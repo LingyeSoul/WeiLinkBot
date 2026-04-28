@@ -1,0 +1,22 @@
+# WeiLinkBot Configuration
+# Environment variables override these values (prefix: WEILINKBOT_)
+
+bot:
+  base_url: "https://ilinkai.weixin.qq.com"
+  cred_path: "~/.wechatbot/credentials.json"
+
+llm:
+  # Provider: "openai" | "deepseek" | "custom"
+  provider: "openai"
+  api_key: ""
+  base_url: "https://api.openai.com/v1"
+  model: "gpt-4o-mini"
+  max_tokens: 2048
+  temperature: 0.7
+
+database:
+  url: "sqlite+aiosqlite:///./data/weilinkbot.db"
+
+server:
+  host: "0.0.0.0"
+  port: 8000

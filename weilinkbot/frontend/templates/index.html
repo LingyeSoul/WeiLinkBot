@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WeiLinkBot Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        [x-cloak] { display: none !important; }
+        .msg-user { background: #e0f2fe; }
+        .msg-assistant { background: #f0fdf4; }
+        .msg-system { background: #fef9c3; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen" x-data="dashboard()" x-init="init()" x-cloak>
+
+<!-- Header -->
+<header class="bg-white shadow-sm border-b">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <div class="text-xl font-bold text-gray-800">WeiLinkBot</div>
+            <span class="text-xs px-2 py-1 rounded-full"
+                  :class="{
+                      'bg-green-100 text-green-700': botStatus.status === 'running',
+                      'bg-yellow-100 text-yellow-700': botStatus.status === 'starting',
+                      'bg-red-100 text-red-700': botStatus.status === 'error',
+                      'bg-gray-100 text-gray-700': botStatus.status === 'stopped',
+                  }"
+                  x-text="botStatus.status || 'unknown'">
+            </span>
+        </div>
+        <div class="flex gap-2">
+            <button @click="startBot()"
+                    x-show="botStatus.status !== 'running' && botStatus.status !== 'starting'"
+                    class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium">
+                Start Bot
+            </button>
+            <button @click="stopBot()"
+                    x-show="botStatus.status === 'running' || botStatus.status === 'starting'"
+                    class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium">
+                Stop Bot
+            </button>
+        </div>
+    </div>
+</header>
+
+<!-- Tab Navigation -->
+<nav class="bg-white border-b">
+    <div class="max-w-7xl mx-auto px-4 flex gap-1">
+        <template x-for="tab in tabs" :key="tab.id">
+            <button @click="activeTab = tab.id"
+                    class="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
+                    :class="activeTab === tab.id
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'">
+                <span x-text="tab.label"></span>
+            </button>
+        </template>
+    </div>
+</nav>
+
+<main class="max-w-7xl mx-auto px-4 py-6">
+
+    <!-- Status Tab -->
+    <div x-show="activeTab === 'status'" class="space-y-6">
+        <div class="bg-white rounded-xl shadow-sm p-6">
+            <h2 class="text-lg font-semibold mb-4">Bot Status</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="text-sm text-gray-500">Status</div>
+                    <div class="text-xl font-bold mt-1" x-text="botStatus.status"></div>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="text-sm text-gray-500">User ID</div>
+                    <div class="text-sm font-mono mt-1 truncate" x-text="botStatus.user_id || '—'"></div>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="text-sm text-gray-500">Account ID</div>
+                    <div class="text-sm font-mono mt-1 truncate" x-text="botStatus.account_id || '—'"></div>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="text-sm text-gray-500">Conversations</div>
+                    <div class="text-xl font-bold mt-1" x-text="conversations.length"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- QR Code -->
+        <div x-show="botStatus.login_url" class="bg-white rounded-xl shadow-sm p-6">
+            <h2 class="text-lg font-semibold mb-4">Scan QR to Login</h2>
+            <div class="flex items-center gap-4">
+                <a :href="botStatus.login_url" target="_blank"
+                   class="text-blue-600 underline break-all text-sm" x-text="botStatus.login_url">
+                </a>
+            </div>
+            <p class="text-sm text-gray-500 mt-2">Open the link above in WeChat to scan the QR code.</p>
+        </div>
+
+        <!-- Error -->
+        <div x-show="botStatus.error" class="bg-red-50 border border-red-200 rounded-xl p-6">
+            <h2 class="text-red-700 font-semibold mb-2">Error</h2>
+            <p class="text-red-600 text-sm" x-text="botStatus.error"></p>
+        </div>
+    </div>
+
+    <!-- Conversations Tab -->
+    <div x-show="activeTab === 'conversations'" class="space-y-4">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <!-- Conversation List -->
+            <div class="bg-white rounded-xl shadow-sm">
+                <div class="p-4 border-b font-semibold">Conversations</div>
+                <div class="divide-y max-h-[600px] overflow-y-auto">
+                    <template x-for="conv in conversations" :key="conv.user_id">
+                        <div @click="selectConversation(conv.user_id)"
+                             class="p-3 cursor-pointer hover:bg-gray-50 transition-colors"
+                             :class="{'bg-blue-50': selectedUser === conv.user_id}">
+                            <div class="font-medium text-sm truncate" x-text="conv.user_id"></div>
+                            <div class="text-xs text-gray-400 mt-1" x-text="conv.message_count + ' messages'"></div>
+                            <div class="text-xs text-gray-500 mt-1 truncate" x-text="conv.last_message || ''"></div>
+                        </div>
+                    </template>
+                    <div x-show="conversations.length === 0" class="p-4 text-gray-400 text-sm text-center">
+                        No conversations yet
+                    </div>
+                </div>
+            </div>
+
+            <!-- Message Detail -->
+            <div class="lg:col-span-2 bg-white rounded-xl shadow-sm flex flex-col" x-show="selectedUser">
+                <div class="p-4 border-b flex items-center justify-between">
+                    <span class="font-semibold" x-text="selectedUser"></span>
+                    <button @click="clearConversation(selectedUser)"
+                            class="text-xs px-3 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200">
+                        Clear History
+                    </button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-4 space-y-3 max-h-[500px]" id="msg-container">
+                    <template x-for="msg in selectedMessages" :key="msg.id">
+                        <div class="rounded-lg p-3 max-w-[80%]"
+                             :class="{
+                                 'msg-user ml-auto': msg.role === 'user',
+                                 'msg-assistant': msg.role === 'assistant',
+                                 'msg-system mx-auto text-center text-xs': msg.role === 'system',
+                             }">
+                            <div class="text-sm whitespace-pre-wrap" x-text="msg.content"></div>
+                            <div class="text-xs text-gray-400 mt-1 flex justify-between">
+                                <span x-text="msg.role"></span>
+                                <span x-text="msg.tokens_used ? msg.tokens_used + ' tokens' : ''"></span>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <div x-show="!selectedUser" class="lg:col-span-2 bg-white rounded-xl shadow-sm p-8 text-center text-gray-400">
+                Select a conversation to view messages
+            </div>
+        </div>
+    </div>
+
+    <!-- Prompts Tab -->
+    <div x-show="activeTab === 'prompts'" class="space-y-4">
+        <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold">System Prompts</h2>
+            <button @click="showPromptForm = !showPromptForm"
+                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                + New Prompt
+            </button>
+        </div>
+
+        <!-- Create/Edit Form -->
+        <div x-show="showPromptForm" class="bg-white rounded-xl shadow-sm p-6 space-y-4">
+            <div>
+                <label class="block text-sm font-medium mb-1">Name</label>
+                <input x-model="promptForm.name" type="text"
+                       class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Prompt name">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1">Content</label>
+                <textarea x-model="promptForm.content" rows="4"
+                          class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="System prompt content..."></textarea>
+            </div>
+            <div class="flex items-center gap-2">
+                <input x-model="promptForm.is_default" type="checkbox" id="is-default" class="rounded">
+                <label for="is-default" class="text-sm">Set as default</label>
+            </div>
+            <div class="flex gap-2">
+                <button @click="savePrompt()"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                    <span x-text="promptForm.id ? 'Update' : 'Create'"></span>
+                </button>
+                <button @click="resetPromptForm()"
+                        class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm">
+                    Cancel
+                </button>
+            </div>
+        </div>
+
+        <!-- Prompt List -->
+        <div class="space-y-3">
+            <template x-for="prompt in prompts" :key="prompt.id">
+                <div class="bg-white rounded-xl shadow-sm p-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium" x-text="prompt.name"></span>
+                            <span x-show="prompt.is_default"
+                                  class="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">default</span>
+                        </div>
+                        <div class="flex gap-1">
+                            <button @click="editPrompt(prompt)"
+                                    class="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200">Edit</button>
+                            <button @click="setDefaultPrompt(prompt.id)"
+                                    x-show="!prompt.is_default"
+                                    class="text-xs px-2 py-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200">Set Default</button>
+                            <button @click="deletePrompt(prompt.id)"
+                                    class="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200">Delete</button>
+                        </div>
+                    </div>
+                    <div class="text-sm text-gray-600 whitespace-pre-wrap" x-text="prompt.content"></div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Settings Tab -->
+    <div x-show="activeTab === 'settings'" class="space-y-4">
+        <h2 class="text-lg font-semibold">LLM Configuration</h2>
+        <div class="bg-white rounded-xl shadow-sm p-6 space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Provider</label>
+                    <select x-model="llmForm.provider" @change="onProviderChange()"
+                            class="w-full border rounded-lg px-3 py-2 text-sm">
+                        <option value="openai">OpenAI</option>
+                        <option value="deepseek">DeepSeek</option>
+                        <option value="custom">Custom</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Model</label>
+                    <input x-model="llmForm.model" type="text"
+                           class="w-full border rounded-lg px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">API Key</label>
+                    <input x-model="llmForm.api_key" type="password"
+                           class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="sk-...">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Base URL</label>
+                    <input x-model="llmForm.base_url" type="text"
+                           class="w-full border rounded-lg px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Max Tokens</label>
+                    <input x-model.number="llmForm.max_tokens" type="number"
+                           class="w-full border rounded-lg px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Temperature</label>
+                    <input x-model.number="llmForm.temperature" type="number" step="0.1" min="0" max="2"
+                           class="w-full border rounded-lg px-3 py-2 text-sm">
+                </div>
+            </div>
+            <button @click="saveLLMConfig()"
+                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                Save Configuration
+            </button>
+            <span x-show="llmSaved" class="text-green-600 text-sm ml-2">Saved!</span>
+        </div>
+    </div>
+
+    <!-- Users Tab -->
+    <div x-show="activeTab === 'users'" class="space-y-4">
+        <h2 class="text-lg font-semibold">User Management</h2>
+        <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="text-left px-4 py-3 font-medium">User ID</th>
+                        <th class="text-left px-4 py-3 font-medium">Nickname</th>
+                        <th class="text-left px-4 py-3 font-medium">Status</th>
+                        <th class="text-left px-4 py-3 font-medium">Max History</th>
+                        <th class="text-left px-4 py-3 font-medium">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y">
+                    <template x-for="user in users" :key="user.user_id">
+                        <tr>
+                            <td class="px-4 py-3 font-mono text-xs truncate max-w-[200px]" x-text="user.user_id"></td>
+                            <td class="px-4 py-3" x-text="user.nickname || '—'"></td>
+                            <td class="px-4 py-3">
+                                <span class="text-xs px-2 py-1 rounded-full"
+                                      :class="user.is_blocked ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'"
+                                      x-text="user.is_blocked ? 'Blocked' : 'Active'">
+                                </span>
+                            </td>
+                            <td class="px-4 py-3" x-text="user.max_history"></td>
+                            <td class="px-4 py-3">
+                                <button @click="toggleBlock(user)"
+                                        class="text-xs px-3 py-1 rounded"
+                                        :class="user.is_blocked
+                                            ? 'bg-green-100 text-green-600 hover:bg-green-200'
+                                            : 'bg-red-100 text-red-600 hover:bg-red-200'"
+                                        x-text="user.is_blocked ? 'Unblock' : 'Block'">
+                                </button>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="users.length === 0">
+                        <td colspan="5" class="px-4 py-6 text-center text-gray-400">No users yet</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</main>
+
+<!-- Toast Notification -->
+<div x-show="toast.show" x-transition
+     class="fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg text-sm z-50"
+     :class="{
+         'bg-green-600 text-white': toast.type === 'success',
+         'bg-red-600 text-white': toast.type === 'error',
+         'bg-blue-600 text-white': toast.type === 'info',
+     }"
+     x-text="toast.message">
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
