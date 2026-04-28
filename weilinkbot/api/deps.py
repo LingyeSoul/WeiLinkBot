@@ -1,0 +1,45 @@
+"""FastAPI dependency injection helpers."""
+
+from __future__ import annotations
+
+from typing import AsyncGenerator
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..database import get_db, get_session_factory
+from ..config import get_config
+from ..services.llm_service import LLMService
+from ..services.conversation_service import ConversationService
+
+# Module-level singletons (initialized in app lifespan)
+_llm_service: LLMService | None = None
+_bot_service = None  # Avoid circular import with BotService
+
+
+def get_llm_service() -> LLMService:
+    if _llm_service is None:
+        raise RuntimeError("LLMService not initialized")
+    return _llm_service
+
+
+def set_llm_service(service: LLMService) -> None:
+    global _llm_service
+    _llm_service = service
+
+
+def get_bot_service():
+    if _bot_service is None:
+        raise RuntimeError("BotService not initialized")
+    return _bot_service
+
+
+def set_bot_service(service) -> None:
+    global _bot_service
+    _bot_service = service
+
+
+async def get_conversation_service(
+    db: AsyncSession,
+) -> ConversationService:
+    """Create a ConversationService bound to the request's DB session."""
+    return ConversationService(db)
