@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter
 
 from ..config import get_config, LLM_PRESETS
 from ..schemas import LLMConfigResponse, LLMConfigUpdate, MessageAction
 from .deps import get_bot_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -32,10 +36,14 @@ async def update_llm_config(data: LLMConfigUpdate):
     bot = get_bot_service()
     llm = bot.llm
 
+    logger.info("Config update request: provider=%s model=%s base_url=%s api_key=%s",
+                data.provider, data.model, data.base_url,
+                "***" + data.api_key[-4:] if data.api_key else None)
+
     if data.provider is not None:
         llm.apply_preset(data.provider, config.llm)
     if data.api_key is not None:
-        config.llm.api_key = data.api_key
+        config.llm.api_key = data.api_key.strip()
     if data.base_url is not None:
         config.llm.base_url = data.base_url
     if data.model is not None:
@@ -47,6 +55,9 @@ async def update_llm_config(data: LLMConfigUpdate):
 
     # Hot-reload LLM service
     llm.update_config(config.llm)
+    logger.info("Config applied: provider=%s model=%s base_url=%s api_key_set=%s",
+                config.llm.provider, config.llm.model, config.llm.base_url,
+                bool(config.llm.api_key))
     return MessageAction(message="LLM config updated")
 
 

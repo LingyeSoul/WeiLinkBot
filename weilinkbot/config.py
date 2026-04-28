@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
 
@@ -85,6 +86,9 @@ def _env_override(data: dict[str, Any], prefix: str = "WEILINKBOT_") -> dict[str
 
 def load_config(config_path: str | Path = "config.yaml") -> AppConfig:
     """Load configuration from YAML file with environment variable overrides."""
+    # Load .env file into os.environ (if it exists)
+    load_dotenv()
+
     config_path = Path(config_path)
     data: dict[str, Any] = {}
 

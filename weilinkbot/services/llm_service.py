@@ -24,6 +24,7 @@ class LLMService:
     """
 
     def __init__(self, config: LLMConfig) -> None:
+        config.api_key = config.api_key.strip()
         self._config = config
         self._build_client()
 
@@ -40,9 +41,12 @@ class LLMService:
 
     def update_config(self, config: LLMConfig) -> None:
         """Hot-swap LLM configuration without restart."""
+        # Trim whitespace from API key to prevent auth failures
+        config.api_key = config.api_key.strip()
         self._config = config
         self._build_client()
-        logger.info("LLM config updated: model=%s provider=%s", config.model, config.provider)
+        logger.info("LLM config updated: model=%s provider=%s base_url=%s",
+                     config.model, config.provider, config.base_url)
 
     async def chat(
         self,

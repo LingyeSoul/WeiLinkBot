@@ -37,3 +37,4 @@ wechatbot_credentials.json
 
 # Logs
 *.log
+/~
