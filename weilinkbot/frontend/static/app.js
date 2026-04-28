@@ -13,12 +13,12 @@ function dashboard() {
             { id: "status", label: "Status" },
             { id: "conversations", label: "Conversations" },
             { id: "prompts", label: "Prompts" },
-            { id: "settings", label: "Settings" },
+            { id: "models", label: "Models" },
             { id: "users", label: "Users" },
         ],
 
         // Bot
-        botStatus: { status: "stopped", login_url: null, error: null, user_id: null, account_id: null },
+        botStatus: { status: "stopped", login_url: null, error: null, user_id: null, account_id: null, active_model: null, uptime_seconds: null },
 
         // Conversations
         conversations: [],
@@ -30,12 +30,16 @@ function dashboard() {
         showPromptForm: false,
         promptForm: { id: null, name: "", content: "", is_default: false },
 
-        // LLM Config
-        llmForm: { provider: "openai", api_key: "", base_url: "", model: "", max_tokens: 2048, temperature: 0.7 },
-        llmSaved: false,
+        // Models
+        models: [],
+        showModelForm: false,
+        modelForm: { id: null, name: "", provider: "openai", api_key: "", base_url: "", model: "", max_tokens: 2048, temperature: 0.7, is_active: false },
 
         // Users
         users: [],
+
+        // Token Stats
+        tokenStats: { models: [], total_tokens: 0, total_requests: 0 },
 
         // Toast
         toast: { show: false, message: "", type: "info" },
@@ -46,8 +50,9 @@ function dashboard() {
         // ── Init ─────────────────────────────────────────────────
         async init() {
             await this.refreshAll();
-            // Poll bot status every 3 seconds
             this._pollTimer = setInterval(() => this.refreshBotStatus(), 3000);
+            // Refresh token stats every 15 seconds
+            setInterval(() => this.refreshTokenStats(), 15000);
         },
 
         async refreshAll() {
@@ -55,8 +60,9 @@ function dashboard() {
                 this.refreshBotStatus(),
                 this.refreshConversations(),
                 this.refreshPrompts(),
-                this.refreshLLMConfig(),
+                this.refreshModels(),
                 this.refreshUsers(),
+                this.refreshTokenStats(),
             ]);
         },
 
@@ -81,6 +87,26 @@ function dashboard() {
         showToast(message, type = "info") {
             this.toast = { show: true, message, type };
             setTimeout(() => { this.toast.show = false; }, 3000);
+        },
+
+        formatUptime(seconds) {
+            if (!seconds && seconds !== 0) return "—";
+            if (seconds < 60) return Math.floor(seconds) + "s";
+            if (seconds < 3600) return Math.floor(seconds / 60) + "m " + Math.floor(seconds % 60) + "s";
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            return h + "h " + m + "m";
+        },
+
+        formatNumber(n) {
+            if (!n && n !== 0) return "—";
+            return n.toLocaleString();
+        },
+
+        async refreshTokenStats() {
+            try {
+                this.tokenStats = await this.api("/api/stats/tokens");
+            } catch { this.tokenStats = { models: [], total_tokens: 0, total_requests: 0 }; }
         },
 
         // ── Bot Control ──────────────────────────────────────────
@@ -114,7 +140,6 @@ function dashboard() {
             try {
                 const data = await this.api(`/api/conversations/${userId}`);
                 this.selectedMessages = data.messages || [];
-                // Scroll to bottom
                 this.$nextTick(() => {
                     const el = document.getElementById("msg-container");
                     if (el) el.scrollTop = el.scrollHeight;
@@ -127,6 +152,7 @@ function dashboard() {
             await this.api(`/api/conversations/${userId}`, { method: "DELETE" });
             this.selectedMessages = [];
             await this.refreshConversations();
+            await this.refreshTokenStats();
             this.showToast("Conversation cleared", "success");
         },
 
@@ -153,7 +179,6 @@ function dashboard() {
                 this.showToast("Name and content are required", "error");
                 return;
             }
-
             if (form.id) {
                 await this.api(`/api/prompts/${form.id}`, {
                     method: "PUT",
@@ -165,7 +190,6 @@ function dashboard() {
                     body: JSON.stringify({ name: form.name, content: form.content, is_default: form.is_default }),
                 });
             }
-
             this.resetPromptForm();
             await this.refreshPrompts();
             this.showToast("Prompt saved", "success");
@@ -184,43 +208,87 @@ function dashboard() {
             this.showToast("Prompt deleted", "success");
         },
 
-        // ── LLM Config ───────────────────────────────────────────
-        async refreshLLMConfig() {
+        // ── Models ───────────────────────────────────────────────
+        async refreshModels() {
             try {
-                const data = await this.api("/api/config");
-                this.llmForm = {
-                    provider: data.provider,
-                    base_url: data.base_url,
-                    model: data.model,
-                    max_tokens: data.max_tokens,
-                    temperature: data.temperature,
-                    api_key: "",  // Never pre-fill
-                };
-            } catch { /* use defaults */ }
+                this.models = await this.api("/api/models");
+            } catch { this.models = []; }
         },
 
-        onProviderChange() {
-            const preset = PRESETS[this.llmForm.provider];
+        resetModelForm() {
+            this.modelForm = { id: null, name: "", provider: "openai", api_key: "", base_url: "https://api.openai.com/v1", model: "gpt-4o-mini", max_tokens: 2048, temperature: 0.7, is_active: false };
+        },
+
+        onModelProviderChange() {
+            const preset = PRESETS[this.modelForm.provider];
             if (preset) {
-                this.llmForm.base_url = preset.base_url;
-                this.llmForm.model = preset.model;
+                this.modelForm.base_url = preset.base_url;
+                this.modelForm.model = preset.model;
             }
         },
 
-        async saveLLMConfig() {
-            const body = {};
-            if (this.llmForm.provider) body.provider = this.llmForm.provider;
-            if (this.llmForm.api_key) body.api_key = this.llmForm.api_key;
-            if (this.llmForm.base_url) body.base_url = this.llmForm.base_url;
-            if (this.llmForm.model) body.model = this.llmForm.model;
-            if (this.llmForm.max_tokens) body.max_tokens = this.llmForm.max_tokens;
-            if (this.llmForm.temperature !== undefined) body.temperature = this.llmForm.temperature;
+        editModel(m) {
+            this.modelForm = {
+                id: m.id,
+                name: m.name,
+                provider: m.provider,
+                api_key: "",  // Never pre-fill
+                base_url: m.base_url,
+                model: m.model,
+                max_tokens: m.max_tokens,
+                temperature: m.temperature,
+                is_active: m.is_active,
+            };
+            this.showModelForm = true;
+        },
 
-            await this.api("/api/config", { method: "PUT", body: JSON.stringify(body) });
-            this.llmSaved = true;
-            this.llmForm.api_key = "";  // Clear after save
-            setTimeout(() => { this.llmSaved = false; }, 2000);
-            this.showToast("LLM config updated", "success");
+        async saveModel() {
+            const form = this.modelForm;
+            if (!form.name || !form.model || !form.base_url) {
+                this.showToast("Name, model, and base URL are required", "error");
+                return;
+            }
+            // For new models, API key is required
+            if (!form.id && !form.api_key) {
+                this.showToast("API key is required for new models", "error");
+                return;
+            }
+
+            const body = {
+                name: form.name,
+                provider: form.provider,
+                base_url: form.base_url,
+                model: form.model,
+                max_tokens: form.max_tokens,
+                temperature: form.temperature,
+                is_active: form.is_active,
+            };
+            if (form.api_key) body.api_key = form.api_key;
+
+            if (form.id) {
+                await this.api(`/api/models/${form.id}`, { method: "PUT", body: JSON.stringify(body) });
+            } else {
+                await this.api("/api/models", { method: "POST", body: JSON.stringify(body) });
+            }
+            this.showModelForm = false;
+            this.resetModelForm();
+            await this.refreshModels();
+            await this.refreshBotStatus();
+            this.showToast("Model saved", "success");
+        },
+
+        async activateModel(id) {
+            await this.api(`/api/models/${id}/activate`, { method: "POST" });
+            await this.refreshModels();
+            await this.refreshBotStatus();
+            this.showToast("Model activated", "success");
+        },
+
+        async deleteModel(id, name) {
+            if (!confirm(`Delete model '${name}'?`)) return;
+            await this.api(`/api/models/${id}`, { method: "DELETE" });
+            await this.refreshModels();
+            this.showToast("Model deleted", "success");
         },
 
         // ── Users ────────────────────────────────────────────────

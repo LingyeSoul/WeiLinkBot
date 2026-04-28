@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse
 
 from ..config import get_config, AppConfig
 from ..database import init_db, get_session_factory
-from ..models import SystemPrompt
+from ..models import SystemPrompt, LLMPreset
 from ..services.llm_service import LLMService
 from ..services.bot_service import BotService
 from .deps import set_llm_service, set_bot_service
@@ -22,6 +22,8 @@ from . import conversations as conv_routes
 from . import prompts as prompt_routes
 from . import config as config_routes
 from . import users as user_routes
+from . import models as model_routes
+from . import stats as stats_routes
 
 logger = logging.getLogger(__name__)
 
@@ -40,10 +42,12 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info("Database initialized")
 
-    # Create default system prompt if none exists
+    # Create default system prompt if none exists, and default LLM preset
     session_factory = get_session_factory()
     async with session_factory() as db:
         from sqlalchemy import select, func
+
+        # System prompt
         count_stmt = select(func.count()).select_from(SystemPrompt)
         result = await db.execute(count_stmt)
         count = result.scalar()
@@ -56,10 +60,48 @@ async def lifespan(app: FastAPI):
             await db.commit()
             logger.info("Created default system prompt")
 
-    # Init LLM service
-    llm_service = LLMService(config.llm)
+        # LLM preset — create from config if none exist
+        preset_count_stmt = select(func.count()).select_from(LLMPreset)
+        result = await db.execute(preset_count_stmt)
+        preset_count = result.scalar()
+        if preset_count == 0 and config.llm.api_key:
+            db.add(LLMPreset(
+                name=f"{config.llm.provider}/{config.llm.model}",
+                provider=config.llm.provider,
+                api_key=config.llm.api_key,
+                base_url=config.llm.base_url,
+                model=config.llm.model,
+                max_tokens=config.llm.max_tokens,
+                temperature=config.llm.temperature,
+                is_active=True,
+            ))
+            await db.commit()
+            logger.info("Created default LLM preset from config")
+
+    # Load active preset from DB (if any), otherwise use config
+    active_config = config.llm
+    async with session_factory() as db:
+        from sqlalchemy import select
+        result = await db.execute(
+            select(LLMPreset).where(LLMPreset.is_active == True)
+        )
+        active_preset = result.scalar_one_or_none()
+        if active_preset:
+            from ..config import LLMConfig
+            active_config = LLMConfig(
+                provider=active_preset.provider,
+                api_key=active_preset.api_key,
+                base_url=active_preset.base_url,
+                model=active_preset.model,
+                max_tokens=active_preset.max_tokens,
+                temperature=active_preset.temperature,
+            )
+            logger.info("Loaded active preset: %s (%s)", active_preset.name, active_preset.model)
+
+    # Init LLM service (from active preset or config)
+    llm_service = LLMService(active_config)
     set_llm_service(llm_service)
-    logger.info("LLM service initialized (model=%s)", config.llm.model)
+    logger.info("LLM service initialized (model=%s)", active_config.model)
 
     # Init Bot service
     bot_service = BotService(config, llm_service)
@@ -93,6 +135,8 @@ def create_app() -> FastAPI:
     app.include_router(prompt_routes.router, prefix="/api/prompts", tags=["Prompts"])
     app.include_router(config_routes.router, prefix="/api/config", tags=["Config"])
     app.include_router(user_routes.router, prefix="/api/users", tags=["Users"])
+    app.include_router(model_routes.router, prefix="/api/models", tags=["Models"])
+    app.include_router(stats_routes.router, prefix="/api/stats", tags=["Stats"])
 
     # Serve dashboard
     @app.get("/", include_in_schema=False)
