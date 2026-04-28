@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from enum import Enum
+from pathlib import Path
 from typing import Optional
 
 from wechatbot import WeChatBot, IncomingMessage, Credentials
@@ -73,9 +74,12 @@ class BotService:
     async def _run(self) -> None:
         """Internal: login and start long-poll loop."""
         try:
+            # Expand ~ to actual home directory (avoids literal ~ folder on Windows)
+            cred_path = str(Path(self._config.bot.cred_path).expanduser())
+
             self._bot = WeChatBot(
                 base_url=self._config.bot.base_url,
-                cred_path=self._config.bot.cred_path,
+                cred_path=cred_path,
                 on_qr_url=self._on_qr_url,
                 on_scanned=lambda: logger.info("QR scanned — confirm in WeChat"),
                 on_expired=lambda: logger.warning("QR expired"),
