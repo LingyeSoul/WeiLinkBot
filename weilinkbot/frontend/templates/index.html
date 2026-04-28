@@ -92,52 +92,67 @@
 
         <!-- Token Usage -->
         <div class="bg-white rounded-xl shadow-sm p-6">
-            <h2 class="text-lg font-semibold mb-4">Token Usage</h2>
-            <div x-show="tokenStats.models && tokenStats.models.length > 0">
-                <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
-                    <div class="bg-gray-50 rounded-lg p-4">
-                        <div class="text-sm text-gray-500">Total Tokens</div>
-                        <div class="text-xl font-bold mt-1" x-text="formatNumber(tokenStats.total_tokens)"></div>
-                    </div>
-                    <div class="bg-gray-50 rounded-lg p-4">
-                        <div class="text-sm text-gray-500">Total Requests</div>
-                        <div class="text-xl font-bold mt-1" x-text="formatNumber(tokenStats.total_requests)"></div>
-                    </div>
-                    <div class="bg-gray-50 rounded-lg p-4">
-                        <div class="text-sm text-gray-500">Avg Tokens/Request</div>
-                        <div class="text-xl font-bold mt-1" x-text="tokenStats.total_requests ? Math.round(tokenStats.total_tokens / tokenStats.total_requests) : '—'"></div>
-                    </div>
-                </div>
-                <div class="overflow-hidden rounded-lg border">
-                    <table class="w-full text-sm">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="text-left px-4 py-2 font-medium">Model</th>
-                                <th class="text-right px-4 py-2 font-medium">Tokens</th>
-                                <th class="text-right px-4 py-2 font-medium">Requests</th>
-                                <th class="text-right px-4 py-2 font-medium">Share</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y">
-                            <template x-for="m in tokenStats.models" :key="m.model">
-                                <tr>
-                                    <td class="px-4 py-2 font-mono text-xs" x-text="m.model"></td>
-                                    <td class="px-4 py-2 text-right" x-text="formatNumber(m.tokens)"></td>
-                                    <td class="px-4 py-2 text-right" x-text="m.requests"></td>
-                                    <td class="px-4 py-2 text-right">
-                                        <span class="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700"
-                                              x-text="tokenStats.total_tokens ? Math.round(m.tokens / tokenStats.total_tokens * 100) + '%' : '—'">
-                                        </span>
-                                    </td>
-                                </tr>
-                            </template>
-                        </tbody>
-                    </table>
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold">Token Usage</h2>
+                <div class="flex bg-gray-100 rounded-lg p-0.5">
+                    <button @click="tokenView = 'session'"
+                            class="px-3 py-1 text-xs font-medium rounded-md transition-colors"
+                            :class="tokenView === 'session' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'">
+                        This Session
+                    </button>
+                    <button @click="tokenView = 'history'"
+                            class="px-3 py-1 text-xs font-medium rounded-md transition-colors"
+                            :class="tokenView === 'history' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'">
+                        All Time
+                    </button>
                 </div>
             </div>
-            <div x-show="!tokenStats.models || tokenStats.models.length === 0"
-                 class="text-gray-400 text-sm text-center py-4">
-                No token usage recorded yet
+            <!-- Summary cards -->
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="text-sm text-gray-500" x-text="tokenView === 'session' ? 'Session Tokens' : 'Total Tokens'"></div>
+                    <div class="text-xl font-bold mt-1" x-text="formatNumber(activeTokenStats.total_tokens)"></div>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="text-sm text-gray-500" x-text="tokenView === 'session' ? 'Session Requests' : 'Total Requests'"></div>
+                    <div class="text-xl font-bold mt-1" x-text="formatNumber(activeTokenStats.total_requests)"></div>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="text-sm text-gray-500">Avg Tokens/Req</div>
+                    <div class="text-xl font-bold mt-1" x-text="activeTokenStats.total_requests ? Math.round(activeTokenStats.total_tokens / activeTokenStats.total_requests) : '—'"></div>
+                </div>
+            </div>
+            <!-- Per-model table -->
+            <div x-show="activeTokenStats.models && activeTokenStats.models.length > 0"
+                 class="overflow-hidden rounded-lg border">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="text-left px-4 py-2 font-medium">Model</th>
+                            <th class="text-right px-4 py-2 font-medium">Tokens</th>
+                            <th class="text-right px-4 py-2 font-medium">Requests</th>
+                            <th class="text-right px-4 py-2 font-medium">Share</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y">
+                        <template x-for="m in activeTokenStats.models" :key="m.model">
+                            <tr>
+                                <td class="px-4 py-2 font-mono text-xs" x-text="m.model"></td>
+                                <td class="px-4 py-2 text-right" x-text="formatNumber(m.tokens)"></td>
+                                <td class="px-4 py-2 text-right" x-text="m.requests"></td>
+                                <td class="px-4 py-2 text-right">
+                                    <span class="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700"
+                                          x-text="activeTokenStats.total_tokens ? Math.round(m.tokens / activeTokenStats.total_tokens * 100) + '%' : '—'">
+                                    </span>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+            <div x-show="!activeTokenStats.models || activeTokenStats.models.length === 0"
+                 class="text-gray-400 text-sm text-center py-4"
+                 x-text="tokenView === 'session' ? 'No requests this session' : 'No token usage recorded yet'">
             </div>
         </div>
 

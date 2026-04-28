@@ -23,6 +23,8 @@ async def bot_status():
         account_id=creds.account_id if creds else None,
         active_model=bot.llm.config.model,
         uptime_seconds=bot.uptime_seconds,
+        session_messages=bot.message_count,
+        session_token_stats=bot.session_token_stats,
     )
 
 

@@ -159,6 +159,8 @@ class BotStatusResponse(BaseModel):
     account_id: Optional[str] = None
     active_model: Optional[str] = None
     uptime_seconds: Optional[float] = None
+    session_messages: int = 0
+    session_token_stats: Optional[dict] = None
 
 
 # ── Generic ─────────────────────────────────────────────────────

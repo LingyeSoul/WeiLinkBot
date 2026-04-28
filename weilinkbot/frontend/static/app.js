@@ -39,7 +39,9 @@ function dashboard() {
         users: [],
 
         // Token Stats
-        tokenStats: { models: [], total_tokens: 0, total_requests: 0 },
+        tokenStats: { models: [], total_tokens: 0, total_requests: 0 },       // all-time (from API)
+        sessionTokenStats: { models: [], total_tokens: 0, total_requests: 0 }, // current session (from bot status)
+        tokenView: "session",  // "session" or "history"
 
         // Toast
         toast: { show: false, message: "", type: "info" },
@@ -103,6 +105,12 @@ function dashboard() {
             return n.toLocaleString();
         },
 
+        // Returns the active token stats based on toggle (session or history)
+        get activeTokenStats() {
+            if (this.tokenView === "session") return this.sessionTokenStats;
+            return this.tokenStats;
+        },
+
         async refreshTokenStats() {
             try {
                 this.tokenStats = await this.api("/api/stats/tokens");
@@ -112,7 +120,12 @@ function dashboard() {
         // ── Bot Control ──────────────────────────────────────────
         async refreshBotStatus() {
             try {
-                this.botStatus = await this.api("/api/bot/status");
+                const data = await this.api("/api/bot/status");
+                this.botStatus = data;
+                // Extract session token stats from bot status
+                if (data.session_token_stats) {
+                    this.sessionTokenStats = data.session_token_stats;
+                }
             } catch { /* ignore polling errors */ }
         },
 
