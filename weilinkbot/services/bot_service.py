@@ -56,6 +56,9 @@ class BotService:
         self._bot: Optional[WeChatBot] = None
         self._start_time: Optional[float] = None
         self._message_count: int = 0
+        # Session-level token tracking (model -> tokens, reset on each start)
+        self._session_tokens: dict[str, int] = {}
+        self._session_requests: dict[str, int] = {}
 
     @property
     def state(self) -> BotState:
@@ -86,6 +89,21 @@ class BotService:
     @property
     def message_count(self) -> int:
         return self._message_count
+
+    @property
+    def session_token_stats(self) -> dict:
+        """Current session token usage, grouped by model."""
+        models = []
+        total_tokens = 0
+        total_requests = 0
+        all_models = set(self._session_tokens.keys()) | set(self._session_requests.keys())
+        for m in sorted(all_models, key=lambda k: self._session_tokens.get(k, 0), reverse=True):
+            t = self._session_tokens.get(m, 0)
+            r = self._session_requests.get(m, 0)
+            models.append({"model": m, "tokens": t, "requests": r})
+            total_tokens += t
+            total_requests += r
+        return {"models": models, "total_tokens": total_tokens, "total_requests": total_requests}
 
     async def start(self) -> None:
         """Start the bot (login + begin polling)."""
@@ -122,6 +140,8 @@ class BotService:
             self._state = BotState.RUNNING
             self._start_time = time.time()
             self._message_count = 0
+            self._session_tokens.clear()
+            self._session_requests.clear()
             logger.info(
                 "Bot running — user_id=%s account_id=%s",
                 self._credentials.user_id,
@@ -195,8 +215,13 @@ class BotService:
                 logger.info("LLM request for user %s: %s...", user_id, text[:50])
                 response_text, tokens = await self._llm.chat(context)
 
+                # Track session token usage
+                model_name = self._llm.config.model
+                self._session_tokens[model_name] = self._session_tokens.get(model_name, 0) + tokens
+                self._session_requests[model_name] = self._session_requests.get(model_name, 0) + 1
+
                 await conv_service.add_message(
-                    user_id, "assistant", response_text, tokens, self._llm.config.model
+                    user_id, "assistant", response_text, tokens, model_name
                 )
                 await db.commit()
 
@@ -257,6 +282,7 @@ class BotService:
         uptime_str = self._format_uptime(uptime) if uptime else "N/A"
         model = self._llm.config.model
         provider = self._llm.config.provider
+        session_stats = self.session_token_stats
 
         session_factory = get_session_factory()
         async with session_factory() as db:
@@ -265,7 +291,7 @@ class BotService:
             conv_count = len(conv_result.scalars().all())
 
             conv_service = ConversationService(db)
-            stats = await conv_service.get_token_stats()
+            history_stats = await conv_service.get_token_stats()
 
         lines = [
             "Bot Status",
@@ -274,20 +300,31 @@ class BotService:
             f"Uptime: {uptime_str}",
             f"Model: {model}",
             f"Provider: {provider}",
-            f"Messages processed: {self._message_count}",
+            f"Messages this session: {self._message_count}",
             f"Active conversations: {conv_count}",
         ]
         if self._credentials:
             lines.append(f"User ID: {self._credentials.user_id}")
 
-        # Token usage stats
-        if stats["models"]:
-            lines.append("")
-            lines.append("Token Usage")
-            lines.append("─" * 30)
-            for m in stats["models"]:
+        # Current session token usage
+        lines.append("")
+        lines.append("This Session")
+        lines.append("─" * 30)
+        if session_stats["models"]:
+            for m in session_stats["models"]:
                 lines.append(f"  {m['model']}: {m['tokens']:,} tokens ({m['requests']} reqs)")
-            lines.append(f"  Total: {stats['total_tokens']:,} tokens ({stats['total_requests']} reqs)")
+            lines.append(f"  Total: {session_stats['total_tokens']:,} tokens ({session_stats['total_requests']} reqs)")
+        else:
+            lines.append("  No requests yet")
+
+        # All-time token usage
+        if history_stats["models"]:
+            lines.append("")
+            lines.append("All Time")
+            lines.append("─" * 30)
+            for m in history_stats["models"]:
+                lines.append(f"  {m['model']}: {m['tokens']:,} tokens ({m['requests']} reqs)")
+            lines.append(f"  Total: {history_stats['total_tokens']:,} tokens ({history_stats['total_requests']} reqs)")
 
         await self._bot.reply(msg, "\n".join(lines))
 
