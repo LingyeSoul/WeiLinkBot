@@ -86,6 +86,27 @@ class Conversation(Base):
         return f"<Conversation id={self.id} user_id={self.user_id!r} msgs={self.message_count}>"
 
 
+class LLMPreset(Base):
+    """A saved LLM model configuration that can be activated."""
+    __tablename__ = "llm_presets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)
+    api_key: Mapped[str] = mapped_column(Text, nullable=False)
+    base_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    model: Mapped[str] = mapped_column(String(100), nullable=False)
+    max_tokens: Mapped[int] = mapped_column(Integer, default=2048, nullable=False)
+    temperature: Mapped[float] = mapped_column(default=0.7, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, server_default=func.now()
+    )
+
+    def __repr__(self) -> str:
+        return f"<LLMPreset id={self.id} name={self.name!r} model={self.model!r} active={self.is_active}>"
+
+
 class Message(Base):
     __tablename__ = "messages"
 

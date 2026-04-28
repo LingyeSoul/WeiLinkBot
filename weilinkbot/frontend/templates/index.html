@@ -80,9 +80,64 @@
                     <div class="text-sm font-mono mt-1 truncate" x-text="botStatus.account_id || '—'"></div>
                 </div>
                 <div class="bg-gray-50 rounded-lg p-4">
-                    <div class="text-sm text-gray-500">Conversations</div>
-                    <div class="text-xl font-bold mt-1" x-text="conversations.length"></div>
+                    <div class="text-sm text-gray-500">Active Model</div>
+                    <div class="text-sm font-mono mt-1 truncate" x-text="botStatus.active_model || '—'"></div>
                 </div>
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="text-sm text-gray-500">Uptime</div>
+                    <div class="text-lg font-bold mt-1" x-text="formatUptime(botStatus.uptime_seconds)"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Token Usage -->
+        <div class="bg-white rounded-xl shadow-sm p-6">
+            <h2 class="text-lg font-semibold mb-4">Token Usage</h2>
+            <div x-show="tokenStats.models && tokenStats.models.length > 0">
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <div class="text-sm text-gray-500">Total Tokens</div>
+                        <div class="text-xl font-bold mt-1" x-text="formatNumber(tokenStats.total_tokens)"></div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <div class="text-sm text-gray-500">Total Requests</div>
+                        <div class="text-xl font-bold mt-1" x-text="formatNumber(tokenStats.total_requests)"></div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <div class="text-sm text-gray-500">Avg Tokens/Request</div>
+                        <div class="text-xl font-bold mt-1" x-text="tokenStats.total_requests ? Math.round(tokenStats.total_tokens / tokenStats.total_requests) : '—'"></div>
+                    </div>
+                </div>
+                <div class="overflow-hidden rounded-lg border">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="text-left px-4 py-2 font-medium">Model</th>
+                                <th class="text-right px-4 py-2 font-medium">Tokens</th>
+                                <th class="text-right px-4 py-2 font-medium">Requests</th>
+                                <th class="text-right px-4 py-2 font-medium">Share</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y">
+                            <template x-for="m in tokenStats.models" :key="m.model">
+                                <tr>
+                                    <td class="px-4 py-2 font-mono text-xs" x-text="m.model"></td>
+                                    <td class="px-4 py-2 text-right" x-text="formatNumber(m.tokens)"></td>
+                                    <td class="px-4 py-2 text-right" x-text="m.requests"></td>
+                                    <td class="px-4 py-2 text-right">
+                                        <span class="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700"
+                                              x-text="tokenStats.total_tokens ? Math.round(m.tokens / tokenStats.total_tokens * 100) + '%' : '—'">
+                                        </span>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div x-show="!tokenStats.models || tokenStats.models.length === 0"
+                 class="text-gray-400 text-sm text-center py-4">
+                No token usage recorded yet
             </div>
         </div>
 
@@ -223,14 +278,27 @@
         </div>
     </div>
 
-    <!-- Settings Tab -->
-    <div x-show="activeTab === 'settings'" class="space-y-4">
-        <h2 class="text-lg font-semibold">LLM Configuration</h2>
-        <div class="bg-white rounded-xl shadow-sm p-6 space-y-4">
+    <!-- Models Tab -->
+    <div x-show="activeTab === 'models'" class="space-y-4">
+        <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold">Model Management</h2>
+            <button @click="showModelForm = !showModelForm; resetModelForm()"
+                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                + Add Model
+            </button>
+        </div>
+
+        <!-- Add/Edit Model Form -->
+        <div x-show="showModelForm" class="bg-white rounded-xl shadow-sm p-6 space-y-4">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
+                    <label class="block text-sm font-medium mb-1">Display Name</label>
+                    <input x-model="modelForm.name" type="text"
+                           class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="e.g. DeepSeek V3">
+                </div>
+                <div>
                     <label class="block text-sm font-medium mb-1">Provider</label>
-                    <select x-model="llmForm.provider" @change="onProviderChange()"
+                    <select x-model="modelForm.provider" @change="onModelProviderChange()"
                             class="w-full border rounded-lg px-3 py-2 text-sm">
                         <option value="openai">OpenAI</option>
                         <option value="deepseek">DeepSeek</option>
@@ -238,36 +306,99 @@
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium mb-1">Model</label>
-                    <input x-model="llmForm.model" type="text"
+                    <label class="block text-sm font-medium mb-1">Model ID</label>
+                    <input x-model="modelForm.model" type="text"
+                           class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="gpt-4o-mini">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Base URL</label>
+                    <input x-model="modelForm.base_url" type="text"
                            class="w-full border rounded-lg px-3 py-2 text-sm">
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-1">API Key</label>
-                    <input x-model="llmForm.api_key" type="password"
+                    <input x-model="modelForm.api_key" type="password"
                            class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="sk-...">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium mb-1">Base URL</label>
-                    <input x-model="llmForm.base_url" type="text"
-                           class="w-full border rounded-lg px-3 py-2 text-sm">
-                </div>
-                <div>
                     <label class="block text-sm font-medium mb-1">Max Tokens</label>
-                    <input x-model.number="llmForm.max_tokens" type="number"
+                    <input x-model.number="modelForm.max_tokens" type="number"
                            class="w-full border rounded-lg px-3 py-2 text-sm">
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-1">Temperature</label>
-                    <input x-model.number="llmForm.temperature" type="number" step="0.1" min="0" max="2"
+                    <input x-model.number="modelForm.temperature" type="number" step="0.1" min="0" max="2"
                            class="w-full border rounded-lg px-3 py-2 text-sm">
                 </div>
+                <div class="flex items-center gap-2">
+                    <input x-model="modelForm.is_active" type="checkbox" id="model-active" class="rounded">
+                    <label for="model-active" class="text-sm">Activate immediately</label>
+                </div>
             </div>
-            <button @click="saveLLMConfig()"
-                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
-                Save Configuration
-            </button>
-            <span x-show="llmSaved" class="text-green-600 text-sm ml-2">Saved!</span>
+            <div class="flex gap-2">
+                <button @click="saveModel()"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                    <span x-text="modelForm.id ? 'Update' : 'Add Model'"></span>
+                </button>
+                <button @click="showModelForm = false; resetModelForm()"
+                        class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm">
+                    Cancel
+                </button>
+            </div>
+        </div>
+
+        <!-- Model List -->
+        <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="text-left px-4 py-3 font-medium">Name</th>
+                        <th class="text-left px-4 py-3 font-medium">Provider</th>
+                        <th class="text-left px-4 py-3 font-medium">Model</th>
+                        <th class="text-left px-4 py-3 font-medium">Status</th>
+                        <th class="text-left px-4 py-3 font-medium">API Key</th>
+                        <th class="text-left px-4 py-3 font-medium">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y">
+                    <template x-for="m in models" :key="m.id">
+                        <tr :class="{'bg-blue-50': m.is_active}">
+                            <td class="px-4 py-3 font-medium" x-text="m.name"></td>
+                            <td class="px-4 py-3 text-gray-600" x-text="m.provider"></td>
+                            <td class="px-4 py-3 font-mono text-xs" x-text="m.model"></td>
+                            <td class="px-4 py-3">
+                                <span class="text-xs px-2 py-1 rounded-full"
+                                      :class="m.is_active ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'"
+                                      x-text="m.is_active ? 'Active' : 'Inactive'">
+                                </span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="text-xs"
+                                      :class="m.api_key_set ? 'text-green-600' : 'text-red-500'"
+                                      x-text="m.api_key_set ? 'Set' : 'Missing'">
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 flex gap-1">
+                                <button @click="activateModel(m.id)" x-show="!m.is_active"
+                                        class="text-xs px-2 py-1 bg-green-100 text-green-600 rounded hover:bg-green-200">
+                                    Activate
+                                </button>
+                                <button @click="editModel(m)"
+                                        class="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200">Edit</button>
+                                <button @click="deleteModel(m.id, m.name)" x-show="!m.is_active"
+                                        class="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200">
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="models.length === 0">
+                        <td colspan="6" class="px-4 py-6 text-center text-gray-400">
+                            No models configured. Click "Add Model" to get started.
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
     </div>
 

@@ -303,6 +303,110 @@ def prompt_set_default(prompt_id: int = typer.Argument(..., help="Prompt ID")):
     _run_async(_set())
 
 
+# ── Model Commands ────────────────────────────────────────────────
+
+model_app = typer.Typer(help="Manage LLM model presets")
+app.add_typer(model_app, name="model")
+
+
+@model_app.command("list")
+def model_list():
+    """List all LLM model presets."""
+    async def _list():
+        from ..database import init_db, get_session_factory
+        from ..models import LLMPreset
+        from sqlalchemy import select
+
+        await init_db()
+        session_factory = get_session_factory()
+        async with session_factory() as db:
+            result = await db.execute(
+                select(LLMPreset).order_by(LLMPreset.is_active.desc(), LLMPreset.id)
+            )
+            presets = result.scalars().all()
+
+            if not presets:
+                console.print("[yellow]No models configured[/yellow]")
+                return
+
+            table = Table(title="LLM Model Presets")
+            table.add_column("ID", style="cyan", width=4)
+            table.add_column("Name", style="white")
+            table.add_column("Provider", style="dim")
+            table.add_column("Model", style="green")
+            table.add_column("Active", style="bold")
+
+            for p in presets:
+                table.add_row(
+                    str(p.id), p.name, p.provider, p.model,
+                    "Yes" if p.is_active else ""
+                )
+
+            console.print(table)
+
+    _run_async(_list())
+
+
+@model_app.command("activate")
+def model_activate(
+    preset_id: int = typer.Argument(..., help="Preset ID to activate"),
+):
+    """Activate an LLM model preset."""
+    async def _activate():
+        from ..database import init_db, get_session_factory
+        from ..models import LLMPreset
+        from ..config import LLMConfig
+        from ..services.llm_service import LLMService
+        from sqlalchemy import select, update
+
+        await init_db()
+        session_factory = get_session_factory()
+        async with session_factory() as db:
+            preset = await db.get(LLMPreset, preset_id)
+            if not preset:
+                console.print(f"[red]Preset {preset_id} not found[/red]")
+                return
+
+            await db.execute(
+                update(LLMPreset).where(LLMPreset.is_active == True).values(is_active=False)
+            )
+            preset.is_active = True
+            await db.commit()
+            console.print(f"[green]Activated '{preset.name}' ({preset.model})[/green]")
+
+    _run_async(_activate())
+
+
+@model_app.command("add")
+def model_add(
+    name: str = typer.Option(..., prompt=True, help="Display name"),
+    provider: str = typer.Option("custom", help="Provider: openai | deepseek | custom"),
+    model_id: str = typer.Option(..., prompt=True, help="Model ID (e.g. gpt-4o-mini)"),
+    base_url: str = typer.Option(..., prompt=True, help="API base URL"),
+    api_key: str = typer.Option(..., prompt=True, hide_input=True, help="API key"),
+):
+    """Add a new LLM model preset."""
+    async def _add():
+        from ..database import init_db, get_session_factory
+        from ..models import LLMPreset
+
+        await init_db()
+        session_factory = get_session_factory()
+        async with session_factory() as db:
+            db.add(LLMPreset(
+                name=name,
+                provider=provider,
+                api_key=api_key.strip(),
+                base_url=base_url,
+                model=model_id,
+                is_active=False,
+            ))
+            await db.commit()
+            console.print(f"[green]Added model preset '{name}'[/green]")
+
+    _run_async(_add())
+
+
 # ── Entry point ──────────────────────────────────────────────────
 
 def main():

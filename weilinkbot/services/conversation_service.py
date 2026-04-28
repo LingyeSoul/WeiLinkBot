@@ -205,6 +205,95 @@ class ConversationService:
         await self._db.flush()
         return config
 
+    # ── Token Statistics ──────────────────────────────────────────
+
+    async def get_token_stats(self) -> dict:
+        """Get token usage statistics grouped by model.
+
+        Returns:
+            {
+                "models": [{"model": "gpt-4o-mini", "tokens": 12345, "requests": 10}, ...],
+                "total_tokens": 12345,
+                "total_requests": 10,
+            }
+        """
+        stmt = (
+            select(
+                Message.model,
+                func.coalesce(func.sum(Message.tokens_used), 0).label("total_tokens"),
+                func.count(Message.id).label("request_count"),
+            )
+            .where(Message.role == "assistant")
+            .where(Message.model.isnot(None))
+            .group_by(Message.model)
+            .order_by(func.sum(Message.tokens_used).desc())
+        )
+        result = await self._db.execute(stmt)
+        rows = result.all()
+
+        models = []
+        total_tokens = 0
+        total_requests = 0
+
+        for row in rows:
+            model_name = row.model or "unknown"
+            tokens = int(row.total_tokens)
+            count = int(row.request_count)
+            models.append({
+                "model": model_name,
+                "tokens": tokens,
+                "requests": count,
+            })
+            total_tokens += tokens
+            total_requests += count
+
+        return {
+            "models": models,
+            "total_tokens": total_tokens,
+            "total_requests": total_requests,
+        }
+
+    async def get_user_token_stats(self, user_id: str) -> dict:
+        """Get token usage for a single user's conversation."""
+        stmt = (
+            select(Conversation)
+            .where(Conversation.user_id == user_id)
+        )
+        result = await self._db.execute(stmt)
+        conv = result.scalar_one_or_none()
+        if not conv:
+            return {"models": [], "total_tokens": 0, "total_requests": 0}
+
+        stmt = (
+            select(
+                Message.model,
+                func.coalesce(func.sum(Message.tokens_used), 0).label("total_tokens"),
+                func.count(Message.id).label("request_count"),
+            )
+            .where(Message.conversation_id == conv.id)
+            .where(Message.role == "assistant")
+            .where(Message.model.isnot(None))
+            .group_by(Message.model)
+        )
+        result = await self._db.execute(stmt)
+        rows = result.all()
+
+        models = []
+        total_tokens = 0
+        total_requests = 0
+        for row in rows:
+            tokens = int(row.total_tokens)
+            count = int(row.request_count)
+            models.append({"model": row.model, "tokens": tokens, "requests": count})
+            total_tokens += tokens
+            total_requests += count
+
+        return {
+            "models": models,
+            "total_tokens": total_tokens,
+            "total_requests": total_requests,
+        }
+
     # ── System Prompt Resolution ──────────────────────────────────
 
     async def _get_system_prompt(self, user_config: Optional[UserConfig]) -> str:

@@ -90,6 +90,45 @@ class UserConfigUpdate(BaseModel):
     max_history: Optional[int] = Field(None, ge=1, le=100)
 
 
+# ── LLM Presets ──────────────────────────────────────────────────
+
+class LLMPresetCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    provider: str = Field("custom", max_length=50)
+    api_key: str = Field(..., min_length=1)
+    base_url: str = Field(..., min_length=1, max_length=500)
+    model: str = Field(..., min_length=1, max_length=100)
+    max_tokens: int = Field(2048, ge=1, le=128000)
+    temperature: float = Field(0.7, ge=0, le=2)
+    is_active: bool = False
+
+
+class LLMPresetUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    provider: Optional[str] = None
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+    model: Optional[str] = None
+    max_tokens: Optional[int] = Field(None, ge=1, le=128000)
+    temperature: Optional[float] = Field(None, ge=0, le=2)
+    is_active: Optional[bool] = None
+
+
+class LLMPresetResponse(BaseModel):
+    id: int
+    name: str
+    provider: str
+    base_url: str
+    model: str
+    max_tokens: int
+    temperature: float
+    is_active: bool
+    api_key_set: bool = True  # Never expose actual key
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 # ── LLM Config ──────────────────────────────────────────────────
 
 class LLMConfigResponse(BaseModel):
@@ -118,6 +157,8 @@ class BotStatusResponse(BaseModel):
     error: Optional[str] = None
     user_id: Optional[str] = None
     account_id: Optional[str] = None
+    active_model: Optional[str] = None
+    uptime_seconds: Optional[float] = None
 
 
 # ── Generic ─────────────────────────────────────────────────────

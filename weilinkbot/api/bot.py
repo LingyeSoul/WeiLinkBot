@@ -21,6 +21,8 @@ async def bot_status():
         error=bot.error,
         user_id=creds.user_id if creds else None,
         account_id=creds.account_id if creds else None,
+        active_model=bot.llm.config.model,
+        uptime_seconds=bot.uptime_seconds,
     )
 
 
