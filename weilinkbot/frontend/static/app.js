@@ -15,6 +15,7 @@ function dashboard() {
             { id: "prompts", label: "Prompts" },
             { id: "models", label: "Models" },
             { id: "users", label: "Users" },
+            { id: "characters", label: "Characters" },
         ],
 
         // Bot
@@ -37,6 +38,11 @@ function dashboard() {
 
         // Users
         users: [],
+
+        // Characters
+        characters: [],
+        showCharForm: false,
+        charForm: { id: null, name: "", description: "", personality: "", scenario: "", first_mes: "", mes_example: "" },
 
         // Token Stats
         tokenStats: { models: [], total_tokens: 0, total_requests: 0 },       // all-time (from API)
@@ -64,6 +70,7 @@ function dashboard() {
                 this.refreshPrompts(),
                 this.refreshModels(),
                 this.refreshUsers(),
+                this.refreshCharacters(),
                 this.refreshTokenStats(),
             ]);
         },
@@ -103,6 +110,18 @@ function dashboard() {
         formatNumber(n) {
             if (!n && n !== 0) return "—";
             return n.toLocaleString();
+        },
+
+        get charPromptPreview() {
+            const f = this.charForm;
+            const parts = [`[character("${f.name || '?'}")]`];
+            if (f.description) parts.push(`[description("${f.description}")]`);
+            if (f.personality) parts.push(`[personality("${f.personality}")]`);
+            if (f.scenario) parts.push(`[scenario("${f.scenario}")]`);
+            parts.push("<START>");
+            if (f.first_mes) parts.push(`{{char}}: ${f.first_mes}`);
+            if (f.mes_example) parts.push(f.mes_example);
+            return parts.join("\n");
         },
 
         // Returns the active token stats based on toggle (session or history)
@@ -321,6 +340,102 @@ function dashboard() {
                 user.is_blocked ? "User unblocked" : "User blocked",
                 "success"
             );
+        },
+
+        // ── Characters ─────────────────────────────────────────────
+        async refreshCharacters() {
+            try { this.characters = await this.api("/api/characters"); }
+            catch { this.characters = []; }
+        },
+
+        openCharacterForm() {
+            this.charForm = { id: null, name: "", description: "", personality: "", scenario: "", first_mes: "", mes_example: "" };
+            this.showCharForm = true;
+        },
+
+        openCharacterEdit(card) {
+            this.charForm = {
+                id: card.id,
+                name: card.name,
+                description: card.description || "",
+                personality: card.personality || "",
+                scenario: card.scenario || "",
+                first_mes: card.first_mes || "",
+                mes_example: card.mes_example || "",
+            };
+            this.showCharForm = true;
+        },
+
+        async saveCharacter() {
+            const form = this.charForm;
+            if (!form.name) {
+                this.showToast("Name is required", "error");
+                return;
+            }
+            const body = {
+                name: form.name,
+                description: form.description,
+                personality: form.personality,
+                scenario: form.scenario,
+                first_mes: form.first_mes || null,
+                mes_example: form.mes_example || null,
+            };
+            if (form.id) {
+                await this.api(`/api/characters/${form.id}`, { method: "PUT", body: JSON.stringify(body) });
+            } else {
+                await this.api("/api/characters", { method: "POST", body: JSON.stringify(body) });
+            }
+            this.showCharForm = false;
+            await this.refreshCharacters();
+            this.showToast("Character saved", "success");
+        },
+
+        async activateCharacter(id) {
+            await this.api(`/api/characters/${id}/activate`, { method: "POST" });
+            await this.refreshCharacters();
+            this.showToast("Character activated", "success");
+        },
+
+        async deleteCharacter(id) {
+            if (!confirm("Delete this character card?")) return;
+            await this.api(`/api/characters/${id}`, { method: "DELETE" });
+            this.showCharForm = false;
+            await this.refreshCharacters();
+            this.showToast("Character deleted", "success");
+        },
+
+        async importCharacter(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const formData = new FormData();
+            formData.append("file", file);
+            try {
+                const resp = await fetch("/api/characters/import", { method: "POST", body: formData });
+                if (!resp.ok) {
+                    const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+                    throw new Error(err.detail || `HTTP ${resp.status}`);
+                }
+                await this.refreshCharacters();
+                this.showToast("Character imported", "success");
+            } catch (e) {
+                this.showToast(e.message, "error");
+            }
+            event.target.value = "";
+        },
+
+        async uploadAvatar(event) {
+            const file = event.target.files[0];
+            if (!file || !this.charForm.id) return;
+            const formData = new FormData();
+            formData.append("file", file);
+            try {
+                const resp = await fetch(`/api/characters/${this.charForm.id}/avatar`, { method: "POST", body: formData });
+                if (!resp.ok) throw new Error("Upload failed");
+                await this.refreshCharacters();
+                this.showToast("Avatar uploaded", "success");
+            } catch (e) {
+                this.showToast(e.message, "error");
+            }
         },
     };
 }
