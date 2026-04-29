@@ -119,10 +119,12 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
+    from .. import __version__
+
     app = FastAPI(
         title="WeiLinkBot",
         description="AI Chatbot Platform powered by WeChat iLink Bot SDK",
-        version="0.1.0",
+        version=__version__,
         lifespan=lifespan,
     )
 
