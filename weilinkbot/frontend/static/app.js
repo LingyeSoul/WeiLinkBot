@@ -66,7 +66,6 @@ function dashboard() {
 
         // ── Init ─────────────────────────────────────────────────
         async init() {
-            await window.i18n.init();
             this.langLabel = t("lang.toggle");
             window.addEventListener("lang-changed", () => {
                 this.langLabel = t("lang.toggle");
@@ -77,10 +76,10 @@ function dashboard() {
         },
 
         // ── Language switch ──────────────────────────────────────
-        async switchLang() {
+        switchLang() {
             const newLang = window.i18n.lang === "zh-CN" ? "en" : "zh-CN";
-            await window.i18n.switchLang(newLang);
-            this.langLabel = t("lang.toggle");
+            localStorage.setItem("lang", newLang);
+            location.reload();
         },
 
         async refreshAll() {

@@ -1,23 +1,35 @@
 // WeiLinkBot i18n — frontend internationalization
 
+function detectLang() {
+    const nav = navigator.language || navigator.userLanguage || "en";
+    return nav.startsWith("zh") ? "zh-CN" : "en";
+}
+
 window.i18n = {
     lang: localStorage.getItem("lang") || detectLang(),
     translations: {},
-    _listeners: [],
 
-    async init() {
+    // Load translations synchronously so Alpine.js x-text bindings work immediately
+    init() {
+        const xhr = new XMLHttpRequest();
+        xhr.open("GET", `/locales/${this.lang}.json`, false); // synchronous
         try {
-            const resp = await fetch(`/locales/${this.lang}.json`);
-            if (resp.ok) {
-                this.translations = await resp.json();
-            } else {
-                // Fallback to English
-                const fallback = await fetch("/locales/en.json");
-                this.translations = await fallback.json();
+            xhr.send();
+            if (xhr.status === 200) {
+                this.translations = JSON.parse(xhr.responseText);
+                return;
             }
-        } catch {
-            this.translations = {};
-        }
+        } catch {}
+
+        // Fallback to English
+        try {
+            const fb = new XMLHttpRequest();
+            fb.open("GET", "/locales/en.json", false);
+            fb.send();
+            if (fb.status === 200) {
+                this.translations = JSON.parse(fb.responseText);
+            }
+        } catch {}
     },
 
     t(key) {
@@ -27,19 +39,19 @@ window.i18n = {
     async switchLang(lang) {
         this.lang = lang;
         localStorage.setItem("lang", lang);
-        await this.init();
+        // Re-fetch translations
+        try {
+            const resp = await fetch(`/locales/${lang}.json`);
+            if (resp.ok) {
+                this.translations = await resp.json();
+            }
+        } catch {}
         window.dispatchEvent(new Event("lang-changed"));
-    },
-
-    onChange(fn) {
-        this._listeners.push(fn);
     }
 };
 
-function detectLang() {
-    const nav = navigator.language || navigator.userLanguage || "en";
-    return nav.startsWith("zh") ? "zh-CN" : "en";
-}
+// Load translations immediately (synchronous) before Alpine.js starts
+window.i18n.init();
 
 // Global shorthand
 window.t = (key) => window.i18n.t(key);
