@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
@@ -19,6 +20,8 @@ from ..services.character_service import (
     CharacterService,
     parse_png_character,
     parse_st_json,
+    export_st_json,
+    export_st_png,
 )
 
 router = APIRouter()
@@ -98,6 +101,42 @@ async def deactivate_character(db: AsyncSession = Depends(get_db)):
     service = CharacterService(db)
     await service.deactivate_character()
     return MessageAction(message="Character deactivated")
+
+
+@router.get("/{char_id}/export/json")
+async def export_character_json(char_id: int, db: AsyncSession = Depends(get_db)):
+    """Export a character card as SillyTavern JSON file."""
+    service = CharacterService(db)
+    card = await service.get_character(char_id)
+    if not card:
+        raise HTTPException(status_code=404, detail="Character not found")
+    data = export_st_json(card)
+    return Response(
+        content=data,
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{card.name}.json"'},
+    )
+
+
+@router.get("/{char_id}/export/png")
+async def export_character_png(char_id: int, db: AsyncSession = Depends(get_db)):
+    """Export a character card as PNG with embedded character data."""
+    service = CharacterService(db)
+    card = await service.get_character(char_id)
+    if not card:
+        raise HTTPException(status_code=404, detail="Character not found")
+    base_png = None
+    if card.avatar_path:
+        try:
+            base_png = Path(card.avatar_path).read_bytes()
+        except Exception:
+            pass
+    data = export_st_png(card, base_png)
+    return Response(
+        content=data,
+        media_type="image/png",
+        headers={"Content-Disposition": f'attachment; filename="{card.name}.png"'},
+    )
 
 
 @router.post("/import", response_model=CharacterCardResponse, status_code=201)

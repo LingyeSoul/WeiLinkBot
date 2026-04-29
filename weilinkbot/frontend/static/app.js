@@ -405,6 +405,26 @@ function dashboard() {
             this.showToast("Character deactivated", "success");
         },
 
+        async exportCharacter(format) {
+            if (!this.charForm.id) return;
+            try {
+                const resp = await fetch(`/api/characters/${this.charForm.id}/export/${format}`);
+                if (!resp.ok) throw new Error("Export failed");
+                const blob = await resp.blob();
+                const ext = format === "png" ? ".png" : ".json";
+                const filename = (this.charForm.name || "character") + ext;
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(url);
+                this.showToast("Character exported", "success");
+            } catch (e) {
+                this.showToast(e.message, "error");
+            }
+        },
+
         async deleteCharacter(id) {
             if (!confirm("Delete this character card?")) return;
             await this.api(`/api/characters/${id}`, { method: "DELETE" });
