@@ -149,6 +149,42 @@ class LLMConfigUpdate(BaseModel):
     temperature: Optional[float] = Field(None, ge=0, le=2)
 
 
+# ── Character Cards ─────────────────────────────────────────────
+
+class CharacterCardCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    description: str = ""
+    personality: str = ""
+    scenario: str = ""
+    first_mes: Optional[str] = None
+    mes_example: Optional[str] = None
+
+
+class CharacterCardUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    description: Optional[str] = None
+    personality: Optional[str] = None
+    scenario: Optional[str] = None
+    first_mes: Optional[str] = None
+    mes_example: Optional[str] = None
+
+
+class CharacterCardResponse(BaseModel):
+    id: int
+    name: str
+    avatar_path: Optional[str] = None
+    description: str
+    personality: str
+    scenario: str
+    first_mes: Optional[str] = None
+    mes_example: Optional[str] = None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 # ── Bot Status ──────────────────────────────────────────────────
 
 class BotStatusResponse(BaseModel):
