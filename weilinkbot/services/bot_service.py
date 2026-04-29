@@ -39,6 +39,10 @@ COMMANDS = {
     "/clear": "Clear your conversation history",
     "/prompt": "Show current system prompt",
     "/reset": "Reset to default system prompt",
+    "/char": "List character cards",
+    "/char <name>": "Switch to a character card",
+    "/char info": "Show current character details",
+    "/char off": "Disable character card",
 }
 
 
@@ -251,6 +255,7 @@ class BotService:
             "/clear": self._cmd_clear,
             "/prompt": self._cmd_prompt,
             "/reset": self._cmd_reset,
+            "/char": lambda m, a: self._cmd_char(m, a),
         }
 
         handler = handlers.get(cmd)
@@ -431,6 +436,82 @@ class BotService:
             config.custom_prompt_id = None
             await db.commit()
             await self._bot.reply(msg, "Reset to default system prompt.")
+
+    async def _cmd_char(self, msg: IncomingMessage, args: str) -> None:
+        """Handle /char commands for character card management."""
+        from .character_service import CharacterService
+
+        session_factory = get_session_factory()
+        async with session_factory() as db:
+            service = CharacterService(db)
+
+            if not args or args.strip() == "list":
+                chars = await service.list_characters()
+                if not chars:
+                    await self._bot.reply(msg, "No character cards available.\nImport via the web dashboard.")
+                    return
+
+                lines = ["Character Cards:"]
+                for c in chars:
+                    marker = " [active]" if c.is_active else ""
+                    desc_preview = c.description[:30] + "..." if len(c.description) > 30 else c.description
+                    lines.append(f"  {'*' if c.is_active else 'o'} {c.name} - {desc_preview}{marker}")
+                lines.append("")
+                lines.append("Switch: /char <name>")
+                lines.append("Info:   /char info")
+                lines.append("Off:    /char off")
+                await self._bot.reply(msg, "\n".join(lines))
+
+            elif args.strip() == "info":
+                card = await service.get_active_character()
+                if not card:
+                    await self._bot.reply(msg, "No character card is currently active.")
+                    return
+
+                lines = [
+                    f"Current Character: {card.name}",
+                    "-" * 30,
+                ]
+                if card.description:
+                    lines.append(f"Description: {card.description[:200]}")
+                if card.personality:
+                    lines.append(f"Personality: {card.personality[:200]}")
+                if card.scenario:
+                    lines.append(f"Scenario: {card.scenario[:200]}")
+                if card.first_mes:
+                    lines.append(f"First Message: {card.first_mes[:200]}")
+                await self._bot.reply(msg, "\n".join(lines))
+
+            elif args.strip() == "off":
+                await service.deactivate_character()
+                await db.commit()
+                await self._bot.reply(msg, "Character card deactivated. Restored default assistant.")
+
+            elif args.strip() == "help":
+                help_text = (
+                    "Character Card Commands:\n"
+                    "  /char - List all characters\n"
+                    "  /char <name> - Switch to character\n"
+                    "  /char info - Show current character\n"
+                    "  /char off - Deactivate character\n"
+                    "  /char help - This help"
+                )
+                await self._bot.reply(msg, help_text)
+
+            else:
+                name = args.strip()
+                card = await service.get_character_by_name(name)
+                if not card:
+                    await self._bot.reply(msg, f"Character '{name}' not found.\nUse /char to see available characters.")
+                    return
+
+                card = await service.activate_character(card.id)
+                await db.commit()
+
+                reply = f"Switched to character: {card.name}"
+                if card.first_mes:
+                    reply += f"\n\n{card.first_mes}"
+                await self._bot.reply(msg, reply)
 
     @staticmethod
     def _format_uptime(seconds: float) -> str:
