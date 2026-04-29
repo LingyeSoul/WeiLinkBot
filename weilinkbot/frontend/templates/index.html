@@ -147,7 +147,7 @@
                     <tbody class="divide-y">
                         <template x-for="m in activeTokenStats.models" :key="m.model">
                             <tr>
-                                <td class="px-4 py-2 font-mono text-xs" x-text="m.model"></td>
+                                <td class="px-4 py-2" x-text="m.name || m.model"></td>
                                 <td class="px-4 py-2 text-right" x-text="formatNumber(m.tokens)"></td>
                                 <td class="px-4 py-2 text-right" x-text="m.requests"></td>
                                 <td class="px-4 py-2 text-right">
