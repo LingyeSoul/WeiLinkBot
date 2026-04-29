@@ -22,6 +22,15 @@ async def bot_status(db: AsyncSession = Depends(get_db)):
     creds = bot.credentials
     result = await db.execute(select(LLMPreset).where(LLMPreset.is_active == True))
     active_preset = result.scalar_one_or_none()
+    # Resolve model display names for session token stats
+    session_stats = bot.session_token_stats
+    preset_rows = await db.execute(
+        select(LLMPreset.model, LLMPreset.name).where(LLMPreset.model.isnot(None))
+    )
+    name_map = {row.model: row.name for row in preset_rows.all()}
+    for m in session_stats.get("models", []):
+        m["name"] = name_map.get(m["model"], m["model"])
+
     return BotStatusResponse(
         status=bot.state.value,
         login_url=bot.login_url,
@@ -32,7 +41,7 @@ async def bot_status(db: AsyncSession = Depends(get_db)):
         active_model=bot.llm.config.model,
         uptime_seconds=bot.uptime_seconds,
         session_messages=bot.message_count,
-        session_token_stats=bot.session_token_stats,
+        session_token_stats=session_stats,
     )
 
 

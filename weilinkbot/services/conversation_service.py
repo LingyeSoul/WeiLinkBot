@@ -9,7 +9,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from ..models import Conversation, Message, SystemPrompt, UserConfig
+from ..models import Conversation, Message, SystemPrompt, UserConfig, LLMPreset
 
 logger = logging.getLogger(__name__)
 
@@ -207,6 +207,13 @@ class ConversationService:
 
     # ── Token Statistics ──────────────────────────────────────────
 
+    async def _get_model_name_map(self) -> dict[str, str]:
+        """Build a {model_id: display_name} mapping from LLMPreset."""
+        result = await self._db.execute(
+            select(LLMPreset.model, LLMPreset.name).where(LLMPreset.model.isnot(None))
+        )
+        return {row.model: row.name for row in result.all()}
+
     async def get_token_stats(self) -> dict:
         """Get token usage statistics grouped by model.
 
@@ -231,16 +238,19 @@ class ConversationService:
         result = await self._db.execute(stmt)
         rows = result.all()
 
+        name_map = await self._get_model_name_map()
+
         models = []
         total_tokens = 0
         total_requests = 0
 
         for row in rows:
-            model_name = row.model or "unknown"
+            model_id = row.model or "unknown"
             tokens = int(row.total_tokens)
             count = int(row.request_count)
             models.append({
-                "model": model_name,
+                "model": model_id,
+                "name": name_map.get(model_id, model_id),
                 "tokens": tokens,
                 "requests": count,
             })
@@ -278,13 +288,21 @@ class ConversationService:
         result = await self._db.execute(stmt)
         rows = result.all()
 
+        name_map = await self._get_model_name_map()
+
         models = []
         total_tokens = 0
         total_requests = 0
         for row in rows:
+            model_id = row.model
             tokens = int(row.total_tokens)
             count = int(row.request_count)
-            models.append({"model": row.model, "tokens": tokens, "requests": count})
+            models.append({
+                "model": model_id,
+                "name": name_map.get(model_id, model_id),
+                "tokens": tokens,
+                "requests": count,
+            })
             total_tokens += tokens
             total_requests += count
 
