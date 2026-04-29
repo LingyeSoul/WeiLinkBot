@@ -18,6 +18,7 @@ from ..database import get_session_factory
 from ..models import LLMPreset
 from .llm_service import LLMService
 from .conversation_service import ConversationService
+from ..i18n import t
 
 logger = logging.getLogger(__name__)
 
@@ -236,7 +237,7 @@ class BotService:
                 logger.exception("Error handling message from %s: %s", user_id, e)
                 try:
                     await db.rollback()
-                    await self._bot.reply(msg, "[Error] Failed to process your message.")
+                    await self._bot.reply(msg, t("bot.error.process"))
                 except Exception:
                     pass
 
@@ -264,15 +265,15 @@ class BotService:
                 await handler(msg, args)
             except Exception as e:
                 logger.exception("Command %s error: %s", cmd, e)
-                await self._bot.reply(msg, f"[Error] Command failed: {e}")
+                await self._bot.reply(msg, t("bot.error.command", e=e))
         else:
             await self._bot.reply(
                 msg,
-                f"Unknown command: {cmd}\n\n" + self._format_help()
+                t("bot.error.unknown_cmd", cmd=cmd) + "\n\n" + self._format_help()
             )
 
     def _format_help(self) -> str:
-        lines = ["Available commands:"]
+        lines = [t("bot.help.title")]
         for cmd, desc in COMMANDS.items():
             lines.append(f"  {cmd} — {desc}")
         return "\n".join(lines)
@@ -299,37 +300,37 @@ class BotService:
             history_stats = await conv_service.get_token_stats()
 
         lines = [
-            "Bot Status",
+            t("bot.status.title"),
             "─" * 30,
-            f"Status: {self._state.value}",
-            f"Uptime: {uptime_str}",
-            f"Model: {model}",
-            f"Provider: {provider}",
-            f"Messages this session: {self._message_count}",
-            f"Active conversations: {conv_count}",
+            f"{t('bot.status.status')} {self._state.value}",
+            f"{t('bot.status.uptime')} {uptime_str}",
+            f"{t('bot.status.model')} {model}",
+            f"{t('bot.status.provider')} {provider}",
+            f"{t('bot.status.messages_session')} {self._message_count}",
+            f"{t('bot.status.active_convs')} {conv_count}",
         ]
         if self._credentials:
-            lines.append(f"User ID: {self._credentials.user_id}")
+            lines.append(f"{t('bot.status.user_id')} {self._credentials.user_id}")
 
         # Current session token usage
         lines.append("")
-        lines.append("This Session")
+        lines.append(t("bot.status.session"))
         lines.append("─" * 30)
         if session_stats["models"]:
             for m in session_stats["models"]:
                 lines.append(f"  {m['model']}: {m['tokens']:,} tokens ({m['requests']} reqs)")
-            lines.append(f"  Total: {session_stats['total_tokens']:,} tokens ({session_stats['total_requests']} reqs)")
+            lines.append(f"  {t('bot.status.total')} {session_stats['total_tokens']:,} tokens ({session_stats['total_requests']} reqs)")
         else:
-            lines.append("  No requests yet")
+            lines.append(t("bot.status.no_requests"))
 
         # All-time token usage
         if history_stats["models"]:
             lines.append("")
-            lines.append("All Time")
+            lines.append(t("bot.status.all_time"))
             lines.append("─" * 30)
             for m in history_stats["models"]:
                 lines.append(f"  {m['model']}: {m['tokens']:,} tokens ({m['requests']} reqs)")
-            lines.append(f"  Total: {history_stats['total_tokens']:,} tokens ({history_stats['total_requests']} reqs)")
+            lines.append(f"  {t('bot.status.total')} {history_stats['total_tokens']:,} tokens ({history_stats['total_requests']} reqs)")
 
         await self._bot.reply(msg, "\n".join(lines))
 
@@ -343,16 +344,16 @@ class BotService:
                 )
                 presets = result.scalars().all()
                 if not presets:
-                    await self._bot.reply(msg, "No models configured. Add models via the web dashboard.")
+                    await self._bot.reply(msg, t("bot.model.no_models"))
                     return
 
                 current = self._llm.config.model
-                lines = [f"Current model: {current}", "", "Available models:"]
+                lines = [f"{t('bot.model.current')} {current}", "", t("bot.model.available")]
                 for p in presets:
-                    marker = " [active]" if p.is_active else ""
+                    marker = t("bot.model.active_marker") if p.is_active else ""
                     lines.append(f"  {p.name} — {p.model} ({p.provider}){marker}")
                 lines.append("")
-                lines.append('Switch with: /model <name>')
+                lines.append(t("bot.model.switch_hint"))
                 await self._bot.reply(msg, "\n".join(lines))
                 return
 
@@ -374,7 +375,7 @@ class BotService:
             if not preset:
                 await self._bot.reply(
                     msg,
-                    f"Model '{target}' not found.\nUse /model to see available models."
+                    t("bot.model.not_found", target=target)
                 )
                 return
 
@@ -398,7 +399,7 @@ class BotService:
 
             await self._bot.reply(
                 msg,
-                f"Switched to: {preset.name}\n"
+                t("bot.model.switched") + f" {preset.name}\n"
                 f"Model: {preset.model}\n"
                 f"Provider: {preset.provider}"
             )
@@ -410,9 +411,9 @@ class BotService:
             cleared = await conv_service.clear_messages(msg.user_id)
             await db.commit()
             if cleared:
-                await self._bot.reply(msg, "Conversation history cleared.")
+                await self._bot.reply(msg, t("bot.clear.done"))
             else:
-                await self._bot.reply(msg, "No conversation history to clear.")
+                await self._bot.reply(msg, t("bot.clear.empty"))
 
     async def _cmd_prompt(self, msg: IncomingMessage, args: str) -> None:
         session_factory = get_session_factory()
@@ -426,7 +427,7 @@ class BotService:
                 prompt_text = prompt_text[:500] + "..."
 
             source = "custom" if (user_config and user_config.custom_prompt_id) else "default"
-            await self._bot.reply(msg, f"System prompt ({source}):\n\n{prompt_text}")
+            await self._bot.reply(msg, t("bot.prompt.header", source=source) + f"\n\n{prompt_text}")
 
     async def _cmd_reset(self, msg: IncomingMessage, args: str) -> None:
         session_factory = get_session_factory()
@@ -435,7 +436,7 @@ class BotService:
             config = await conv_service.get_or_create_user_config(msg.user_id)
             config.custom_prompt_id = None
             await db.commit()
-            await self._bot.reply(msg, "Reset to default system prompt.")
+            await self._bot.reply(msg, t("bot.reset.done"))
 
     async def _cmd_char(self, msg: IncomingMessage, args: str) -> None:
         """Handle /char commands for character card management."""
@@ -448,48 +449,48 @@ class BotService:
             if not args or args.strip() == "list":
                 chars = await service.list_characters()
                 if not chars:
-                    await self._bot.reply(msg, "No character cards available.\nImport via the web dashboard.")
+                    await self._bot.reply(msg, t("bot.char.no_chars"))
                     return
 
-                lines = ["Character Cards:"]
+                lines = [t("bot.char.title")]
                 for c in chars:
-                    marker = " [active]" if c.is_active else ""
+                    marker = t("bot.model.active_marker") if c.is_active else ""
                     desc_preview = c.description[:30] + "..." if len(c.description) > 30 else c.description
                     lines.append(f"  {'*' if c.is_active else 'o'} {c.name} - {desc_preview}{marker}")
                 lines.append("")
-                lines.append("Switch: /char <name>")
-                lines.append("Info:   /char info")
-                lines.append("Off:    /char off")
+                lines.append(t("bot.char.switch_hint"))
+                lines.append(t("bot.char.info_hint"))
+                lines.append(t("bot.char.off_hint"))
                 await self._bot.reply(msg, "\n".join(lines))
 
             elif args.strip() == "info":
                 card = await service.get_active_character()
                 if not card:
-                    await self._bot.reply(msg, "No character card is currently active.")
+                    await self._bot.reply(msg, t("bot.char.no_active"))
                     return
 
                 lines = [
-                    f"Current Character: {card.name}",
+                    f"{t('bot.char.current')} {card.name}",
                     "-" * 30,
                 ]
                 if card.description:
-                    lines.append(f"Description: {card.description[:200]}")
+                    lines.append(f"{t('bot.char.description')} {card.description[:200]}")
                 if card.personality:
-                    lines.append(f"Personality: {card.personality[:200]}")
+                    lines.append(f"{t('bot.char.personality')} {card.personality[:200]}")
                 if card.scenario:
-                    lines.append(f"Scenario: {card.scenario[:200]}")
+                    lines.append(f"{t('bot.char.scenario')} {card.scenario[:200]}")
                 if card.first_mes:
-                    lines.append(f"First Message: {card.first_mes[:200]}")
+                    lines.append(f"{t('bot.char.first_mes')} {card.first_mes[:200]}")
                 await self._bot.reply(msg, "\n".join(lines))
 
             elif args.strip() == "off":
                 await service.deactivate_character()
                 await db.commit()
-                await self._bot.reply(msg, "Character card deactivated. Restored default assistant.")
+                await self._bot.reply(msg, t("bot.char.deactivated"))
 
             elif args.strip() == "help":
                 help_text = (
-                    "Character Card Commands:\n"
+                    t("bot.char.help_title") + "\n"
                     "  /char - List all characters\n"
                     "  /char <name> - Switch to character\n"
                     "  /char info - Show current character\n"
@@ -502,13 +503,13 @@ class BotService:
                 name = args.strip()
                 card = await service.get_character_by_name(name)
                 if not card:
-                    await self._bot.reply(msg, f"Character '{name}' not found.\nUse /char to see available characters.")
+                    await self._bot.reply(msg, t("bot.char.not_found", name=name))
                     return
 
                 card = await service.activate_character(card.id)
                 await db.commit()
 
-                reply = f"Switched to character: {card.name}"
+                reply = t("bot.char.switched") + f" {card.name}"
                 if card.first_mes:
                     reply += f"\n\n{card.first_mes}"
                 await self._bot.reply(msg, reply)
