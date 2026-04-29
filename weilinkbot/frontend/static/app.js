@@ -16,6 +16,7 @@ function dashboard() {
             { id: "models", label: "Models" },
             { id: "users", label: "Users" },
             { id: "characters", label: "Characters" },
+            { id: "about", label: "About" },
         ],
 
         // Bot
@@ -49,6 +50,9 @@ function dashboard() {
         sessionTokenStats: { models: [], total_tokens: 0, total_requests: 0 }, // current session (from bot status)
         tokenView: "session",  // "session" or "history"
 
+        // About
+        botVersion: "0.1.0",
+
         // Toast
         toast: { show: false, message: "", type: "info" },
 
@@ -72,6 +76,7 @@ function dashboard() {
                 this.refreshUsers(),
                 this.refreshCharacters(),
                 this.refreshTokenStats(),
+                this.refreshVersion(),
             ]);
         },
 
@@ -134,6 +139,13 @@ function dashboard() {
             try {
                 this.tokenStats = await this.api("/api/stats/tokens");
             } catch { this.tokenStats = { models: [], total_tokens: 0, total_requests: 0 }; }
+        },
+
+        async refreshVersion() {
+            try {
+                const data = await this.api("/api/version");
+                this.botVersion = data.version;
+            } catch { /* keep default */ }
         },
 
         // ── Bot Control ──────────────────────────────────────────
