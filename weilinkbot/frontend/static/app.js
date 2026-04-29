@@ -9,15 +9,7 @@ function dashboard() {
     return {
         // ── State ────────────────────────────────────────────────
         activeTab: "status",
-        tabs: [
-            { id: "status", label: "Status" },
-            { id: "conversations", label: "Conversations" },
-            { id: "prompts", label: "Prompts" },
-            { id: "models", label: "Models" },
-            { id: "users", label: "Users" },
-            { id: "characters", label: "Characters" },
-            { id: "about", label: "About" },
-        ],
+        langLabel: "EN",
 
         // Bot
         botStatus: { status: "stopped", login_url: null, error: null, user_id: null, account_id: null, active_model: null, uptime_seconds: null },
@@ -59,12 +51,36 @@ function dashboard() {
         // Polling
         _pollTimer: null,
 
+        // ── Tabs getter (re-evaluates on language change) ────────
+        get tabs() {
+            return [
+                { id: "status", label: t("tab.status") },
+                { id: "conversations", label: t("tab.conversations") },
+                { id: "prompts", label: t("tab.prompts") },
+                { id: "models", label: t("tab.models") },
+                { id: "users", label: t("tab.users") },
+                { id: "characters", label: t("tab.characters") },
+                { id: "about", label: t("tab.about") },
+            ];
+        },
+
         // ── Init ─────────────────────────────────────────────────
         async init() {
+            await window.i18n.init();
+            this.langLabel = t("lang.toggle");
+            window.addEventListener("lang-changed", () => {
+                this.langLabel = t("lang.toggle");
+            });
             await this.refreshAll();
             this._pollTimer = setInterval(() => this.refreshBotStatus(), 3000);
-            // Refresh token stats every 15 seconds
             setInterval(() => this.refreshTokenStats(), 15000);
+        },
+
+        // ── Language switch ──────────────────────────────────────
+        async switchLang() {
+            const newLang = window.i18n.lang === "zh-CN" ? "en" : "zh-CN";
+            await window.i18n.switchLang(newLang);
+            this.langLabel = t("lang.toggle");
         },
 
         async refreshAll() {
@@ -162,13 +178,13 @@ function dashboard() {
 
         async startBot() {
             await this.api("/api/bot/start", { method: "POST" });
-            this.showToast("Bot starting...", "info");
+            this.showToast(t("toast.bot_starting"), "info");
             await this.refreshBotStatus();
         },
 
         async stopBot() {
             await this.api("/api/bot/stop", { method: "POST" });
-            this.showToast("Bot stopped", "info");
+            this.showToast(t("toast.bot_stopped"), "info");
             await this.refreshBotStatus();
         },
 
@@ -192,12 +208,12 @@ function dashboard() {
         },
 
         async clearConversation(userId) {
-            if (!confirm(`Clear all messages for ${userId}?`)) return;
+            if (!confirm(t("confirm.clear_history").replace("{userId}", userId))) return;
             await this.api(`/api/conversations/${userId}`, { method: "DELETE" });
             this.selectedMessages = [];
             await this.refreshConversations();
             await this.refreshTokenStats();
-            this.showToast("Conversation cleared", "success");
+            this.showToast(t("toast.conv_cleared"), "success");
         },
 
         // ── Prompts ──────────────────────────────────────────────
@@ -220,7 +236,7 @@ function dashboard() {
         async savePrompt() {
             const form = this.promptForm;
             if (!form.name || !form.content) {
-                this.showToast("Name and content are required", "error");
+                this.showToast(t("validate.name_content_required"), "error");
                 return;
             }
             if (form.id) {
@@ -236,20 +252,20 @@ function dashboard() {
             }
             this.resetPromptForm();
             await this.refreshPrompts();
-            this.showToast("Prompt saved", "success");
+            this.showToast(t("toast.prompt_saved"), "success");
         },
 
         async setDefaultPrompt(id) {
             await this.api(`/api/prompts/${id}/default`, { method: "POST" });
             await this.refreshPrompts();
-            this.showToast("Default prompt updated", "success");
+            this.showToast(t("toast.default_updated"), "success");
         },
 
         async deletePrompt(id) {
-            if (!confirm("Delete this prompt?")) return;
+            if (!confirm(t("confirm.delete_prompt"))) return;
             await this.api(`/api/prompts/${id}`, { method: "DELETE" });
             await this.refreshPrompts();
-            this.showToast("Prompt deleted", "success");
+            this.showToast(t("toast.prompt_deleted"), "success");
         },
 
         // ── Models ───────────────────────────────────────────────
@@ -289,12 +305,12 @@ function dashboard() {
         async saveModel() {
             const form = this.modelForm;
             if (!form.name || !form.model || !form.base_url) {
-                this.showToast("Name, model, and base URL are required", "error");
+                this.showToast(t("validate.name_model_url_required"), "error");
                 return;
             }
             // For new models, API key is required
             if (!form.id && !form.api_key) {
-                this.showToast("API key is required for new models", "error");
+                this.showToast(t("validate.api_key_required"), "error");
                 return;
             }
 
@@ -318,21 +334,21 @@ function dashboard() {
             this.resetModelForm();
             await this.refreshModels();
             await this.refreshBotStatus();
-            this.showToast("Model saved", "success");
+            this.showToast(t("toast.model_saved"), "success");
         },
 
         async activateModel(id) {
             await this.api(`/api/models/${id}/activate`, { method: "POST" });
             await this.refreshModels();
             await this.refreshBotStatus();
-            this.showToast("Model activated", "success");
+            this.showToast(t("toast.model_activated"), "success");
         },
 
         async deleteModel(id, name) {
-            if (!confirm(`Delete model '${name}'?`)) return;
+            if (!confirm(t("confirm.delete_model").replace("{name}", name))) return;
             await this.api(`/api/models/${id}`, { method: "DELETE" });
             await this.refreshModels();
-            this.showToast("Model deleted", "success");
+            this.showToast(t("toast.model_deleted"), "success");
         },
 
         // ── Users ────────────────────────────────────────────────
@@ -349,7 +365,7 @@ function dashboard() {
             });
             await this.refreshUsers();
             this.showToast(
-                user.is_blocked ? "User unblocked" : "User blocked",
+                user.is_blocked ? t("toast.user_unblocked") : t("toast.user_blocked"),
                 "success"
             );
         },
@@ -382,7 +398,7 @@ function dashboard() {
         async saveCharacter() {
             const form = this.charForm;
             if (!form.name) {
-                this.showToast("Name is required", "error");
+                this.showToast(t("validate.name_required"), "error");
                 return;
             }
             const body = {
@@ -400,21 +416,21 @@ function dashboard() {
             }
             this.showCharForm = false;
             await this.refreshCharacters();
-            this.showToast("Character saved", "success");
+            this.showToast(t("toast.char_saved"), "success");
         },
 
         async activateCharacter(id) {
             await this.api(`/api/characters/${id}/activate`, { method: "POST" });
             await this.refreshCharacters();
             this.charForm.is_active = true;
-            this.showToast("Character activated", "success");
+            this.showToast(t("toast.char_activated"), "success");
         },
 
         async deactivateCharacter() {
             await this.api("/api/characters/deactivate", { method: "POST" });
             await this.refreshCharacters();
             this.charForm.is_active = false;
-            this.showToast("Character deactivated", "success");
+            this.showToast(t("toast.char_deactivated"), "success");
         },
 
         async exportCharacter(format) {
@@ -431,18 +447,18 @@ function dashboard() {
                 a.download = filename;
                 a.click();
                 URL.revokeObjectURL(url);
-                this.showToast("Character exported", "success");
+                this.showToast(t("toast.char_exported"), "success");
             } catch (e) {
                 this.showToast(e.message, "error");
             }
         },
 
         async deleteCharacter(id) {
-            if (!confirm("Delete this character card?")) return;
+            if (!confirm(t("confirm.delete_char"))) return;
             await this.api(`/api/characters/${id}`, { method: "DELETE" });
             this.showCharForm = false;
             await this.refreshCharacters();
-            this.showToast("Character deleted", "success");
+            this.showToast(t("toast.char_deleted"), "success");
         },
 
         async importCharacter(event) {
@@ -457,7 +473,7 @@ function dashboard() {
                     throw new Error(err.detail || `HTTP ${resp.status}`);
                 }
                 await this.refreshCharacters();
-                this.showToast("Character imported", "success");
+                this.showToast(t("toast.char_imported"), "success");
             } catch (e) {
                 this.showToast(e.message, "error");
             }
@@ -473,7 +489,7 @@ function dashboard() {
                 const resp = await fetch(`/api/characters/${this.charForm.id}/avatar`, { method: "POST", body: formData });
                 if (!resp.ok) throw new Error("Upload failed");
                 await this.refreshCharacters();
-                this.showToast("Avatar uploaded", "success");
+                this.showToast(t("toast.avatar_uploaded"), "success");
             } catch (e) {
                 this.showToast(e.message, "error");
             }
