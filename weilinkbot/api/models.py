@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -97,7 +98,12 @@ async def update_preset(
             raise HTTPException(status_code=409, detail=t("api.preset_exists"))
         preset.name = data.name
 
-    for field in ["provider", "api_key", "base_url", "model", "max_tokens", "temperature"]:
+    for field in [
+        "provider", "api_key", "base_url", "model", "max_tokens", "temperature",
+        "capability_text", "capability_audio", "capability_image",
+        "preprocess_voice_model_id", "preprocess_image_model_id",
+        "preprocess_voice", "preprocess_image",
+    ]:
         val = getattr(data, field)
         if val is not None:
             setattr(preset, field, val.strip() if isinstance(val, str) else val)
@@ -168,5 +174,6 @@ def _activate_preset_in_service(preset: LLMPreset) -> None:
             temperature=preset.temperature,
         )
         bot.llm.update_config(config)
+        asyncio.create_task(bot._load_preprocess_config())
     except RuntimeError:
         pass  # Bot service not yet initialized

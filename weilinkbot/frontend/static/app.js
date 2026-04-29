@@ -27,7 +27,7 @@ function dashboard() {
         // Models
         models: [],
         showModelForm: false,
-        modelForm: { id: null, name: "", provider: "openai", api_key: "", base_url: "", model: "", max_tokens: 2048, temperature: 0.7, is_active: false },
+        modelForm: { id: null, name: "", provider: "openai", api_key: "", base_url: "", model: "", max_tokens: 2048, temperature: 0.7, is_active: false, capability_text: true, capability_audio: false, capability_image: false, preprocess_voice_model_id: null, preprocess_image_model_id: null, preprocess_voice: false, preprocess_image: false },
 
         // Users
         users: [],
@@ -275,7 +275,7 @@ function dashboard() {
         },
 
         resetModelForm() {
-            this.modelForm = { id: null, name: "", provider: "openai", api_key: "", base_url: "https://api.openai.com/v1", model: "gpt-4o-mini", max_tokens: 2048, temperature: 0.7, is_active: false };
+            this.modelForm = { id: null, name: "", provider: "openai", api_key: "", base_url: "https://api.openai.com/v1", model: "gpt-4o-mini", max_tokens: 2048, temperature: 0.7, is_active: false, capability_text: true, capability_audio: false, capability_image: false, preprocess_voice_model_id: null, preprocess_image_model_id: null, preprocess_voice: false, preprocess_image: false };
         },
 
         onModelProviderChange() {
@@ -297,6 +297,13 @@ function dashboard() {
                 max_tokens: m.max_tokens,
                 temperature: m.temperature,
                 is_active: m.is_active,
+                capability_text: m.capability_text,
+                capability_audio: m.capability_audio,
+                capability_image: m.capability_image,
+                preprocess_voice_model_id: m.preprocess_voice_model_id,
+                preprocess_image_model_id: m.preprocess_image_model_id,
+                preprocess_voice: m.preprocess_voice,
+                preprocess_image: m.preprocess_image,
             };
             this.showModelForm = true;
         },
@@ -321,6 +328,13 @@ function dashboard() {
                 max_tokens: form.max_tokens,
                 temperature: form.temperature,
                 is_active: form.is_active,
+                capability_text: form.capability_text,
+                capability_audio: form.capability_audio,
+                capability_image: form.capability_image,
+                preprocess_voice_model_id: form.preprocess_voice_model_id || null,
+                preprocess_image_model_id: form.preprocess_image_model_id || null,
+                preprocess_voice: form.preprocess_voice,
+                preprocess_image: form.preprocess_image,
             };
             if (form.api_key) body.api_key = form.api_key;
 

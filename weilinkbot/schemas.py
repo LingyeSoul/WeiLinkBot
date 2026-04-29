@@ -101,6 +101,13 @@ class LLMPresetCreate(BaseModel):
     max_tokens: int = Field(2048, ge=1, le=128000)
     temperature: float = Field(0.7, ge=0, le=2)
     is_active: bool = False
+    capability_text: bool = True
+    capability_audio: bool = False
+    capability_image: bool = False
+    preprocess_voice_model_id: Optional[int] = None
+    preprocess_image_model_id: Optional[int] = None
+    preprocess_voice: bool = False
+    preprocess_image: bool = False
 
 
 class LLMPresetUpdate(BaseModel):
@@ -112,6 +119,13 @@ class LLMPresetUpdate(BaseModel):
     max_tokens: Optional[int] = Field(None, ge=1, le=128000)
     temperature: Optional[float] = Field(None, ge=0, le=2)
     is_active: Optional[bool] = None
+    capability_text: Optional[bool] = None
+    capability_audio: Optional[bool] = None
+    capability_image: Optional[bool] = None
+    preprocess_voice_model_id: Optional[int] = None
+    preprocess_image_model_id: Optional[int] = None
+    preprocess_voice: Optional[bool] = None
+    preprocess_image: Optional[bool] = None
 
 
 class LLMPresetResponse(BaseModel):
@@ -124,6 +138,13 @@ class LLMPresetResponse(BaseModel):
     temperature: float
     is_active: bool
     api_key_set: bool = True  # Never expose actual key
+    capability_text: bool = True
+    capability_audio: bool = False
+    capability_image: bool = False
+    preprocess_voice_model_id: Optional[int] = None
+    preprocess_image_model_id: Optional[int] = None
+    preprocess_voice: bool = False
+    preprocess_image: bool = False
     created_at: datetime
 
     model_config = {"from_attributes": True}

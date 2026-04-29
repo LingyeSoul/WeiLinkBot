@@ -84,6 +84,15 @@
   "models.edit": "Edit",
   "models.delete": "Delete",
   "models.empty": "No models configured. Click \"Add Model\" to get started.",
+  "models.capabilities": "Capabilities",
+  "models.cap_text": "Text",
+  "models.cap_audio": "Audio",
+  "models.cap_image": "Image",
+  "models.preprocess": "Preprocessing",
+  "models.preprocess_model": "Preprocessing Model",
+  "models.preprocess_voice": "Voice preprocessing",
+  "models.preprocess_image": "Image preprocessing",
+  "models.none": "None",
 
   "users.title": "User Management",
   "users.user_id": "User ID",
@@ -207,6 +216,11 @@
   "llm.error.no_key": "[Error] LLM API key not configured. Use the dashboard or CLI to set it.",
   "llm.error.request_failed": "[Error] LLM request failed: {e}",
   "llm.error.unavailable": "[Error] LLM service unavailable after {retries} retries.",
+
+  "preprocess.image_system": "You are an image understanding assistant. Observe the image carefully and describe its content concisely, including main objects, scene, text, and other key information.",
+  "preprocess.image_user": "Please describe the content of this image.",
+  "preprocess.voice_system": "You are a speech transcription assistant. Accurately transcribe the user's audio content into text, preserving the original meaning.",
+  "preprocess.voice_user": "Please transcribe the content of this audio.",
 
   "cli.starting_bot": "Starting bot...",
   "cli.bot_stopped": "Bot stopped.",

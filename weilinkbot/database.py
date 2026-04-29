@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -12,6 +14,8 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase
 
 from .config import get_config
+
+logger = logging.getLogger(__name__)
 
 
 class Base(DeclarativeBase):
@@ -57,8 +61,46 @@ async def get_db():
             raise
 
 
+# Columns added after initial table creation — safe to re-run.
+_MIGRATIONS: list[tuple[str, str, str]] = [
+    # (table, column, column_type)
+    ("llm_presets", "capability_text", "BOOLEAN NOT NULL DEFAULT 1"),
+    ("llm_presets", "capability_audio", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("llm_presets", "capability_image", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("llm_presets", "preprocess_model_id", "INTEGER REFERENCES llm_presets(id) ON DELETE SET NULL"),
+    ("llm_presets", "preprocess_voice_model_id", "INTEGER REFERENCES llm_presets(id) ON DELETE SET NULL"),
+    ("llm_presets", "preprocess_image_model_id", "INTEGER REFERENCES llm_presets(id) ON DELETE SET NULL"),
+    ("llm_presets", "preprocess_voice", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("llm_presets", "preprocess_image", "BOOLEAN NOT NULL DEFAULT 0"),
+]
+
+
+async def _auto_migrate(conn) -> None:
+    """Add missing columns to existing tables."""
+    for table, column, col_type in _MIGRATIONS:
+        result = await conn.execute(text(f"PRAGMA table_info({table})"))
+        existing = {row[1] for row in result.fetchall()}
+        if column not in existing:
+            await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
+            logger.info("Auto-migration: added %s.%s", table, column)
+
+    # Data migration: copy old preprocess_model_id → both new columns
+    result = await conn.execute(text("PRAGMA table_info(llm_presets)"))
+    cols = {row[1] for row in result.fetchall()}
+    if "preprocess_voice_model_id" in cols and "preprocess_model_id" in cols:
+        await conn.execute(text(
+            "UPDATE llm_presets SET preprocess_voice_model_id = preprocess_model_id "
+            "WHERE preprocess_voice_model_id IS NULL AND preprocess_model_id IS NOT NULL"
+        ))
+        await conn.execute(text(
+            "UPDATE llm_presets SET preprocess_image_model_id = preprocess_model_id "
+            "WHERE preprocess_image_model_id IS NULL AND preprocess_model_id IS NOT NULL"
+        ))
+
+
 async def init_db():
-    """Create all tables."""
+    """Create all tables and apply auto-migrations."""
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await _auto_migrate(conn)
