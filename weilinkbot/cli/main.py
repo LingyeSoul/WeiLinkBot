@@ -15,6 +15,8 @@ from rich.table import Table
 from rich.panel import Panel
 from rich import print as rprint
 
+from weilinkbot.i18n import t
+
 app = typer.Typer(
     name="weilinkbot",
     help="WeiLinkBot — AI Chatbot Platform powered by WeChat iLink Bot SDK",
@@ -44,7 +46,7 @@ def start():
         llm = LLMService(config.llm)
         bot = BotService(config, llm)
 
-        console.print("[bold green]Starting bot...[/bold green]")
+        console.print(f"[bold green]{t('cli.starting_bot')}[/bold green]")
         await bot.start()
 
         # Keep running until interrupted
@@ -53,7 +55,7 @@ def start():
                 await asyncio.sleep(1)
         except KeyboardInterrupt:
             await bot.stop()
-            console.print("[bold yellow]Bot stopped.[/bold yellow]")
+            console.print(f"[bold yellow]{t('cli.bot_stopped')}[/bold yellow]")
 
     _run_async(_start())
 
@@ -64,14 +66,14 @@ def status():
     from weilinkbot.config import get_config
     config = get_config()
 
-    table = Table(title="WeiLinkBot Configuration")
-    table.add_column("Key", style="cyan")
-    table.add_column("Value", style="green")
+    table = Table(title=t("cli.config_title"))
+    table.add_column(t("cli.key"), style="cyan")
+    table.add_column(t("cli.value"), style="green")
 
     table.add_row("LLM Provider", config.llm.provider)
     table.add_row("LLM Model", config.llm.model)
     table.add_row("LLM Base URL", config.llm.base_url)
-    table.add_row("API Key Set", "Yes" if config.llm.api_key else "No")
+    table.add_row("API Key Set", t("cli.yes") if config.llm.api_key else t("cli.no"))
     table.add_row("Max Tokens", str(config.llm.max_tokens))
     table.add_row("Temperature", str(config.llm.temperature))
     table.add_row("Bot Base URL", config.bot.base_url)
@@ -94,8 +96,8 @@ def serve(
     import time
     from weilinkbot.api.app import create_app
 
-    console.print(f"[bold blue]Starting WeiLinkBot dashboard on {host}:{port}...[/bold blue]")
-    console.print(f"[dim]Open http://localhost:{port} in your browser[/dim]")
+    console.print(f"[bold blue]{t('cli.starting_dashboard', host=host, port=port)}[/bold blue]")
+    console.print(f"[dim]{t('cli.open_browser', port=port)}[/dim]")
 
     if open_browser:
         url = f"http://localhost:{port}"
@@ -150,10 +152,10 @@ def config_set_llm(
     elif model:
         config.llm.model = model
 
-    console.print(f"[green]LLM configured:[/green]")
-    console.print(f"  Provider: {config.llm.provider}")
-    console.print(f"  Model:    {config.llm.model}")
-    console.print(f"  Base URL: {config.llm.base_url}")
+    console.print(f"[green]{t('cli.llm_configured')}[/green]")
+    console.print(f"  {t('cli.provider')} {config.llm.provider}")
+    console.print(f"  {t('cli.model')} {config.llm.model}")
+    console.print(f"  {t('cli.base_url')} {config.llm.base_url}")
 
 
 # ── History Commands ──────────────────────────────────────────────
@@ -179,14 +181,14 @@ def history_show(
             messages = await service.get_messages(user_id, limit=limit)
 
             if not messages:
-                console.print(f"[yellow]No messages found for user {user_id}[/yellow]")
+                console.print(f"[yellow]{t('cli.no_messages', user_id=user_id)}[/yellow]")
                 return
 
-            table = Table(title=f"Conversation: {user_id}")
-            table.add_column("Role", style="cyan", width=10)
-            table.add_column("Content", style="white")
-            table.add_column("Tokens", style="dim", width=8)
-            table.add_column("Time", style="dim", width=20)
+            table = Table(title=t("cli.conv_title", user_id=user_id))
+            table.add_column(t("cli.role"), style="cyan", width=10)
+            table.add_column(t("cli.content"), style="white")
+            table.add_column(t("status.tokens"), style="dim", width=8)
+            table.add_column(t("cli.time"), style="dim", width=20)
 
             for msg in messages:
                 content = msg.content[:100] + "..." if len(msg.content) > 100 else msg.content
@@ -198,7 +200,7 @@ def history_show(
                 )
 
             console.print(table)
-            console.print(f"[dim]Showing {len(messages)} messages[/dim]")
+            console.print(f"[dim]{t('cli.showing_messages', count=len(messages))}[/dim]")
 
     _run_async(_show())
 
@@ -217,9 +219,9 @@ def history_clear(user_id: str = typer.Argument(..., help="User ID")):
             cleared = await service.clear_messages(user_id)
             if cleared:
                 await db.commit()
-                console.print(f"[green]Cleared conversation for {user_id}[/green]")
+                console.print(f"[green]{t('cli.cleared', user_id=user_id)}[/green]")
             else:
-                console.print(f"[yellow]No conversation found for {user_id}[/yellow]")
+                console.print(f"[yellow]{t('cli.no_conv', user_id=user_id)}[/yellow]")
 
     _run_async(_clear())
 
@@ -247,18 +249,18 @@ def prompt_list():
             prompts = result.scalars().all()
 
             if not prompts:
-                console.print("[yellow]No prompts found[/yellow]")
+                console.print(f"[yellow]{t('cli.no_prompts')}[/yellow]")
                 return
 
-            table = Table(title="System Prompts")
-            table.add_column("ID", style="cyan", width=4)
-            table.add_column("Name", style="white")
-            table.add_column("Default", style="green", width=8)
-            table.add_column("Content Preview", style="dim")
+            table = Table(title=t("cli.prompts_title"))
+            table.add_column(t("cli.id"), style="cyan", width=4)
+            table.add_column(t("cli.name"), style="white")
+            table.add_column(t("cli.default"), style="green", width=8)
+            table.add_column(t("cli.content_preview"), style="dim")
 
             for p in prompts:
                 preview = p.content[:80] + "..." if len(p.content) > 80 else p.content
-                table.add_row(str(p.id), p.name, "Yes" if p.is_default else "", preview)
+                table.add_row(str(p.id), p.name, t("cli.yes") if p.is_default else "", preview)
 
             console.print(table)
 
@@ -287,7 +289,7 @@ def prompt_create(
 
             db.add(SystemPrompt(name=name, content=content, is_default=default))
             await db.commit()
-            console.print(f"[green]Created prompt '{name}'[/green]")
+            console.print(f"[green]{t('cli.created_prompt', name=name)}[/green]")
 
     _run_async(_create())
 
@@ -308,11 +310,11 @@ def prompt_set_default(prompt_id: int = typer.Argument(..., help="Prompt ID")):
             )
             prompt = await db.get(SystemPrompt, prompt_id)
             if not prompt:
-                console.print(f"[red]Prompt {prompt_id} not found[/red]")
+                console.print(f"[red]{t('cli.prompt_not_found', id=prompt_id)}[/red]")
                 return
             prompt.is_default = True
             await db.commit()
-            console.print(f"[green]Set '{prompt.name}' as default[/green]")
+            console.print(f"[green]{t('cli.set_default', name=prompt.name)}[/green]")
 
     _run_async(_set())
 
@@ -340,20 +342,20 @@ def model_list():
             presets = result.scalars().all()
 
             if not presets:
-                console.print("[yellow]No models configured[/yellow]")
+                console.print(f"[yellow]{t('cli.no_models')}[/yellow]")
                 return
 
-            table = Table(title="LLM Model Presets")
-            table.add_column("ID", style="cyan", width=4)
-            table.add_column("Name", style="white")
-            table.add_column("Provider", style="dim")
-            table.add_column("Model", style="green")
-            table.add_column("Active", style="bold")
+            table = Table(title=t("cli.models_title"))
+            table.add_column(t("cli.id"), style="cyan", width=4)
+            table.add_column(t("cli.name"), style="white")
+            table.add_column(t("models.provider"), style="dim")
+            table.add_column(t("status.model"), style="green")
+            table.add_column(t("cli.active"), style="bold")
 
             for p in presets:
                 table.add_row(
                     str(p.id), p.name, p.provider, p.model,
-                    "Yes" if p.is_active else ""
+                    t("cli.yes") if p.is_active else ""
                 )
 
             console.print(table)
@@ -378,7 +380,7 @@ def model_activate(
         async with session_factory() as db:
             preset = await db.get(LLMPreset, preset_id)
             if not preset:
-                console.print(f"[red]Preset {preset_id} not found[/red]")
+                console.print(f"[red]{t('cli.preset_not_found', id=preset_id)}[/red]")
                 return
 
             await db.execute(
@@ -386,7 +388,7 @@ def model_activate(
             )
             preset.is_active = True
             await db.commit()
-            console.print(f"[green]Activated '{preset.name}' ({preset.model})[/green]")
+            console.print(f"[green]{t('cli.activated', name=preset.name, model=preset.model)}[/green]")
 
     _run_async(_activate())
 
@@ -416,7 +418,7 @@ def model_add(
                 is_active=False,
             ))
             await db.commit()
-            console.print(f"[green]Added model preset '{name}'[/green]")
+            console.print(f"[green]{t('cli.added_model', name=name)}[/green]")
 
     _run_async(_add())
 
