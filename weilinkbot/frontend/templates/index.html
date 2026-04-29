@@ -569,9 +569,13 @@
                                 class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
                             <span x-text="charForm.id ? 'Save' : 'Create'"></span>
                         </button>
-                        <button x-show="charForm.id" @click="activateCharacter(charForm.id)"
+                        <button x-show="charForm.id && !charForm.is_active" @click="activateCharacter(charForm.id)"
                                 class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm">
                             Activate
+                        </button>
+                        <button x-show="charForm.id && charForm.is_active" @click="deactivateCharacter()"
+                                class="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 text-sm">
+                            Deactivate
                         </button>
                         <button x-show="charForm.id" @click="deleteCharacter(charForm.id)"
                                 class="px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 text-sm">

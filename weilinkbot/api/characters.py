@@ -92,6 +92,14 @@ async def activate_character(char_id: int, db: AsyncSession = Depends(get_db)):
     return MessageAction(message=f"Activated character: {card.name}")
 
 
+@router.post("/deactivate", response_model=MessageAction)
+async def deactivate_character(db: AsyncSession = Depends(get_db)):
+    """Deactivate current character card and restore default prompt."""
+    service = CharacterService(db)
+    await service.deactivate_character()
+    return MessageAction(message="Character deactivated")
+
+
 @router.post("/import", response_model=CharacterCardResponse, status_code=201)
 async def import_character(
     file: UploadFile = File(...),
