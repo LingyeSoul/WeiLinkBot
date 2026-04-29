@@ -171,6 +171,22 @@ def create_app() -> FastAPI:
         from .. import __version__
         return {"version": __version__}
 
+    # Language API — allow frontend to control global language
+    @app.get("/api/lang", include_in_schema=False)
+    async def get_language():
+        from .. import i18n
+        return {"lang": i18n.get_lang(), "available": i18n.get_available_langs()}
+
+    @app.put("/api/lang", include_in_schema=False)
+    async def set_language(body: dict):
+        from .. import i18n
+        lang = body.get("lang")
+        if not lang:
+            raise HTTPException(status_code=400, detail="'lang' is required")
+        if not i18n.set_lang(lang):
+            raise HTTPException(status_code=400, detail=f"Unsupported language: {lang}")
+        return {"lang": i18n.get_lang()}
+
     # GitHub avatar proxy (cached locally)
     _avatar_cache: dict[str, tuple[float, bytes]] = {}
 

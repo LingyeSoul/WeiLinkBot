@@ -353,6 +353,8 @@ class BotService:
         """Actual preprocessing + LLM pipeline."""
 
         # Preprocess media if configured
+        preprocess_tokens = 0
+        preprocess_model_name = None
         should_preprocess = (
             (msg.type == "image" and self._preprocess_image and self._preprocess_image_config) or
             (msg.type == "voice" and self._preprocess_voice and self._preprocess_voice_config)
@@ -362,14 +364,22 @@ class BotService:
                 downloaded = await self._bot.download(msg)
                 if downloaded and downloaded.data:
                     if downloaded.type == "image" and self._preprocess_image_config:
+                        model_id = self._preprocess_image_config.model
+                        tokens_before = self._session_tokens.get(model_id, 0)
                         result = await self._do_preprocess_image(downloaded.data)
                         if result:
                             text = result
+                            preprocess_tokens = self._session_tokens.get(model_id, 0) - tokens_before
+                            preprocess_model_name = model_id
                             logger.info("Image preprocessed for user %s", user_id)
                     elif downloaded.type == "voice" and self._preprocess_voice_config:
+                        model_id = self._preprocess_voice_config.model
+                        tokens_before = self._session_tokens.get(model_id, 0)
                         result = await self._do_preprocess_voice(downloaded.data, downloaded.format or "ogg")
                         if result:
                             text = result
+                            preprocess_tokens = self._session_tokens.get(model_id, 0) - tokens_before
+                            preprocess_model_name = model_id
                             logger.info("Voice preprocessed for user %s", user_id)
             except Exception:
                 logger.warning("Media preprocessing failed, using fallback text", exc_info=True)
@@ -388,6 +398,12 @@ class BotService:
                     await self._bot.send_typing(user_id)
                 except Exception:
                     pass
+
+                # Persist preprocessing token usage to database
+                if preprocess_tokens and preprocess_model_name:
+                    await conv_service.add_message(
+                        user_id, "preprocess", text, preprocess_tokens, preprocess_model_name
+                    )
 
                 await conv_service.add_message(user_id, "user", text)
                 await db.commit()
