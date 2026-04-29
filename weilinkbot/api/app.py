@@ -6,7 +6,7 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response
 
@@ -38,6 +38,11 @@ _STATIC_DIR = _FRONTEND_DIR / "static"
 async def lifespan(app: FastAPI):
     """Startup/shutdown lifecycle."""
     config = get_config()
+
+    # Init i18n
+    from .. import i18n
+    i18n.init()
+    logger.info("i18n initialized (lang=%s)", i18n.get_lang())
 
     # Init database
     await init_db()
@@ -131,6 +136,19 @@ def create_app() -> FastAPI:
     # Mount static files
     if _STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
+
+    # Serve locale translation files
+    from ..i18n import LOCALES_DIR
+    import json as _json
+
+    @app.get("/locales/{lang}.json", include_in_schema=False)
+    async def serve_locale(lang: str):
+        locale_file = LOCALES_DIR / f"{lang}.json"
+        if not locale_file.exists():
+            raise HTTPException(status_code=404, detail="Locale not found")
+        from fastapi.responses import JSONResponse
+        data = _json.loads(locale_file.read_text("utf-8"))
+        return JSONResponse(content=data)
 
     # Serve character avatars
     characters_dir = Path("data/characters")
