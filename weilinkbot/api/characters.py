@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -96,7 +98,7 @@ async def import_character(
     db: AsyncSession = Depends(get_db),
 ):
     """Import a character card from a JSON or PNG file."""
-    file_data = await file.read()
+    file_data = await _read_upload_with_limit(file)
     filename = file.filename or "unknown"
 
     if filename.lower().endswith(".png"):
@@ -105,19 +107,22 @@ async def import_character(
             raise HTTPException(status_code=400, detail="No character data found in PNG file")
     elif filename.lower().endswith(".json"):
         try:
-            json_data = __import__("json").loads(file_data)
+            json_data = json.loads(file_data)
             parsed = parse_st_json(json_data)
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid JSON: {e}")
     else:
         raise HTTPException(status_code=400, detail="Unsupported file format. Use .json or .png")
 
+    # Validate imported data through Pydantic schema
+    validated = CharacterCardCreate(**parsed)
+
     service = CharacterService(db)
-    existing = await service.get_character_by_name(parsed["name"])
+    existing = await service.get_character_by_name(validated.name)
     if existing:
-        card = await service.update_character(existing.id, parsed)
+        card = await service.update_character(existing.id, validated.model_dump())
     else:
-        card = await service.create_character(parsed)
+        card = await service.create_character(validated.model_dump())
 
     # If PNG, save avatar
     if filename.lower().endswith(".png") and card:
@@ -133,10 +138,29 @@ async def upload_avatar(
     db: AsyncSession = Depends(get_db),
 ):
     """Upload an avatar image for a character card."""
+    # Validate content type
+    if file.content_type and not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Only image files are allowed")
+
     service = CharacterService(db)
     card = await service.get_character(char_id)
     if not card:
         raise HTTPException(status_code=404, detail="Character not found")
-    file_data = await file.read()
+    file_data = await _read_upload_with_limit(file)
     await service.save_avatar(char_id, file_data, file.filename or "avatar.png")
     return MessageAction(message="Avatar uploaded")
+
+
+_MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
+async def _read_upload_with_limit(file: UploadFile) -> bytes:
+    """Read uploaded file with a size limit to prevent memory exhaustion."""
+    chunks: list[bytes] = []
+    total = 0
+    while chunk := await file.read(8192):
+        total += len(chunk)
+        if total > _MAX_UPLOAD_SIZE:
+            raise HTTPException(status_code=413, detail="File too large (max 10 MB)")
+        chunks.append(chunk)
+    return b"".join(chunks)

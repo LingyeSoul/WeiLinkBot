@@ -133,7 +133,7 @@ class CharacterService:
         if not card:
             return None
         for key, value in data.items():
-            if value is not None and hasattr(card, key):
+            if hasattr(card, key):
                 setattr(card, key, value)
         await self._db.flush()
         return card
@@ -198,10 +198,14 @@ class CharacterService:
             prompt = SystemPrompt(name=name, content=content, is_default=True)
             self._db.add(prompt)
 
+    _ALLOWED_AVATAR_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+
     async def save_avatar(self, char_id: int, file_data: bytes, filename: str) -> Optional[str]:
         """Save an avatar image file and return the path."""
         AVATARS_DIR.mkdir(parents=True, exist_ok=True)
-        ext = Path(filename).suffix or ".png"
+        ext = Path(filename).suffix.lower() or ".png"
+        if ext not in self._ALLOWED_AVATAR_EXTENSIONS:
+            ext = ".png"
         avatar_filename = f"char_{char_id}{ext}"
         avatar_path = AVATARS_DIR / avatar_filename
         avatar_path.write_bytes(file_data)
