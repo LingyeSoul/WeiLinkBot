@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import Response
@@ -23,6 +24,16 @@ from ..services.character_service import (
     export_st_json,
     export_st_png,
 )
+
+
+def _content_disposition(filename: str) -> str:
+    """Build Content-Disposition header with RFC 5987 encoding for non-ASCII filenames."""
+    ascii_name = filename.encode("ascii", "ignore").decode("ascii")
+    if ascii_name == filename:
+        return f'attachment; filename="{filename}"'
+    encoded = quote(filename)
+    return f"attachment; filename=\"{ascii_name or 'file'}\"; filename*=UTF-8''{encoded}"
+
 
 router = APIRouter()
 
@@ -111,10 +122,11 @@ async def export_character_json(char_id: int, db: AsyncSession = Depends(get_db)
     if not card:
         raise HTTPException(status_code=404, detail="Character not found")
     data = export_st_json(card)
+    disposition = _content_disposition(f"{card.name}.json")
     return Response(
         content=data,
         media_type="application/json",
-        headers={"Content-Disposition": f'attachment; filename="{card.name}.json"'},
+        headers={"Content-Disposition": disposition},
     )
 
 
@@ -132,10 +144,11 @@ async def export_character_png(char_id: int, db: AsyncSession = Depends(get_db))
         except Exception:
             pass
     data = export_st_png(card, base_png)
+    disposition = _content_disposition(f"{card.name}.png")
     return Response(
         content=data,
         media_type="image/png",
-        headers={"Content-Disposition": f'attachment; filename="{card.name}.png"'},
+        headers={"Content-Disposition": disposition},
     )
 
 
