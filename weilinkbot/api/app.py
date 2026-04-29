@@ -151,6 +151,48 @@ def create_app() -> FastAPI:
         from .. import __version__
         return {"version": __version__}
 
+    # GitHub avatar proxy (cached locally)
+    _avatar_cache: dict[str, tuple[float, bytes]] = {}
+
+    @app.get("/api/avatar/github/{username}", include_in_schema=False)
+    async def github_avatar(username: str):
+        import time
+        import asyncio
+        import urllib.request
+
+        cache_ttl = 3600  # 1 hour
+        now = time.time()
+
+        if username in _avatar_cache:
+            ts, data = _avatar_cache[username]
+            if now - ts < cache_ttl:
+                return Response(content=data, media_type="image/png")
+
+        def _fetch():
+            req = urllib.request.Request(
+                f"https://github.com/{username}.png?size=80",
+                headers={"User-Agent": "WeiLinkBot"},
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                return resp.read()
+
+        try:
+            data = await asyncio.to_thread(_fetch)
+            _avatar_cache[username] = (now, data)
+            return Response(content=data, media_type="image/png")
+        except Exception:
+            pass
+
+        # Fallback: 1x1 transparent PNG
+        fallback = (
+            b"\x89PNG\r\n\x1a\n"
+            b"\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+            b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
+            b"\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01"
+            b"\r\n\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+        )
+        return Response(content=fallback, media_type="image/png")
+
     # Serve dashboard
     @app.get("/", include_in_schema=False)
     async def dashboard():
