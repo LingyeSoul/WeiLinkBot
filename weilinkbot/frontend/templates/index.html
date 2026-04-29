@@ -581,6 +581,19 @@
                                 class="px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 text-sm">
                             Delete
                         </button>
+                        <div x-show="charForm.id" class="relative ml-2" x-data="{ open: false }">
+                            <button @click="open = !open"
+                                    class="px-4 py-2 bg-purple-100 text-purple-600 rounded-lg hover:bg-purple-200 text-sm">
+                                Export
+                            </button>
+                            <div x-show="open" @click.away="open = false"
+                                 class="absolute bottom-full mb-1 left-0 bg-white border rounded-lg shadow-lg py-1 min-w-[100px] z-10">
+                                <button @click="exportCharacter('json'); open = false"
+                                        class="block w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100">JSON</button>
+                                <button @click="exportCharacter('png'); open = false"
+                                        class="block w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100">PNG</button>
+                            </div>
+                        </div>
                         <button @click="showCharForm = false"
                                 class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm ml-auto">
                             Cancel

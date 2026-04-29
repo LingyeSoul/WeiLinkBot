@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import json
 import logging
 import struct
@@ -96,6 +97,107 @@ def parse_png_character(data: bytes) -> Optional[dict]:
         offset += 12 + length
 
     return None
+
+
+def export_st_json(card: CharacterCard) -> bytes:
+    """Export a character card as SillyTavern V2 JSON."""
+    data = {
+        "name": card.name,
+        "description": card.description or "",
+        "personality": card.personality or "",
+        "scenario": card.scenario or "",
+        "first_mes": card.first_mes or "",
+        "mes_example": card.mes_example or "",
+        "system_prompt": "",
+        "tags": [],
+        "creator": "WeiLinkBot",
+        "character_version": "1.0",
+    }
+    result = {
+        "spec": "chara_card_v2",
+        "spec_version": "2.0",
+        "data": data,
+    }
+    return json.dumps(result, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _make_png_chunk(chunk_type: bytes, data: bytes) -> bytes:
+    """Build a PNG chunk with correct CRC."""
+    length = struct.pack(">I", len(data))
+    crc = binascii.crc32(chunk_type + data) & 0xFFFFFFFF
+    return length + chunk_type + data + struct.pack(">I", crc)
+
+
+def export_st_png(card: CharacterCard, base_png: Optional[bytes] = None) -> bytes:
+    """Export a character card as PNG with embedded character data in tEXt 'chara' chunk.
+
+    If base_png is provided, embed into that image. Otherwise create a minimal 1x1 white PNG.
+    """
+    # Build character card JSON (same as export_st_json but without outer wrapper for ST compat)
+    card_data = {
+        "name": card.name,
+        "description": card.description or "",
+        "personality": card.personality or "",
+        "scenario": card.scenario or "",
+        "first_mes": card.first_mes or "",
+        "mes_example": card.mes_example or "",
+        "system_prompt": "",
+        "tags": [],
+        "creator": "WeiLinkBot",
+        "character_version": "1.0",
+    }
+    card_json = json.dumps(
+        {"spec": "chara_card_v2", "spec_version": "2.0", "data": card_data},
+        ensure_ascii=False,
+    )
+    b64_data = base64.b64encode(card_json.encode("utf-8")).decode("ascii")
+
+    # Build tEXt chunk: keyword \0 base64_text
+    text_payload = b"chara\x00" + b64_data.encode("ascii")
+    text_chunk = _make_png_chunk(b"tEXt", text_payload)
+
+    if base_png and base_png[:8] == b"\x89PNG\r\n\x1a\n":
+        # Strip existing tEXt 'chara' chunks from base image
+        chunks = [base_png[:8]]  # PNG signature
+        offset = 8
+        while offset < len(base_png):
+            if offset + 8 > len(base_png):
+                break
+            length = struct.unpack(">I", base_png[offset:offset + 4])[0]
+            chunk_type = base_png[offset + 4:offset + 8]
+            chunk_data = base_png[offset + 8:offset + 8 + length]
+            crc = base_png[offset + 8 + length:offset + 12 + length]
+            offset += 12 + length
+
+            # Skip old tEXt 'chara' chunks
+            if chunk_type == b"tEXt":
+                null_pos = chunk_data.find(b"\0")
+                if null_pos != -1 and chunk_data[:null_pos] == b"chara":
+                    continue
+
+            if chunk_type == b"IEND":
+                # Insert new tEXt chunk before IEND
+                chunks.append(text_chunk)
+
+            chunks.append(
+                struct.pack(">I", len(chunk_data)) + chunk_type + chunk_data + crc
+            )
+
+        return b"".join(chunks)
+
+    # Generate minimal 1x1 white PNG
+    def _minimal_png() -> bytes:
+        sig = b"\x89PNG\r\n\x1a\n"
+        ihdr_data = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
+        ihdr = _make_png_chunk(b"IHDR", ihdr_data)
+        import zlib
+        raw = b"\x00\xff\xff\xff"  # filter-byte + white RGB pixel
+        compressed = zlib.compress(raw)
+        idat = _make_png_chunk(b"IDAT", compressed)
+        iend = _make_png_chunk(b"IEND", b"")
+        return sig + ihdr + idat + text_chunk + iend
+
+    return _minimal_png()
 
 
 class CharacterService:
