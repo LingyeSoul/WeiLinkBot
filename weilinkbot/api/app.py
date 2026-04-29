@@ -24,6 +24,7 @@ from . import config as config_routes
 from . import users as user_routes
 from . import models as model_routes
 from . import stats as stats_routes
+from . import characters as char_routes
 
 logger = logging.getLogger(__name__)
 
@@ -137,6 +138,7 @@ def create_app() -> FastAPI:
     app.include_router(user_routes.router, prefix="/api/users", tags=["Users"])
     app.include_router(model_routes.router, prefix="/api/models", tags=["Models"])
     app.include_router(stats_routes.router, prefix="/api/stats", tags=["Stats"])
+    app.include_router(char_routes.router, prefix="/api/characters", tags=["Characters"])
 
     # Serve dashboard
     @app.get("/", include_in_schema=False)
