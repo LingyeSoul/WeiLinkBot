@@ -15,7 +15,7 @@ from ..database import init_db, get_session_factory
 from ..models import SystemPrompt, LLMPreset
 from ..services.llm_service import LLMService
 from ..services.bot_service import BotService
-from .deps import set_llm_service, set_bot_service
+from .deps import set_llm_service, set_bot_service, set_memory_service
 
 from . import bot as bot_routes
 from . import conversations as conv_routes
@@ -109,8 +109,14 @@ async def lifespan(app: FastAPI):
     set_llm_service(llm_service)
     logger.info("LLM service initialized (model=%s)", active_config.model)
 
+    # Init Memory service
+    from ..services.memory_service import MemoryService
+    memory_service = MemoryService(config)
+    set_memory_service(memory_service)
+    logger.info("Memory service initialized (available=%s)", memory_service.available)
+
     # Init Bot service
-    bot_service = BotService(config, llm_service)
+    bot_service = BotService(config, llm_service, memory_service=memory_service)
     set_bot_service(bot_service)
     logger.info("Bot service initialized")
 
@@ -164,6 +170,9 @@ def create_app() -> FastAPI:
     app.include_router(model_routes.router, prefix="/api/models", tags=["Models"])
     app.include_router(stats_routes.router, prefix="/api/stats", tags=["Stats"])
     app.include_router(char_routes.router, prefix="/api/characters", tags=["Characters"])
+
+    from . import memories as memory_routes
+    app.include_router(memory_routes.router, prefix="/api/memories", tags=["Memories"])
 
     # Version endpoint
     @app.get("/api/version", include_in_schema=False)

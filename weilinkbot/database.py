@@ -74,6 +74,7 @@ _MIGRATIONS: list[tuple[str, str, str]] = [
     ("llm_presets", "preprocess_image", "BOOLEAN NOT NULL DEFAULT 0"),
     ("llm_presets", "voice_method", "VARCHAR(10) NOT NULL DEFAULT 'llm'"),
     ("llm_presets", "asr_language", "VARCHAR(10)"),
+    ("user_configs", "source", "VARCHAR(20) NOT NULL DEFAULT 'wechat'"),
 ]
 
 

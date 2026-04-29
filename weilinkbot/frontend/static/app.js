@@ -60,6 +60,7 @@ function dashboard() {
                 { id: "models", label: t("tab.models") },
                 { id: "users", label: t("tab.users") },
                 { id: "characters", label: t("tab.characters") },
+                { id: "memories", label: t("memory.title") },
                 { id: "about", label: t("tab.about") },
             ];
         },
@@ -509,6 +510,242 @@ function dashboard() {
                 this.showToast(t("toast.avatar_uploaded"), "success");
             } catch (e) {
                 this.showToast(e.message, "error");
+            }
+        },
+    };
+}
+
+function memoriesPanel() {
+    return {
+        status: { available: false },
+        statusLoaded: false,
+        showConfig: false,
+        configForm: {
+            embedding_provider: 'openai',
+            embedding_model: '',
+            embedding_base_url: '',
+            embedding_api_key: '',
+            embedding_api_key_set: false,
+            top_k: 5,
+        },
+        users: [],
+        selectedUser: null,
+        userMemories: [],
+        displayedMemories: [],
+        searchQuery: '',
+        editingId: null,
+        editText: '',
+        totalMemories: 0,
+
+        async init() {
+            this.initShowToast();
+            await this.loadConfig();
+            await this.loadStatus();
+            if (this.status.available) {
+                await this.loadUsers();
+            }
+        },
+
+        async loadConfig() {
+            try {
+                const res = await fetch('/api/memories/config');
+                if (res.ok) {
+                    const data = await res.json();
+                    this.configForm.embedding_provider = data.embedding?.provider || 'openai';
+                    this.configForm.embedding_model = data.embedding?.model || '';
+                    this.configForm.embedding_base_url = data.embedding?.base_url || '';
+                    this.configForm.embedding_api_key = '';
+                    this.configForm.embedding_api_key_set = data.embedding?.api_key_set || false;
+                    this.configForm.top_k = data.top_k || 5;
+                    // Auto-show config when not configured
+                    if (!this.configForm.embedding_model) {
+                        this.showConfig = true;
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to load memory config', e);
+            }
+        },
+
+        onEmbeddingProviderChange() {
+            const presets = {
+                openai: { base_url: 'https://api.openai.com/v1', model: 'text-embedding-3-small' },
+                huggingface: { base_url: '', model: '' },
+            };
+            const p = presets[this.configForm.embedding_provider];
+            if (p) {
+                this.configForm.embedding_base_url = p.base_url;
+                this.configForm.embedding_model = p.model;
+            }
+        },
+
+        async saveConfig() {
+            if (!this.configForm.embedding_model.trim()) {
+                this.showToast(t('memory.config.model_required'), 'error');
+                return;
+            }
+            try {
+                const body = {
+                    embedding_provider: this.configForm.embedding_provider,
+                    embedding_model: this.configForm.embedding_model.trim(),
+                    embedding_base_url: this.configForm.embedding_base_url.trim(),
+                    top_k: this.configForm.top_k,
+                };
+                if (this.configForm.embedding_api_key) {
+                    body.embedding_api_key = this.configForm.embedding_api_key;
+                }
+                const res = await fetch('/api/memories/config', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                if (res.ok) {
+                    this.showConfig = false;
+                    this.configForm.embedding_api_key = '';
+                    // Reload status and config
+                    await this.loadConfig();
+                    await this.loadStatus();
+                    if (this.status.available) {
+                        await this.loadUsers();
+                    }
+                    this.showToast(t('memory.config.saved'));
+                }
+            } catch (e) {
+                console.error('Failed to save memory config', e);
+            }
+        },
+
+        get selectedUserNickname() {
+            const u = this.users.find(u => u.user_id === this.selectedUser);
+            return u ? u.nickname : null;
+        },
+
+        async loadStatus() {
+            try {
+                const res = await fetch('/api/memories/status');
+                if (res.ok) {
+                    this.status = await res.json();
+                }
+            } catch (e) {
+                console.error('Failed to load memory status', e);
+            }
+            this.statusLoaded = true;
+        },
+
+        async loadUsers() {
+            try {
+                const res = await fetch('/api/memories/users');
+                if (res.ok) {
+                    const data = await res.json();
+                    this.users = data.users || [];
+                    this.totalMemories = this.users.reduce((sum, u) => sum + u.count, 0);
+                }
+            } catch (e) {
+                console.error('Failed to load memory users', e);
+            }
+        },
+
+        showToast(message, type = "info") {
+            const dashboard = Alpine.$data(document.querySelector('[x-data="dashboard()"]'));
+            if (dashboard && dashboard.showToast) dashboard.showToast(message, type);
+        },
+
+        initShowToast() {
+            window.showToast = (msg, type) => this.showToast(msg, type);
+        },
+
+        async selectUser(userId) {
+            this.selectedUser = userId;
+            this.searchQuery = '';
+            this.editingId = null;
+            await this.loadUserMemories();
+        },
+
+        async loadUserMemories() {
+            try {
+                const res = await fetch(`/api/memories/${this.selectedUser}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    this.userMemories = data.memories || [];
+                    this.displayedMemories = [...this.userMemories];
+                }
+            } catch (e) {
+                console.error('Failed to load user memories', e);
+            }
+        },
+
+        async searchMemories() {
+            if (!this.searchQuery.trim()) {
+                this.displayedMemories = [...this.userMemories];
+                return;
+            }
+            try {
+                const res = await fetch(`/api/memories/${this.selectedUser}/search?query=${encodeURIComponent(this.searchQuery)}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    this.displayedMemories = (data.results || []).map((text, i) => ({
+                        id: `search-${i}`,
+                        memory: text,
+                        _isSearchResult: true,
+                    }));
+                }
+            } catch (e) {
+                console.error('Failed to search memories', e);
+            }
+        },
+
+        startEdit(mem) {
+            this.editingId = mem.id;
+            this.editText = mem.memory || mem.text;
+        },
+
+        cancelEdit() {
+            this.editingId = null;
+            this.editText = '';
+        },
+
+        async saveEdit(memoryId) {
+            try {
+                const res = await fetch(`/api/memories/${memoryId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: this.editText }),
+                });
+                if (res.ok) {
+                    this.editingId = null;
+                    if (window.showToast) showToast(t('memory.detail.updated'));
+                    await this.loadUserMemories();
+                }
+            } catch (e) {
+                console.error('Failed to update memory', e);
+            }
+        },
+
+        async deleteMemory(memoryId) {
+            try {
+                const res = await fetch(`/api/memories/${memoryId}`, { method: 'DELETE' });
+                if (res.ok) {
+                    if (window.showToast) showToast(t('memory.detail.deleted'));
+                    await this.loadUserMemories();
+                    await this.loadUsers();
+                }
+            } catch (e) {
+                console.error('Failed to delete memory', e);
+            }
+        },
+
+        async clearAllMemories() {
+            if (!confirm(t('memory.detail.confirm_clear'))) return;
+            try {
+                const res = await fetch(`/api/memories/user/${this.selectedUser}`, { method: 'DELETE' });
+                if (res.ok) {
+                    if (window.showToast) showToast(t('memory.detail.cleared'));
+                    this.userMemories = [];
+                    this.displayedMemories = [];
+                    await this.loadUsers();
+                }
+            } catch (e) {
+                console.error('Failed to clear memories', e);
             }
         },
     };

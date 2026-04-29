@@ -41,9 +41,33 @@ class ServerConfig(BaseModel):
     port: int = 5292
 
 
+class EmbeddingConfig(BaseModel):
+    provider: str = "openai"
+    api_key: str = ""
+    base_url: str = ""
+    model: str = ""
+
+
+class EmbeddingLLMConfig(BaseModel):
+    """LLM config for mem0 memory extraction."""
+    provider: str = ""
+    api_key: str = ""
+    base_url: str = ""
+    model: str = ""
+
+
+class MemoryConfig(BaseModel):
+    enabled: bool = False
+    db_path: str = "./data/chroma_memory"
+    top_k: int = 5
+    embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
+    llm: EmbeddingLLMConfig = Field(default_factory=EmbeddingLLMConfig)
+
+
 class AppConfig(BaseModel):
     bot: BotConfig = Field(default_factory=BotConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
+    memory: MemoryConfig = Field(default_factory=MemoryConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
 

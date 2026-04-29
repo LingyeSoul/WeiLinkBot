@@ -49,6 +49,7 @@ class UserConfig(Base):
 
     user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     nickname: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    source: Mapped[str] = mapped_column(String(20), default="wechat", nullable=False)
     is_blocked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     custom_prompt_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("system_prompts.id"), nullable=True
