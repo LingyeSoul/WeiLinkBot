@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import sys
+import threading
+import webbrowser
 from pathlib import Path
 from typing import Optional
 
@@ -85,12 +87,23 @@ def serve(
     host: str = typer.Option("0.0.0.0", help="Server host"),
     port: int = typer.Option(8000, help="Server port"),
     reload: bool = typer.Option(False, help="Enable auto-reload for development"),
+    open_browser: bool = typer.Option(True, "--open/--no-open", help="Auto-open browser on start"),
 ):
     """Start the web dashboard and API server."""
     import uvicorn
+    import time
 
     console.print(f"[bold blue]Starting WeiLinkBot dashboard on {host}:{port}...[/bold blue]")
     console.print(f"[dim]Open http://localhost:{port} in your browser[/dim]")
+
+    if open_browser:
+        url = f"http://localhost:{port}"
+
+        def _open():
+            time.sleep(1.5)
+            webbrowser.open(url)
+
+        threading.Thread(target=_open, daemon=True).start()
 
     uvicorn.run(
         "weilinkbot.api.app:create_app",
