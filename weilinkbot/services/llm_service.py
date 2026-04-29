@@ -9,6 +9,7 @@ from typing import Optional
 from openai import AsyncOpenAI, APIConnectionError, APITimeoutError, RateLimitError
 
 from ..config import LLMConfig, LLM_PRESETS
+from ..i18n import t
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +70,7 @@ class LLMService:
             RuntimeError: After all retries exhausted
         """
         if not self._config.api_key:
-            return "[Error] LLM API key not configured. Use the dashboard or CLI to set it.", 0
+            return t("llm.error.no_key"), 0
 
         kwargs = {
             "model": self._config.model,
@@ -101,10 +102,10 @@ class LLMService:
 
             except Exception as e:
                 logger.error("LLM unexpected error: %s", e)
-                return f"[Error] LLM request failed: {e}", 0
+                return t("llm.error.request_failed", e=e), 0
 
         logger.error("LLM failed after %d retries: %s", MAX_RETRIES, last_error)
-        return f"[Error] LLM service unavailable after {MAX_RETRIES} retries.", 0
+        return t("llm.error.unavailable", retries=MAX_RETRIES), 0
 
     @staticmethod
     def apply_preset(provider: str, config: LLMConfig) -> LLMConfig:
