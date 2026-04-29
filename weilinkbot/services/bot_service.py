@@ -70,6 +70,10 @@ class BotService:
         self._preprocess_image_config: Optional[LLMConfig] = None
         self._preprocess_voice: bool = False
         self._preprocess_image: bool = False
+        self._preprocess_voice_method: str = "llm"
+        self._preprocess_voice_asr_language: Optional[str] = None
+        # Main model credentials — fallback when a preprocess model has no api_key
+        self._main_llm_fallback: Optional[LLMConfig] = None
 
     @property
     def state(self) -> BotState:
@@ -199,6 +203,10 @@ class BotService:
         self._preprocess_image_config = None
         self._preprocess_voice = False
         self._preprocess_image = False
+        self._preprocess_voice_method = "llm"
+        self._preprocess_voice_asr_language = None
+        # Capture main model credentials for fallback when preprocess model has no api_key
+        self._main_llm_fallback = self._llm.config
         try:
             session_factory = get_session_factory()
             async with session_factory() as db:
@@ -218,11 +226,17 @@ class BotService:
                     )
                     pp = result.scalar_one_or_none()
                     if pp:
+                        api_key = pp.api_key or self._main_llm_fallback.api_key
+                        base_url = pp.base_url or self._main_llm_fallback.base_url
                         self._preprocess_voice_config = LLMConfig(
-                            provider=pp.provider, api_key=pp.api_key,
-                            base_url=pp.base_url, model=pp.model,
+                            provider=pp.provider, api_key=api_key,
+                            base_url=base_url, model=pp.model,
                             max_tokens=pp.max_tokens, temperature=pp.temperature,
                         )
+                        self._preprocess_voice_method = pp.voice_method or "llm"
+                        self._preprocess_voice_asr_language = pp.asr_language
+                        if not pp.api_key:
+                            logger.info("Voice preprocess model '%s' has no api_key — using main model credentials", pp.name)
                     else:
                         logger.warning("Voice preprocess model id=%s not found", preset.preprocess_voice_model_id)
 
@@ -233,11 +247,15 @@ class BotService:
                     )
                     pp = result.scalar_one_or_none()
                     if pp:
+                        api_key = pp.api_key or self._main_llm_fallback.api_key
+                        base_url = pp.base_url or self._main_llm_fallback.base_url
                         self._preprocess_image_config = LLMConfig(
-                            provider=pp.provider, api_key=pp.api_key,
-                            base_url=pp.base_url, model=pp.model,
+                            provider=pp.provider, api_key=api_key,
+                            base_url=base_url, model=pp.model,
                             max_tokens=pp.max_tokens, temperature=pp.temperature,
                         )
+                        if not pp.api_key:
+                            logger.info("Image preprocess model '%s' has no api_key — using main model credentials", pp.name)
                     else:
                         logger.warning("Image preprocess model id=%s not found", preset.preprocess_image_model_id)
         except Exception:
@@ -253,7 +271,9 @@ class BotService:
                 {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
             ]},
         ]
-        text, tokens = await LLMService.chat_with_config(self._preprocess_image_config, messages)
+        text, tokens, api_error = await LLMService.chat_with_config(self._preprocess_image_config, messages)
+        if api_error:
+            return ""
         if tokens:
             model_name = self._preprocess_image_config.model
             self._session_tokens[model_name] = self._session_tokens.get(model_name, 0) + tokens
@@ -262,16 +282,28 @@ class BotService:
 
     async def _do_preprocess_voice(self, audio_bytes: bytes, audio_format: str = "ogg") -> str:
         """Send audio to preprocessing model, return transcription text."""
-        b64 = base64.b64encode(audio_bytes).decode()
         fmt = {"ogg": "ogg", "mp3": "mp3", "wav": "wav"}.get(audio_format, "ogg")
-        messages = [
-            {"role": "system", "content": t("preprocess.voice_system")},
-            {"role": "user", "content": [
-                {"type": "text", "text": t("preprocess.voice_user")},
-                {"type": "input_audio", "input_audio": {"data": b64, "format": fmt}},
-            ]},
-        ]
-        text, tokens = await LLMService.chat_with_config(self._preprocess_voice_config, messages)
+
+        if self._preprocess_voice_method == "asr":
+            # ASR path — /audio/transcriptions (e.g. Whisper)
+            text, tokens, api_error = await LLMService.transcribe_audio(
+                self._preprocess_voice_config, audio_bytes, fmt,
+                language=self._preprocess_voice_asr_language,
+            )
+        else:
+            # LLM path — chat completion with input_audio content part
+            b64 = base64.b64encode(audio_bytes).decode()
+            messages = [
+                {"role": "system", "content": t("preprocess.voice_system")},
+                {"role": "user", "content": [
+                    {"type": "text", "text": t("preprocess.voice_user")},
+                    {"type": "input_audio", "input_audio": {"data": b64, "format": fmt}},
+                ]},
+            ]
+            text, tokens, api_error = await LLMService.chat_with_config(self._preprocess_voice_config, messages)
+
+        if api_error:
+            return ""
         if tokens:
             model_name = self._preprocess_voice_config.model
             self._session_tokens[model_name] = self._session_tokens.get(model_name, 0) + tokens
@@ -279,14 +311,46 @@ class BotService:
         return text
 
     async def _handle_message(self, msg: IncomingMessage) -> None:
-        """Core message pipeline: command check → LLM → reply."""
-        user_id = msg.user_id
+        """Core message pipeline — dispatches commands inline, spawns slow work as a task.
+
+        The SDK's _dispatch awaits this coroutine, so it MUST return quickly.
+        Commands (fast, local) are handled synchronously.
+        Normal messages (preprocessing + LLM, potentially slow) are fire-and-forget.
+        """
         text = msg.text.strip()
 
-        # Check for magic commands first
+        # Fast path — commands are handled inline (no external API calls)
         if text.startswith("/"):
             await self._handle_command(msg, text)
             return
+
+        # Slow path — spawn as background task so the SDK poll loop is not blocked
+        task = asyncio.create_task(self._process_message(msg))
+        task.add_done_callback(self._on_task_error)
+
+    @staticmethod
+    def _on_task_error(task: asyncio.Task) -> None:
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc:
+            logger.error("Unhandled error in message processing task: %s", exc, exc_info=exc)
+
+    async def _process_message(self, msg: IncomingMessage) -> None:
+        """Slow message pipeline: preprocessing + LLM + reply. Runs as a background task."""
+        user_id = msg.user_id
+        text = msg.text.strip()
+        try:
+            await self._process_message_inner(msg, user_id, text)
+        except Exception as e:
+            logger.exception("Unhandled error processing message from %s: %s", user_id, e)
+            try:
+                await self._bot.reply(msg, t("bot.error.process"))
+            except Exception:
+                pass
+
+    async def _process_message_inner(self, msg: IncomingMessage, user_id: str, text: str) -> None:
+        """Actual preprocessing + LLM pipeline."""
 
         # Preprocess media if configured
         should_preprocess = (

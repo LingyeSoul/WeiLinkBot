@@ -92,6 +92,11 @@
   "models.preprocess_model": "Preprocessing Model",
   "models.preprocess_voice": "Voice preprocessing",
   "models.preprocess_image": "Image preprocessing",
+  "models.voice_method": "Voice Method",
+  "models.voice_method_llm": "LLM (Chat)",
+  "models.voice_method_asr": "ASR (Transcription)",
+  "models.asr_language": "Language",
+  "models.asr_language_hint": "zh / en / auto",
   "models.none": "None",
 
   "users.title": "User Management",

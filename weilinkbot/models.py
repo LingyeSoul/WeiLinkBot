@@ -114,6 +114,8 @@ class LLMPreset(Base):
     )
     preprocess_voice: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     preprocess_image: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    voice_method: Mapped[str] = mapped_column(String(10), default="llm", nullable=False)
+    asr_language: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, server_default=func.now()

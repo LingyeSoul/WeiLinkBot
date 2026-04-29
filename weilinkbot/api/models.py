@@ -103,6 +103,7 @@ async def update_preset(
         "capability_text", "capability_audio", "capability_image",
         "preprocess_voice_model_id", "preprocess_image_model_id",
         "preprocess_voice", "preprocess_image",
+        "voice_method", "asr_language",
     ]:
         val = getattr(data, field)
         if val is not None:

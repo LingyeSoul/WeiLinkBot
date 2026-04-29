@@ -108,6 +108,8 @@ class LLMPresetCreate(BaseModel):
     preprocess_image_model_id: Optional[int] = None
     preprocess_voice: bool = False
     preprocess_image: bool = False
+    voice_method: str = "llm"
+    asr_language: Optional[str] = None
 
 
 class LLMPresetUpdate(BaseModel):
@@ -126,6 +128,8 @@ class LLMPresetUpdate(BaseModel):
     preprocess_image_model_id: Optional[int] = None
     preprocess_voice: Optional[bool] = None
     preprocess_image: Optional[bool] = None
+    voice_method: Optional[str] = None
+    asr_language: Optional[str] = None
 
 
 class LLMPresetResponse(BaseModel):
@@ -145,6 +149,8 @@ class LLMPresetResponse(BaseModel):
     preprocess_image_model_id: Optional[int] = None
     preprocess_voice: bool = False
     preprocess_image: bool = False
+    voice_method: str = "llm"
+    asr_language: Optional[str] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

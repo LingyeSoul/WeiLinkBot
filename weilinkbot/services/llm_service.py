@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import logging
 from typing import Any, Optional
 
@@ -117,13 +118,17 @@ class LLMService:
         *,
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
-    ) -> tuple[str, int]:
+    ) -> tuple[str, int, bool]:
         """Send a chat request using an arbitrary LLMConfig (e.g. preprocessing model).
 
         Supports multimodal content parts in messages.
+        Returns (text, tokens, api_error). api_error=True means the provider
+        rejected the request (bad key, rate-limit exhausted, etc.) — callers
+        should NOT treat the returned text as a valid result.
         """
         if not config.api_key:
-            return t("llm.error.no_key"), 0
+            logger.error("Preprocess LLM api_key is empty (model=%s, base_url=%s)", config.model, config.base_url)
+            return "", 0, True
 
         client = AsyncOpenAI(
             api_key=config.api_key.strip() or "not-set",
@@ -144,7 +149,7 @@ class LLMService:
                 response = await client.chat.completions.create(**kwargs)
                 text = response.choices[0].message.content or ""
                 tokens = response.usage.total_tokens if response.usage else 0
-                return text, tokens
+                return text, tokens, False
 
             except (APIConnectionError, APITimeoutError) as e:
                 last_error = e
@@ -159,11 +164,81 @@ class LLMService:
                     await asyncio.sleep(RETRY_BASE_DELAY * attempt * 2)
 
             except Exception as e:
-                logger.error("Preprocess LLM unexpected error: %s", e)
-                return "", 0
+                logger.error("Preprocess LLM unexpected error: %s (model=%s, base_url=%s)", e, config.model, config.base_url)
+                return "", 0, True
 
-        logger.error("Preprocess LLM failed after %d retries: %s", MAX_RETRIES, last_error)
-        return "", 0
+        logger.error("Preprocess LLM failed after %d retries: %s (model=%s)", MAX_RETRIES, last_error, config.model)
+        return "", 0, True
+
+    @staticmethod
+    async def transcribe_audio(
+        config: LLMConfig,
+        audio_bytes: bytes,
+        audio_format: str = "ogg",
+        language: Optional[str] = None,
+    ) -> tuple[str, int, bool]:
+        """Transcribe audio via the /audio/transcriptions endpoint (e.g. Whisper ASR).
+
+        Args:
+            config: LLMConfig with base_url, api_key, model (e.g. "whisper-1").
+            audio_bytes: Raw audio file bytes.
+            audio_format: File extension hint (ogg, mp3, wav, m4a, ...).
+            language: Optional ISO-639-1 language code for better accuracy.
+
+        Returns:
+            (transcribed_text, 0, api_error) — token count is 0 because ASR
+            endpoints don't report usage. api_error=True on provider rejection.
+        """
+        if not config.api_key:
+            logger.error("ASR api_key is empty (model=%s, base_url=%s)", config.model, config.base_url)
+            return "", 0, True
+
+        client = AsyncOpenAI(
+            api_key=config.api_key.strip() or "not-set",
+            base_url=config.base_url,
+            default_headers={"User-Agent": DEFAULT_USER_AGENT},
+        )
+
+        mime_map = {
+            "ogg": "audio/ogg", "mp3": "audio/mpeg", "wav": "audio/wav",
+            "m4a": "audio/mp4", "flac": "audio/flac", "webm": "audio/webm",
+        }
+        mime = mime_map.get(audio_format, "audio/ogg")
+        file_tuple = (f"audio.{audio_format}", io.BytesIO(audio_bytes), mime)
+
+        kwargs: dict[str, Any] = {
+            "model": config.model,
+            "file": file_tuple,
+            "response_format": "text",
+        }
+        if language:
+            kwargs["language"] = language
+
+        last_error = None
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                result = await client.audio.transcriptions.create(**kwargs)
+                text = result if isinstance(result, str) else result.text
+                return text.strip(), 0, False
+
+            except (APIConnectionError, APITimeoutError) as e:
+                last_error = e
+                logger.warning("ASR connection error (attempt %d/%d): %s", attempt, MAX_RETRIES, e)
+                if attempt < MAX_RETRIES:
+                    await asyncio.sleep(RETRY_BASE_DELAY * attempt)
+
+            except RateLimitError as e:
+                last_error = e
+                logger.warning("ASR rate limited (attempt %d/%d): %s", attempt, MAX_RETRIES, e)
+                if attempt < MAX_RETRIES:
+                    await asyncio.sleep(RETRY_BASE_DELAY * attempt * 2)
+
+            except Exception as e:
+                logger.error("ASR unexpected error: %s (model=%s, base_url=%s)", e, config.model, config.base_url)
+                return "", 0, True
+
+        logger.error("ASR failed after %d retries: %s (model=%s)", MAX_RETRIES, last_error, config.model)
+        return "", 0, True
 
     @staticmethod
     def apply_preset(provider: str, config: LLMConfig) -> LLMConfig:

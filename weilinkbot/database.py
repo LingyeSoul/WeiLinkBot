@@ -72,6 +72,8 @@ _MIGRATIONS: list[tuple[str, str, str]] = [
     ("llm_presets", "preprocess_image_model_id", "INTEGER REFERENCES llm_presets(id) ON DELETE SET NULL"),
     ("llm_presets", "preprocess_voice", "BOOLEAN NOT NULL DEFAULT 0"),
     ("llm_presets", "preprocess_image", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("llm_presets", "voice_method", "VARCHAR(10) NOT NULL DEFAULT 'llm'"),
+    ("llm_presets", "asr_language", "VARCHAR(10)"),
 ]
 
 

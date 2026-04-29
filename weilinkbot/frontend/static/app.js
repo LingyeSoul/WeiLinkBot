@@ -27,7 +27,7 @@ function dashboard() {
         // Models
         models: [],
         showModelForm: false,
-        modelForm: { id: null, name: "", provider: "openai", api_key: "", base_url: "", model: "", max_tokens: 2048, temperature: 0.7, is_active: false, capability_text: true, capability_audio: false, capability_image: false, preprocess_voice_model_id: null, preprocess_image_model_id: null, preprocess_voice: false, preprocess_image: false },
+        modelForm: { id: null, name: "", provider: "openai", api_key: "", base_url: "", model: "", max_tokens: 2048, temperature: 0.7, is_active: false, capability_text: true, capability_audio: false, capability_image: false, preprocess_voice_model_id: null, preprocess_image_model_id: null, preprocess_voice: false, preprocess_image: false, voice_method: "llm", asr_language: null },
 
         // Users
         users: [],
@@ -275,7 +275,7 @@ function dashboard() {
         },
 
         resetModelForm() {
-            this.modelForm = { id: null, name: "", provider: "openai", api_key: "", base_url: "https://api.openai.com/v1", model: "gpt-4o-mini", max_tokens: 2048, temperature: 0.7, is_active: false, capability_text: true, capability_audio: false, capability_image: false, preprocess_voice_model_id: null, preprocess_image_model_id: null, preprocess_voice: false, preprocess_image: false };
+            this.modelForm = { id: null, name: "", provider: "openai", api_key: "", base_url: "https://api.openai.com/v1", model: "gpt-4o-mini", max_tokens: 2048, temperature: 0.7, is_active: false, capability_text: true, capability_audio: false, capability_image: false, preprocess_voice_model_id: null, preprocess_image_model_id: null, preprocess_voice: false, preprocess_image: false, voice_method: "llm", asr_language: null };
         },
 
         onModelProviderChange() {
@@ -304,6 +304,8 @@ function dashboard() {
                 preprocess_image_model_id: m.preprocess_image_model_id,
                 preprocess_voice: m.preprocess_voice,
                 preprocess_image: m.preprocess_image,
+                voice_method: m.voice_method || "llm",
+                asr_language: m.asr_language,
             };
             this.showModelForm = true;
         },
@@ -335,6 +337,8 @@ function dashboard() {
                 preprocess_image_model_id: form.preprocess_image_model_id || null,
                 preprocess_voice: form.preprocess_voice,
                 preprocess_image: form.preprocess_image,
+                voice_method: form.voice_method || "llm",
+                asr_language: form.asr_language || null,
             };
             if (form.api_key) body.api_key = form.api_key;
 
