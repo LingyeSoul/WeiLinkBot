@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 import time
 from datetime import datetime, timezone
@@ -64,6 +65,11 @@ class BotService:
         # Session-level token tracking (model -> tokens, reset on each start)
         self._session_tokens: dict[str, int] = {}
         self._session_requests: dict[str, int] = {}
+        # Preprocessing model cache
+        self._preprocess_voice_config: Optional[LLMConfig] = None
+        self._preprocess_image_config: Optional[LLMConfig] = None
+        self._preprocess_voice: bool = False
+        self._preprocess_image: bool = False
 
     @property
     def state(self) -> BotState:
@@ -147,6 +153,7 @@ class BotService:
             self._message_count = 0
             self._session_tokens.clear()
             self._session_requests.clear()
+            await self._load_preprocess_config()
             logger.info(
                 "Bot running — user_id=%s account_id=%s",
                 self._credentials.user_id,
@@ -186,6 +193,91 @@ class BotService:
 
     # ── Message Handler ──────────────────────────────────────────
 
+    async def _load_preprocess_config(self) -> None:
+        """Load preprocessing model configuration from the active preset."""
+        self._preprocess_voice_config = None
+        self._preprocess_image_config = None
+        self._preprocess_voice = False
+        self._preprocess_image = False
+        try:
+            session_factory = get_session_factory()
+            async with session_factory() as db:
+                result = await db.execute(
+                    select(LLMPreset).where(LLMPreset.is_active == True)
+                )
+                preset = result.scalar_one_or_none()
+                if not preset:
+                    return
+                self._preprocess_voice = preset.preprocess_voice
+                self._preprocess_image = preset.preprocess_image
+
+                # Voice preprocessing model
+                if preset.preprocess_voice_model_id:
+                    result = await db.execute(
+                        select(LLMPreset).where(LLMPreset.id == preset.preprocess_voice_model_id)
+                    )
+                    pp = result.scalar_one_or_none()
+                    if pp:
+                        self._preprocess_voice_config = LLMConfig(
+                            provider=pp.provider, api_key=pp.api_key,
+                            base_url=pp.base_url, model=pp.model,
+                            max_tokens=pp.max_tokens, temperature=pp.temperature,
+                        )
+                    else:
+                        logger.warning("Voice preprocess model id=%s not found", preset.preprocess_voice_model_id)
+
+                # Image preprocessing model
+                if preset.preprocess_image_model_id:
+                    result = await db.execute(
+                        select(LLMPreset).where(LLMPreset.id == preset.preprocess_image_model_id)
+                    )
+                    pp = result.scalar_one_or_none()
+                    if pp:
+                        self._preprocess_image_config = LLMConfig(
+                            provider=pp.provider, api_key=pp.api_key,
+                            base_url=pp.base_url, model=pp.model,
+                            max_tokens=pp.max_tokens, temperature=pp.temperature,
+                        )
+                    else:
+                        logger.warning("Image preprocess model id=%s not found", preset.preprocess_image_model_id)
+        except Exception:
+            logger.exception("Failed to load preprocessing config")
+
+    async def _do_preprocess_image(self, image_bytes: bytes) -> str:
+        """Send image to preprocessing model, return description text."""
+        b64 = base64.b64encode(image_bytes).decode()
+        messages = [
+            {"role": "system", "content": t("preprocess.image_system")},
+            {"role": "user", "content": [
+                {"type": "text", "text": t("preprocess.image_user")},
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
+            ]},
+        ]
+        text, tokens = await LLMService.chat_with_config(self._preprocess_image_config, messages)
+        if tokens:
+            model_name = self._preprocess_image_config.model
+            self._session_tokens[model_name] = self._session_tokens.get(model_name, 0) + tokens
+            self._session_requests[model_name] = self._session_requests.get(model_name, 0) + 1
+        return text
+
+    async def _do_preprocess_voice(self, audio_bytes: bytes, audio_format: str = "ogg") -> str:
+        """Send audio to preprocessing model, return transcription text."""
+        b64 = base64.b64encode(audio_bytes).decode()
+        fmt = {"ogg": "ogg", "mp3": "mp3", "wav": "wav"}.get(audio_format, "ogg")
+        messages = [
+            {"role": "system", "content": t("preprocess.voice_system")},
+            {"role": "user", "content": [
+                {"type": "text", "text": t("preprocess.voice_user")},
+                {"type": "input_audio", "input_audio": {"data": b64, "format": fmt}},
+            ]},
+        ]
+        text, tokens = await LLMService.chat_with_config(self._preprocess_voice_config, messages)
+        if tokens:
+            model_name = self._preprocess_voice_config.model
+            self._session_tokens[model_name] = self._session_tokens.get(model_name, 0) + tokens
+            self._session_requests[model_name] = self._session_requests.get(model_name, 0) + 1
+        return text
+
     async def _handle_message(self, msg: IncomingMessage) -> None:
         """Core message pipeline: command check → LLM → reply."""
         user_id = msg.user_id
@@ -195,6 +287,28 @@ class BotService:
         if text.startswith("/"):
             await self._handle_command(msg, text)
             return
+
+        # Preprocess media if configured
+        should_preprocess = (
+            (msg.type == "image" and self._preprocess_image and self._preprocess_image_config) or
+            (msg.type == "voice" and self._preprocess_voice and self._preprocess_voice_config)
+        )
+        if should_preprocess:
+            try:
+                downloaded = await self._bot.download(msg)
+                if downloaded and downloaded.data:
+                    if downloaded.type == "image" and self._preprocess_image_config:
+                        result = await self._do_preprocess_image(downloaded.data)
+                        if result:
+                            text = result
+                            logger.info("Image preprocessed for user %s", user_id)
+                    elif downloaded.type == "voice" and self._preprocess_voice_config:
+                        result = await self._do_preprocess_voice(downloaded.data, downloaded.format or "ogg")
+                        if result:
+                            text = result
+                            logger.info("Voice preprocessed for user %s", user_id)
+            except Exception:
+                logger.warning("Media preprocessing failed, using fallback text", exc_info=True)
 
         # Normal LLM flow
         self._message_count += 1
@@ -396,6 +510,7 @@ class BotService:
                 temperature=preset.temperature,
             )
             self._llm.update_config(config)
+            await self._load_preprocess_config()
 
             await self._bot.reply(
                 msg,

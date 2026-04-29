@@ -84,6 +84,15 @@
   "models.edit": "编辑",
   "models.delete": "删除",
   "models.empty": "暂无模型配置。点击\"添加模型\"开始使用。",
+  "models.capabilities": "能力",
+  "models.cap_text": "文本",
+  "models.cap_audio": "音频",
+  "models.cap_image": "图像",
+  "models.preprocess": "前置处理",
+  "models.preprocess_model": "前置处理模型",
+  "models.preprocess_voice": "语音前置处理",
+  "models.preprocess_image": "图像前置处理",
+  "models.none": "无",
 
   "users.title": "用户管理",
   "users.user_id": "用户ID",
@@ -207,6 +216,11 @@
   "llm.error.no_key": "[错误] 未配置LLM API密钥。请通过Web面板或CLI设置。",
   "llm.error.request_failed": "[错误] LLM请求失败：{e}",
   "llm.error.unavailable": "[错误] LLM服务在 {retries} 次重试后仍不可用。",
+
+  "preprocess.image_system": "你是一个图像理解助手。请仔细观察图片并用简洁的语言描述图片内容，包括主要对象、场景、文字等关键信息。",
+  "preprocess.image_user": "请描述这张图片的内容。",
+  "preprocess.voice_system": "你是一个语音转写助手。请将用户的音频内容准确转写为文字，保持原意。",
+  "preprocess.voice_user": "请转写这段音频的内容。",
 
   "cli.starting_bot": "正在启动机器人...",
   "cli.bot_stopped": "机器人已停止。",

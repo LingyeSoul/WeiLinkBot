@@ -99,6 +99,22 @@ class LLMPreset(Base):
     max_tokens: Mapped[int] = mapped_column(Integer, default=2048, nullable=False)
     temperature: Mapped[float] = mapped_column(default=0.7, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # Capability flags
+    capability_text: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    capability_audio: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    capability_image: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # Preprocessing model configuration
+    preprocess_voice_model_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("llm_presets.id", ondelete="SET NULL"), nullable=True
+    )
+    preprocess_image_model_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("llm_presets.id", ondelete="SET NULL"), nullable=True
+    )
+    preprocess_voice: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    preprocess_image: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, server_default=func.now()
     )

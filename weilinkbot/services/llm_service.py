@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 from openai import AsyncOpenAI, APIConnectionError, APITimeoutError, RateLimitError
 
@@ -109,6 +109,61 @@ class LLMService:
 
         logger.error("LLM failed after %d retries: %s", MAX_RETRIES, last_error)
         return t("llm.error.unavailable", retries=MAX_RETRIES), 0
+
+    @staticmethod
+    async def chat_with_config(
+        config: LLMConfig,
+        messages: list[dict[str, Any]],
+        *,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+    ) -> tuple[str, int]:
+        """Send a chat request using an arbitrary LLMConfig (e.g. preprocessing model).
+
+        Supports multimodal content parts in messages.
+        """
+        if not config.api_key:
+            return t("llm.error.no_key"), 0
+
+        client = AsyncOpenAI(
+            api_key=config.api_key.strip() or "not-set",
+            base_url=config.base_url,
+            default_headers={"User-Agent": DEFAULT_USER_AGENT},
+        )
+
+        kwargs = {
+            "model": config.model,
+            "messages": messages,
+            "temperature": temperature if temperature is not None else config.temperature,
+            "max_tokens": max_tokens or config.max_tokens,
+        }
+
+        last_error = None
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                response = await client.chat.completions.create(**kwargs)
+                text = response.choices[0].message.content or ""
+                tokens = response.usage.total_tokens if response.usage else 0
+                return text, tokens
+
+            except (APIConnectionError, APITimeoutError) as e:
+                last_error = e
+                logger.warning("Preprocess LLM connection error (attempt %d/%d): %s", attempt, MAX_RETRIES, e)
+                if attempt < MAX_RETRIES:
+                    await asyncio.sleep(RETRY_BASE_DELAY * attempt)
+
+            except RateLimitError as e:
+                last_error = e
+                logger.warning("Preprocess LLM rate limited (attempt %d/%d): %s", attempt, MAX_RETRIES, e)
+                if attempt < MAX_RETRIES:
+                    await asyncio.sleep(RETRY_BASE_DELAY * attempt * 2)
+
+            except Exception as e:
+                logger.error("Preprocess LLM unexpected error: %s", e)
+                return "", 0
+
+        logger.error("Preprocess LLM failed after %d retries: %s", MAX_RETRIES, last_error)
+        return "", 0
 
     @staticmethod
     def apply_preset(provider: str, config: LLMConfig) -> LLMConfig:
