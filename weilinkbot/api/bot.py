@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from ..i18n import t
 from ..schemas import BotStatusResponse, MessageAction
 from .deps import get_bot_service
 
@@ -33,7 +34,7 @@ async def bot_start():
     """Start the bot (login + begin polling)."""
     bot = get_bot_service()
     await bot.start()
-    return MessageAction(message="Bot start initiated")
+    return MessageAction(message=t("api.bot_start_initiated"))
 
 
 @router.post("/stop", response_model=MessageAction)
@@ -41,4 +42,4 @@ async def bot_stop():
     """Stop the bot."""
     bot = get_bot_service()
     await bot.stop()
-    return MessageAction(message="Bot stopped")
+    return MessageAction(message=t("api.bot_stopped"))

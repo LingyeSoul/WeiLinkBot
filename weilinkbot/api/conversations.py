@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
+from ..i18n import t
 from ..schemas import (
     ConversationResponse,
     ConversationDetailResponse,
@@ -48,7 +49,7 @@ async def get_conversation(
     conv = result.scalar_one_or_none()
 
     if conv is None:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+        raise HTTPException(status_code=404, detail=t("api.conv_not_found"))
 
     messages = await service.get_messages(user_id, limit=limit, offset=offset)
     return ConversationDetailResponse(
@@ -69,5 +70,5 @@ async def clear_conversation(
     """Clear all messages in a user's conversation."""
     cleared = await service.clear_messages(user_id)
     if not cleared:
-        raise HTTPException(status_code=404, detail="Conversation not found")
-    return MessageAction(message=f"Cleared conversation for {user_id}")
+        raise HTTPException(status_code=404, detail=t("api.conv_not_found"))
+    return MessageAction(message=t("api.cleared_conv", user_id=user_id))

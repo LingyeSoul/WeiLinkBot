@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
+from ..i18n import t
 from ..models import SystemPrompt
 from ..schemas import (
     SystemPromptCreate,
@@ -37,7 +38,7 @@ async def create_prompt(
         select(SystemPrompt).where(SystemPrompt.name == data.name)
     )
     if existing.scalar_one_or_none():
-        raise HTTPException(status_code=409, detail="Prompt name already exists")
+        raise HTTPException(status_code=409, detail=t("api.prompt_exists"))
 
     prompt = SystemPrompt(name=data.name, content=data.content, is_default=data.is_default)
 
@@ -55,7 +56,7 @@ async def get_prompt(prompt_id: int, db: AsyncSession = Depends(get_db)):
     """Get a single system prompt by ID."""
     prompt = await db.get(SystemPrompt, prompt_id)
     if not prompt:
-        raise HTTPException(status_code=404, detail="Prompt not found")
+        raise HTTPException(status_code=404, detail=t("api.prompt_not_found"))
     return prompt
 
 
@@ -68,7 +69,7 @@ async def update_prompt(
     """Update a system prompt."""
     prompt = await db.get(SystemPrompt, prompt_id)
     if not prompt:
-        raise HTTPException(status_code=404, detail="Prompt not found")
+        raise HTTPException(status_code=404, detail=t("api.prompt_not_found"))
 
     if data.name is not None:
         # Check uniqueness
@@ -78,7 +79,7 @@ async def update_prompt(
             )
         )
         if existing.scalar_one_or_none():
-            raise HTTPException(status_code=409, detail="Prompt name already exists")
+            raise HTTPException(status_code=409, detail=t("api.prompt_exists"))
         prompt.name = data.name
 
     if data.content is not None:
@@ -99,11 +100,11 @@ async def delete_prompt(prompt_id: int, db: AsyncSession = Depends(get_db)):
     """Delete a system prompt."""
     prompt = await db.get(SystemPrompt, prompt_id)
     if not prompt:
-        raise HTTPException(status_code=404, detail="Prompt not found")
+        raise HTTPException(status_code=404, detail=t("api.prompt_not_found"))
 
     await db.delete(prompt)
     await db.flush()
-    return MessageAction(message=f"Deleted prompt '{prompt.name}'")
+    return MessageAction(message=t("api.deleted_prompt", name=prompt.name))
 
 
 @router.post("/{prompt_id}/default", response_model=MessageAction)
@@ -111,12 +112,12 @@ async def set_default_prompt(prompt_id: int, db: AsyncSession = Depends(get_db))
     """Set a prompt as the default."""
     prompt = await db.get(SystemPrompt, prompt_id)
     if not prompt:
-        raise HTTPException(status_code=404, detail="Prompt not found")
+        raise HTTPException(status_code=404, detail=t("api.prompt_not_found"))
 
     await _unset_all_defaults(db)
     prompt.is_default = True
     await db.flush()
-    return MessageAction(message=f"Set '{prompt.name}' as default")
+    return MessageAction(message=t("api.set_default", name=prompt.name))
 
 
 async def _unset_all_defaults(db: AsyncSession) -> None:

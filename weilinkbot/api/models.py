@@ -9,6 +9,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
+from ..i18n import t
 from ..models import LLMPreset
 from ..schemas import (
     LLMPresetCreate,
@@ -45,7 +46,7 @@ async def create_preset(data: LLMPresetCreate, db: AsyncSession = Depends(get_db
         select(LLMPreset).where(LLMPreset.name == data.name)
     )
     if existing.scalar_one_or_none():
-        raise HTTPException(status_code=409, detail="Preset name already exists")
+        raise HTTPException(status_code=409, detail=t("api.preset_exists"))
 
     if data.is_active:
         await db.execute(
@@ -70,7 +71,7 @@ async def get_preset(preset_id: int, db: AsyncSession = Depends(get_db)):
     """Get a single LLM preset by ID."""
     preset = await db.get(LLMPreset, preset_id)
     if not preset:
-        raise HTTPException(status_code=404, detail="Preset not found")
+        raise HTTPException(status_code=404, detail=t("api.preset_not_found"))
     return LLMPresetResponse(
         **{k: getattr(preset, k) for k in LLMPresetResponse.model_fields if k != "api_key_set"},
         api_key_set=bool(preset.api_key),
@@ -86,14 +87,14 @@ async def update_preset(
     """Update an LLM preset."""
     preset = await db.get(LLMPreset, preset_id)
     if not preset:
-        raise HTTPException(status_code=404, detail="Preset not found")
+        raise HTTPException(status_code=404, detail=t("api.preset_not_found"))
 
     if data.name is not None:
         existing = await db.execute(
             select(LLMPreset).where(LLMPreset.name == data.name, LLMPreset.id != preset_id)
         )
         if existing.scalar_one_or_none():
-            raise HTTPException(status_code=409, detail="Preset name already exists")
+            raise HTTPException(status_code=409, detail=t("api.preset_exists"))
         preset.name = data.name
 
     for field in ["provider", "api_key", "base_url", "model", "max_tokens", "temperature"]:
@@ -127,12 +128,12 @@ async def delete_preset(preset_id: int, db: AsyncSession = Depends(get_db)):
     """Delete an LLM preset."""
     preset = await db.get(LLMPreset, preset_id)
     if not preset:
-        raise HTTPException(status_code=404, detail="Preset not found")
+        raise HTTPException(status_code=404, detail=t("api.preset_not_found"))
     if preset.is_active:
-        raise HTTPException(status_code=400, detail="Cannot delete the active preset. Switch to another first.")
+        raise HTTPException(status_code=400, detail=t("api.cannot_delete_active"))
     await db.delete(preset)
     await db.flush()
-    return MessageAction(message=f"Deleted preset '{preset.name}'")
+    return MessageAction(message=t("api.deleted_preset", name=preset.name))
 
 
 @router.post("/{preset_id}/activate", response_model=MessageAction)
@@ -140,7 +141,7 @@ async def activate_preset(preset_id: int, db: AsyncSession = Depends(get_db)):
     """Activate an LLM preset (deactivates all others)."""
     preset = await db.get(LLMPreset, preset_id)
     if not preset:
-        raise HTTPException(status_code=404, detail="Preset not found")
+        raise HTTPException(status_code=404, detail=t("api.preset_not_found"))
 
     await db.execute(
         update(LLMPreset).where(LLMPreset.is_active == True).values(is_active=False)
@@ -150,7 +151,7 @@ async def activate_preset(preset_id: int, db: AsyncSession = Depends(get_db)):
 
     _activate_preset_in_service(preset)
     logger.info("Activated preset: %s (model=%s)", preset.name, preset.model)
-    return MessageAction(message=f"Switched to '{preset.name}' ({preset.model})")
+    return MessageAction(message=t("api.switched_preset", name=preset.name, model=preset.model))
 
 
 def _activate_preset_in_service(preset: LLMPreset) -> None:
