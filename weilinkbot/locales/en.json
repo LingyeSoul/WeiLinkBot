@@ -13,6 +13,11 @@
 
   "status.title": "Bot Status",
   "status.status": "Status",
+  "state.stopped": "stopped",
+  "state.running": "running",
+  "state.starting": "starting",
+  "state.error": "error",
+  "state.unknown": "unknown",
   "status.user_id": "User ID",
   "status.account_id": "Account ID",
   "status.active_model": "Active Model",

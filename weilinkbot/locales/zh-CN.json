@@ -13,6 +13,11 @@
 
   "status.title": "机器人状态",
   "status.status": "状态",
+  "state.stopped": "已停止",
+  "state.running": "运行中",
+  "state.starting": "启动中",
+  "state.error": "错误",
+  "state.unknown": "未知",
   "status.user_id": "用户ID",
   "status.account_id": "账号ID",
   "status.active_model": "当前模型",
