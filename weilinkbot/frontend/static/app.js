@@ -42,7 +42,7 @@ function dashboard() {
         // Characters
         characters: [],
         showCharForm: false,
-        charForm: { id: null, name: "", description: "", personality: "", scenario: "", first_mes: "", mes_example: "" },
+        charForm: { id: null, name: "", description: "", personality: "", scenario: "", first_mes: "", mes_example: "", is_active: false },
 
         // Token Stats
         tokenStats: { models: [], total_tokens: 0, total_requests: 0 },       // all-time (from API)
@@ -349,7 +349,7 @@ function dashboard() {
         },
 
         openCharacterForm() {
-            this.charForm = { id: null, name: "", description: "", personality: "", scenario: "", first_mes: "", mes_example: "" };
+            this.charForm = { id: null, name: "", description: "", personality: "", scenario: "", first_mes: "", mes_example: "", is_active: false };
             this.showCharForm = true;
         },
 
@@ -362,6 +362,7 @@ function dashboard() {
                 scenario: card.scenario || "",
                 first_mes: card.first_mes || "",
                 mes_example: card.mes_example || "",
+                is_active: card.is_active || false,
             };
             this.showCharForm = true;
         },
@@ -393,7 +394,15 @@ function dashboard() {
         async activateCharacter(id) {
             await this.api(`/api/characters/${id}/activate`, { method: "POST" });
             await this.refreshCharacters();
+            this.charForm.is_active = true;
             this.showToast("Character activated", "success");
+        },
+
+        async deactivateCharacter() {
+            await this.api("/api/characters/deactivate", { method: "POST" });
+            await this.refreshCharacters();
+            this.charForm.is_active = false;
+            this.showToast("Character deactivated", "success");
         },
 
         async deleteCharacter(id) {
