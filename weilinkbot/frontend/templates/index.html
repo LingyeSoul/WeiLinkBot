@@ -39,12 +39,14 @@
             </button>
             <button @click="startBot()"
                     x-show="botStatus.status !== 'running' && botStatus.status !== 'starting'"
-                    class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium">
+                    class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium"
+                    x-text="t('header.start_bot')">
                 Start Bot
             </button>
             <button @click="stopBot()"
                     x-show="botStatus.status === 'running' || botStatus.status === 'starting'"
-                    class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium">
+                    class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium"
+                    x-text="t('header.stop_bot')">
                 Stop Bot
             </button>
         </div>
@@ -71,26 +73,26 @@
     <!-- Status Tab -->
     <div x-show="activeTab === 'status'" class="space-y-6">
         <div class="bg-white rounded-xl shadow-sm p-6">
-            <h2 class="text-lg font-semibold mb-4">Bot Status</h2>
+            <h2 class="text-lg font-semibold mb-4" x-text="t('status.title')">Bot Status</h2>
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div class="bg-gray-50 rounded-lg p-4">
-                    <div class="text-sm text-gray-500">Status</div>
+                    <div class="text-sm text-gray-500" x-text="t('status.status')">Status</div>
                     <div class="text-xl font-bold mt-1" x-text="botStatus.status"></div>
                 </div>
                 <div class="bg-gray-50 rounded-lg p-4">
-                    <div class="text-sm text-gray-500">User ID</div>
+                    <div class="text-sm text-gray-500" x-text="t('status.user_id')">User ID</div>
                     <div class="text-sm font-mono mt-1 truncate" x-text="botStatus.user_id || '—'"></div>
                 </div>
                 <div class="bg-gray-50 rounded-lg p-4">
-                    <div class="text-sm text-gray-500">Account ID</div>
+                    <div class="text-sm text-gray-500" x-text="t('status.account_id')">Account ID</div>
                     <div class="text-sm font-mono mt-1 truncate" x-text="botStatus.account_id || '—'"></div>
                 </div>
                 <div class="bg-gray-50 rounded-lg p-4">
-                    <div class="text-sm text-gray-500">Active Model</div>
+                    <div class="text-sm text-gray-500" x-text="t('status.active_model')">Active Model</div>
                     <div class="text-sm font-mono mt-1 truncate" x-text="botStatus.active_model || '—'"></div>
                 </div>
                 <div class="bg-gray-50 rounded-lg p-4">
-                    <div class="text-sm text-gray-500">Uptime</div>
+                    <div class="text-sm text-gray-500" x-text="t('status.uptime')">Uptime</div>
                     <div class="text-lg font-bold mt-1" x-text="formatUptime(botStatus.uptime_seconds)"></div>
                 </div>
             </div>
@@ -99,16 +101,18 @@
         <!-- Token Usage -->
         <div class="bg-white rounded-xl shadow-sm p-6">
             <div class="flex items-center justify-between mb-4">
-                <h2 class="text-lg font-semibold">Token Usage</h2>
+                <h2 class="text-lg font-semibold" x-text="t('status.token_usage')">Token Usage</h2>
                 <div class="flex bg-gray-100 rounded-lg p-0.5">
                     <button @click="tokenView = 'session'"
                             class="px-3 py-1 text-xs font-medium rounded-md transition-colors"
-                            :class="tokenView === 'session' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'">
+                            :class="tokenView === 'session' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+                            x-text="t('status.this_session')">
                         This Session
                     </button>
                     <button @click="tokenView = 'history'"
                             class="px-3 py-1 text-xs font-medium rounded-md transition-colors"
-                            :class="tokenView === 'history' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'">
+                            :class="tokenView === 'history' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+                            x-text="t('status.all_time')">
                         All Time
                     </button>
                 </div>
@@ -116,15 +120,15 @@
             <!-- Summary cards -->
             <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
                 <div class="bg-gray-50 rounded-lg p-4">
-                    <div class="text-sm text-gray-500" x-text="tokenView === 'session' ? 'Session Tokens' : 'Total Tokens'"></div>
+                    <div class="text-sm text-gray-500" x-text="tokenView === 'session' ? t('status.session_tokens') : t('status.total_tokens')"></div>
                     <div class="text-xl font-bold mt-1" x-text="formatNumber(activeTokenStats.total_tokens)"></div>
                 </div>
                 <div class="bg-gray-50 rounded-lg p-4">
-                    <div class="text-sm text-gray-500" x-text="tokenView === 'session' ? 'Session Requests' : 'Total Requests'"></div>
+                    <div class="text-sm text-gray-500" x-text="tokenView === 'session' ? t('status.session_requests') : t('status.total_requests')"></div>
                     <div class="text-xl font-bold mt-1" x-text="formatNumber(activeTokenStats.total_requests)"></div>
                 </div>
                 <div class="bg-gray-50 rounded-lg p-4">
-                    <div class="text-sm text-gray-500">Avg Tokens/Req</div>
+                    <div class="text-sm text-gray-500" x-text="t('status.avg_tokens_req')">Avg Tokens/Req</div>
                     <div class="text-xl font-bold mt-1" x-text="activeTokenStats.total_requests ? Math.round(activeTokenStats.total_tokens / activeTokenStats.total_requests) : '—'"></div>
                 </div>
             </div>
@@ -134,10 +138,10 @@
                 <table class="w-full text-sm">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="text-left px-4 py-2 font-medium">Model</th>
-                            <th class="text-right px-4 py-2 font-medium">Tokens</th>
-                            <th class="text-right px-4 py-2 font-medium">Requests</th>
-                            <th class="text-right px-4 py-2 font-medium">Share</th>
+                            <th class="text-left px-4 py-2 font-medium" x-text="t('status.model')">Model</th>
+                            <th class="text-right px-4 py-2 font-medium" x-text="t('status.tokens')">Tokens</th>
+                            <th class="text-right px-4 py-2 font-medium" x-text="t('status.requests')">Requests</th>
+                            <th class="text-right px-4 py-2 font-medium" x-text="t('status.share')">Share</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y">
@@ -158,24 +162,24 @@
             </div>
             <div x-show="!activeTokenStats.models || activeTokenStats.models.length === 0"
                  class="text-gray-400 text-sm text-center py-4"
-                 x-text="tokenView === 'session' ? 'No requests this session' : 'No token usage recorded yet'">
+                 x-text="tokenView === 'session' ? t('status.no_session_requests') : t('status.no_token_usage')">
             </div>
         </div>
 
         <!-- QR Code -->
         <div x-show="botStatus.login_url" class="bg-white rounded-xl shadow-sm p-6">
-            <h2 class="text-lg font-semibold mb-4">Scan QR to Login</h2>
+            <h2 class="text-lg font-semibold mb-4" x-text="t('status.qr_title')">Scan QR to Login</h2>
             <div class="flex items-center gap-4">
                 <a :href="botStatus.login_url" target="_blank"
                    class="text-blue-600 underline break-all text-sm" x-text="botStatus.login_url">
                 </a>
             </div>
-            <p class="text-sm text-gray-500 mt-2">Open the link above in WeChat to scan the QR code.</p>
+            <p class="text-sm text-gray-500 mt-2" x-text="t('status.qr_hint')">Open the link above in WeChat to scan the QR code.</p>
         </div>
 
         <!-- Error -->
         <div x-show="botStatus.error" class="bg-red-50 border border-red-200 rounded-xl p-6">
-            <h2 class="text-red-700 font-semibold mb-2">Error</h2>
+            <h2 class="text-red-700 font-semibold mb-2" x-text="t('status.error')">Error</h2>
             <p class="text-red-600 text-sm" x-text="botStatus.error"></p>
         </div>
     </div>
@@ -185,18 +189,19 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <!-- Conversation List -->
             <div class="bg-white rounded-xl shadow-sm">
-                <div class="p-4 border-b font-semibold">Conversations</div>
+                <div class="p-4 border-b font-semibold" x-text="t('conv.title')">Conversations</div>
                 <div class="divide-y max-h-[600px] overflow-y-auto">
                     <template x-for="conv in conversations" :key="conv.user_id">
                         <div @click="selectConversation(conv.user_id)"
                              class="p-3 cursor-pointer hover:bg-gray-50 transition-colors"
                              :class="{'bg-blue-50': selectedUser === conv.user_id}">
                             <div class="font-medium text-sm truncate" x-text="conv.user_id"></div>
-                            <div class="text-xs text-gray-400 mt-1" x-text="conv.message_count + ' messages'"></div>
+                            <div class="text-xs text-gray-400 mt-1" x-text="conv.message_count + ' ' + t('conv.messages')"></div>
                             <div class="text-xs text-gray-500 mt-1 truncate" x-text="conv.last_message || ''"></div>
                         </div>
                     </template>
-                    <div x-show="conversations.length === 0" class="p-4 text-gray-400 text-sm text-center">
+                    <div x-show="conversations.length === 0" class="p-4 text-gray-400 text-sm text-center"
+                         x-text="t('conv.no_conversations')">
                         No conversations yet
                     </div>
                 </div>
@@ -207,7 +212,8 @@
                 <div class="p-4 border-b flex items-center justify-between">
                     <span class="font-semibold" x-text="selectedUser"></span>
                     <button @click="clearConversation(selectedUser)"
-                            class="text-xs px-3 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200">
+                            class="text-xs px-3 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200"
+                            x-text="t('conv.clear_history')">
                         Clear History
                     </button>
                 </div>
@@ -222,14 +228,15 @@
                             <div class="text-sm whitespace-pre-wrap" x-text="msg.content"></div>
                             <div class="text-xs text-gray-400 mt-1 flex justify-between">
                                 <span x-text="msg.role"></span>
-                                <span x-text="msg.tokens_used ? msg.tokens_used + ' tokens' : ''"></span>
+                                <span x-text="msg.tokens_used ? msg.tokens_used + ' ' + t('conv.tokens') : ''"></span>
                             </div>
                         </div>
                     </template>
                 </div>
             </div>
 
-            <div x-show="!selectedUser" class="lg:col-span-2 bg-white rounded-xl shadow-sm p-8 text-center text-gray-400">
+            <div x-show="!selectedUser" class="lg:col-span-2 bg-white rounded-xl shadow-sm p-8 text-center text-gray-400"
+                 x-text="t('conv.select_hint')">
                 Select a conversation to view messages
             </div>
         </div>
@@ -238,9 +245,10 @@
     <!-- Prompts Tab -->
     <div x-show="activeTab === 'prompts'" class="space-y-4">
         <div class="flex items-center justify-between">
-            <h2 class="text-lg font-semibold">System Prompts</h2>
+            <h2 class="text-lg font-semibold" x-text="t('prompts.title')">System Prompts</h2>
             <button @click="showPromptForm = !showPromptForm"
-                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                    x-text="t('prompts.new')">
                 + New Prompt
             </button>
         </div>
@@ -248,26 +256,27 @@
         <!-- Create/Edit Form -->
         <div x-show="showPromptForm" class="bg-white rounded-xl shadow-sm p-6 space-y-4">
             <div>
-                <label class="block text-sm font-medium mb-1">Name</label>
+                <label class="block text-sm font-medium mb-1" x-text="t('prompts.name')">Name</label>
                 <input x-model="promptForm.name" type="text"
-                       class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Prompt name">
+                       class="w-full border rounded-lg px-3 py-2 text-sm" :placeholder="t('prompts.name_placeholder')" placeholder="Prompt name">
             </div>
             <div>
-                <label class="block text-sm font-medium mb-1">Content</label>
+                <label class="block text-sm font-medium mb-1" x-text="t('prompts.content')">Content</label>
                 <textarea x-model="promptForm.content" rows="4"
-                          class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="System prompt content..."></textarea>
+                          class="w-full border rounded-lg px-3 py-2 text-sm" :placeholder="t('prompts.content_placeholder')" placeholder="System prompt content..."></textarea>
             </div>
             <div class="flex items-center gap-2">
                 <input x-model="promptForm.is_default" type="checkbox" id="is-default" class="rounded">
-                <label for="is-default" class="text-sm">Set as default</label>
+                <label for="is-default" class="text-sm" x-text="t('prompts.set_default')">Set as default</label>
             </div>
             <div class="flex gap-2">
                 <button @click="savePrompt()"
                         class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
-                    <span x-text="promptForm.id ? 'Update' : 'Create'"></span>
+                    <span x-text="promptForm.id ? t('prompts.update') : t('prompts.create')"></span>
                 </button>
                 <button @click="resetPromptForm()"
-                        class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm">
+                        class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm"
+                        x-text="t('prompts.cancel')">
                     Cancel
                 </button>
             </div>
@@ -281,16 +290,20 @@
                         <div class="flex items-center gap-2">
                             <span class="font-medium" x-text="prompt.name"></span>
                             <span x-show="prompt.is_default"
-                                  class="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">default</span>
+                                  class="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full"
+                                  x-text="t('prompts.default_badge')">default</span>
                         </div>
                         <div class="flex gap-1">
                             <button @click="editPrompt(prompt)"
-                                    class="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200">Edit</button>
+                                    class="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200"
+                                    x-text="t('prompts.edit')">Edit</button>
                             <button @click="setDefaultPrompt(prompt.id)"
                                     x-show="!prompt.is_default"
-                                    class="text-xs px-2 py-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200">Set Default</button>
+                                    class="text-xs px-2 py-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200"
+                                    x-text="t('prompts.set_default_btn')">Set Default</button>
                             <button @click="deletePrompt(prompt.id)"
-                                    class="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200">Delete</button>
+                                    class="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200"
+                                    x-text="t('prompts.delete')">Delete</button>
                         </div>
                     </div>
                     <div class="text-sm text-gray-600 whitespace-pre-wrap" x-text="prompt.content"></div>
@@ -302,9 +315,10 @@
     <!-- Models Tab -->
     <div x-show="activeTab === 'models'" class="space-y-4">
         <div class="flex items-center justify-between">
-            <h2 class="text-lg font-semibold">Model Management</h2>
+            <h2 class="text-lg font-semibold" x-text="t('models.title')">Model Management</h2>
             <button @click="showModelForm = !showModelForm; resetModelForm()"
-                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                    x-text="t('models.add')">
                 + Add Model
             </button>
         </div>
@@ -313,12 +327,12 @@
         <div x-show="showModelForm" class="bg-white rounded-xl shadow-sm p-6 space-y-4">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label class="block text-sm font-medium mb-1">Display Name</label>
+                    <label class="block text-sm font-medium mb-1" x-text="t('models.display_name')">Display Name</label>
                     <input x-model="modelForm.name" type="text"
                            class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="e.g. DeepSeek V3">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium mb-1">Provider</label>
+                    <label class="block text-sm font-medium mb-1" x-text="t('models.provider')">Provider</label>
                     <select x-model="modelForm.provider" @change="onModelProviderChange()"
                             class="w-full border rounded-lg px-3 py-2 text-sm">
                         <option value="openai">OpenAI</option>
@@ -327,42 +341,43 @@
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium mb-1">Model ID</label>
+                    <label class="block text-sm font-medium mb-1" x-text="t('models.model_id')">Model ID</label>
                     <input x-model="modelForm.model" type="text"
                            class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="gpt-4o-mini">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium mb-1">Base URL</label>
+                    <label class="block text-sm font-medium mb-1" x-text="t('models.base_url')">Base URL</label>
                     <input x-model="modelForm.base_url" type="text"
                            class="w-full border rounded-lg px-3 py-2 text-sm">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium mb-1">API Key</label>
+                    <label class="block text-sm font-medium mb-1" x-text="t('models.api_key')">API Key</label>
                     <input x-model="modelForm.api_key" type="password"
                            class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="sk-...">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium mb-1">Max Tokens</label>
+                    <label class="block text-sm font-medium mb-1" x-text="t('models.max_tokens')">Max Tokens</label>
                     <input x-model.number="modelForm.max_tokens" type="number"
                            class="w-full border rounded-lg px-3 py-2 text-sm">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium mb-1">Temperature</label>
+                    <label class="block text-sm font-medium mb-1" x-text="t('models.temperature')">Temperature</label>
                     <input x-model.number="modelForm.temperature" type="number" step="0.1" min="0" max="2"
                            class="w-full border rounded-lg px-3 py-2 text-sm">
                 </div>
                 <div class="flex items-center gap-2">
                     <input x-model="modelForm.is_active" type="checkbox" id="model-active" class="rounded">
-                    <label for="model-active" class="text-sm">Activate immediately</label>
+                    <label for="model-active" class="text-sm" x-text="t('models.activate_now')">Activate immediately</label>
                 </div>
             </div>
             <div class="flex gap-2">
                 <button @click="saveModel()"
                         class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
-                    <span x-text="modelForm.id ? 'Update' : 'Add Model'"></span>
+                    <span x-text="modelForm.id ? t('models.update') : t('models.add_model')"></span>
                 </button>
                 <button @click="showModelForm = false; resetModelForm()"
-                        class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm">
+                        class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm"
+                        x-text="t('prompts.cancel')">
                     Cancel
                 </button>
             </div>
@@ -373,12 +388,12 @@
             <table class="w-full text-sm">
                 <thead class="bg-gray-50">
                     <tr>
-                        <th class="text-left px-4 py-3 font-medium">Name</th>
-                        <th class="text-left px-4 py-3 font-medium">Provider</th>
-                        <th class="text-left px-4 py-3 font-medium">Model</th>
-                        <th class="text-left px-4 py-3 font-medium">Status</th>
-                        <th class="text-left px-4 py-3 font-medium">API Key</th>
-                        <th class="text-left px-4 py-3 font-medium">Actions</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('cli.name')">Name</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('models.provider')">Provider</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('status.model')">Model</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('users.status')">Status</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('models.api_key')">API Key</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('users.actions')">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y">
@@ -390,31 +405,35 @@
                             <td class="px-4 py-3">
                                 <span class="text-xs px-2 py-1 rounded-full"
                                       :class="m.is_active ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'"
-                                      x-text="m.is_active ? 'Active' : 'Inactive'">
+                                      x-text="m.is_active ? t('models.active') : t('models.inactive')">
                                 </span>
                             </td>
                             <td class="px-4 py-3">
                                 <span class="text-xs"
                                       :class="m.api_key_set ? 'text-green-600' : 'text-red-500'"
-                                      x-text="m.api_key_set ? 'Set' : 'Missing'">
+                                      x-text="m.api_key_set ? t('models.key_set') : t('models.key_missing')">
                                 </span>
                             </td>
                             <td class="px-4 py-3 flex gap-1">
                                 <button @click="activateModel(m.id)" x-show="!m.is_active"
-                                        class="text-xs px-2 py-1 bg-green-100 text-green-600 rounded hover:bg-green-200">
+                                        class="text-xs px-2 py-1 bg-green-100 text-green-600 rounded hover:bg-green-200"
+                                        x-text="t('models.activate')">
                                     Activate
                                 </button>
                                 <button @click="editModel(m)"
-                                        class="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200">Edit</button>
+                                        class="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200"
+                                        x-text="t('models.edit')">Edit</button>
                                 <button @click="deleteModel(m.id, m.name)" x-show="!m.is_active"
-                                        class="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200">
+                                        class="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200"
+                                        x-text="t('models.delete')">
                                     Delete
                                 </button>
                             </td>
                         </tr>
                     </template>
                     <tr x-show="models.length === 0">
-                        <td colspan="6" class="px-4 py-6 text-center text-gray-400">
+                        <td colspan="6" class="px-4 py-6 text-center text-gray-400"
+                            x-text="t('models.empty')">
                             No models configured. Click "Add Model" to get started.
                         </td>
                     </tr>
@@ -425,16 +444,16 @@
 
     <!-- Users Tab -->
     <div x-show="activeTab === 'users'" class="space-y-4">
-        <h2 class="text-lg font-semibold">User Management</h2>
+        <h2 class="text-lg font-semibold" x-text="t('users.title')">User Management</h2>
         <div class="bg-white rounded-xl shadow-sm overflow-hidden">
             <table class="w-full text-sm">
                 <thead class="bg-gray-50">
                     <tr>
-                        <th class="text-left px-4 py-3 font-medium">User ID</th>
-                        <th class="text-left px-4 py-3 font-medium">Nickname</th>
-                        <th class="text-left px-4 py-3 font-medium">Status</th>
-                        <th class="text-left px-4 py-3 font-medium">Max History</th>
-                        <th class="text-left px-4 py-3 font-medium">Actions</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('users.user_id')">User ID</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('users.nickname')">Nickname</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('users.status')">Status</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('users.max_history')">Max History</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('users.actions')">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y">
@@ -445,7 +464,7 @@
                             <td class="px-4 py-3">
                                 <span class="text-xs px-2 py-1 rounded-full"
                                       :class="user.is_blocked ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'"
-                                      x-text="user.is_blocked ? 'Blocked' : 'Active'">
+                                      x-text="user.is_blocked ? t('users.blocked') : t('users.active')">
                                 </span>
                             </td>
                             <td class="px-4 py-3" x-text="user.max_history"></td>
@@ -455,13 +474,13 @@
                                         :class="user.is_blocked
                                             ? 'bg-green-100 text-green-600 hover:bg-green-200'
                                             : 'bg-red-100 text-red-600 hover:bg-red-200'"
-                                        x-text="user.is_blocked ? 'Unblock' : 'Block'">
+                                        x-text="user.is_blocked ? t('users.unblock') : t('users.block')">
                                 </button>
                             </td>
                         </tr>
                     </template>
                     <tr x-show="users.length === 0">
-                        <td colspan="5" class="px-4 py-6 text-center text-gray-400">No users yet</td>
+                        <td colspan="5" class="px-4 py-6 text-center text-gray-400" x-text="t('users.empty')">No users yet</td>
                     </tr>
                 </tbody>
             </table>
@@ -472,15 +491,16 @@
     <div x-show="activeTab === 'characters'" class="space-y-4">
         <!-- Header -->
         <div class="flex items-center justify-between">
-            <h2 class="text-lg font-semibold">Character Cards</h2>
+            <h2 class="text-lg font-semibold" x-text="t('chars.title')">Character Cards</h2>
             <div class="flex gap-2">
                 <label class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm cursor-pointer">
-                    Import
+                    <span x-text="t('chars.import')">Import</span>
                     <input type="file" accept=".json,.png" class="hidden"
                            @change="importCharacter($event)">
                 </label>
                 <button @click="openCharacterForm()"
-                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                        x-text="t('chars.new')">
                     + New
                 </button>
             </div>
@@ -500,14 +520,16 @@
                             <span x-show="!card.avatar_path" x-text="card.name.charAt(0).toUpperCase()"></span>
                         </div>
                         <div class="font-medium text-sm" x-text="card.name"></div>
-                        <div class="text-xs text-gray-500 mt-1 line-clamp-2" x-text="card.description || 'No description'"></div>
+                        <div class="text-xs text-gray-500 mt-1 line-clamp-2" x-text="card.description || t('chars.no_description')"></div>
                         <span x-show="card.is_active"
-                              class="mt-2 text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">Active</span>
+                              class="mt-2 text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full"
+                              x-text="t('chars.active_badge')">Active</span>
                     </div>
                 </div>
             </template>
             <div x-show="characters.length === 0"
-                 class="col-span-full bg-white rounded-xl shadow-sm p-8 text-center text-gray-400">
+                 class="col-span-full bg-white rounded-xl shadow-sm p-8 text-center text-gray-400"
+                 x-text="t('chars.empty')">
                 No character cards yet. Click "New" or "Import" to get started.
             </div>
         </div>
@@ -518,53 +540,53 @@
             <div class="ml-auto w-full max-w-lg bg-white shadow-xl overflow-y-auto relative z-50">
                 <div class="p-6 space-y-4">
                     <div class="flex items-center justify-between">
-                        <h3 class="text-lg font-semibold" x-text="charForm.id ? 'Edit Character' : 'New Character'"></h3>
+                        <h3 class="text-lg font-semibold" x-text="charForm.id ? t('chars.edit_title') : t('chars.new_title')"></h3>
                         <button @click="showCharForm = false" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
                     </div>
 
                     <div>
-                        <label class="block text-sm font-medium mb-1">Name</label>
+                        <label class="block text-sm font-medium mb-1" x-text="t('prompts.name')">Name</label>
                         <input x-model="charForm.name" type="text"
-                               class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Character name">
+                               class="w-full border rounded-lg px-3 py-2 text-sm" :placeholder="t('chars.name_placeholder')" placeholder="Character name">
                     </div>
                     <div>
                         <label class="block text-sm font-medium mb-1">Description</label>
                         <textarea x-model="charForm.description" rows="3"
-                                  class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Character description..."></textarea>
+                                  class="w-full border rounded-lg px-3 py-2 text-sm" :placeholder="t('chars.desc_placeholder')" placeholder="Character description..."></textarea>
                     </div>
                     <div>
                         <label class="block text-sm font-medium mb-1">Personality</label>
                         <textarea x-model="charForm.personality" rows="2"
-                                  class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Personality traits..."></textarea>
+                                  class="w-full border rounded-lg px-3 py-2 text-sm" :placeholder="t('chars.personality_placeholder')" placeholder="Personality traits..."></textarea>
                     </div>
                     <div>
                         <label class="block text-sm font-medium mb-1">Scenario</label>
                         <textarea x-model="charForm.scenario" rows="2"
-                                  class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Scenario / setting..."></textarea>
+                                  class="w-full border rounded-lg px-3 py-2 text-sm" :placeholder="t('chars.scenario_placeholder')" placeholder="Scenario / setting..."></textarea>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium mb-1">First Message <span class="text-gray-400">(optional)</span></label>
+                        <label class="block text-sm font-medium mb-1"><span x-text="t('chars.first_mes')">First Message</span> <span class="text-gray-400" x-text="t('chars.optional')">(optional)</span></label>
                         <textarea x-model="charForm.first_mes" rows="2"
-                                  class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Opening message..."></textarea>
+                                  class="w-full border rounded-lg px-3 py-2 text-sm" :placeholder="t('chars.first_mes_placeholder')" placeholder="Opening message..."></textarea>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium mb-1">Example Dialog <span class="text-gray-400">(optional)</span></label>
+                        <label class="block text-sm font-medium mb-1"><span x-text="t('chars.example_dialog')">Example Dialog</span> <span class="text-gray-400" x-text="t('chars.optional')">(optional)</span></label>
                         <textarea x-model="charForm.mes_example" rows="3"
                                   class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="{{char}}: ...&#10;{{user}}: ..."></textarea>
                     </div>
 
                     <!-- Prompt Preview -->
                     <div>
-                        <label class="block text-sm font-medium mb-1">Prompt Preview</label>
+                        <label class="block text-sm font-medium mb-1" x-text="t('chars.prompt_preview')">Prompt Preview</label>
                         <pre class="bg-gray-50 border rounded-lg p-3 text-xs text-gray-600 overflow-auto max-h-40 whitespace-pre-wrap"
                              x-text="charPromptPreview"></pre>
                     </div>
 
                     <!-- Avatar Upload -->
                     <div x-show="charForm.id">
-                        <label class="block text-sm font-medium mb-1">Avatar</label>
+                        <label class="block text-sm font-medium mb-1" x-text="t('chars.avatar')">Avatar</label>
                         <label class="inline-block px-3 py-1 bg-gray-100 rounded cursor-pointer hover:bg-gray-200 text-sm">
-                            Upload Avatar
+                            <span x-text="t('chars.upload_avatar')">Upload Avatar</span>
                             <input type="file" accept="image/*" class="hidden"
                                    @change="uploadAvatar($event)">
                         </label>
@@ -573,23 +595,27 @@
                     <div class="flex gap-2 pt-2">
                         <button @click="saveCharacter()"
                                 class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
-                            <span x-text="charForm.id ? 'Save' : 'Create'"></span>
+                            <span x-text="charForm.id ? t('chars.save') : t('chars.create')"></span>
                         </button>
                         <button x-show="charForm.id && !charForm.is_active" @click="activateCharacter(charForm.id)"
-                                class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm">
+                                class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
+                                x-text="t('chars.activate')">
                             Activate
                         </button>
                         <button x-show="charForm.id && charForm.is_active" @click="deactivateCharacter()"
-                                class="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 text-sm">
+                                class="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 text-sm"
+                                x-text="t('chars.deactivate')">
                             Deactivate
                         </button>
                         <button x-show="charForm.id" @click="deleteCharacter(charForm.id)"
-                                class="px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 text-sm">
+                                class="px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 text-sm"
+                                x-text="t('chars.delete')">
                             Delete
                         </button>
                         <div x-show="charForm.id" class="relative ml-2" x-data="{ open: false }">
                             <button @click="open = !open"
-                                    class="px-4 py-2 bg-purple-100 text-purple-600 rounded-lg hover:bg-purple-200 text-sm">
+                                    class="px-4 py-2 bg-purple-100 text-purple-600 rounded-lg hover:bg-purple-200 text-sm"
+                                    x-text="t('chars.export')">
                                 Export
                             </button>
                             <div x-show="open" @click.away="open = false"
@@ -601,7 +627,8 @@
                             </div>
                         </div>
                         <button @click="showCharForm = false"
-                                class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm ml-auto">
+                                class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm ml-auto"
+                                x-text="t('prompts.cancel')">
                             Cancel
                         </button>
                     </div>
@@ -616,11 +643,11 @@
             <img src="/static/logo.svg" alt="WeiLinkBot" class="w-20 h-20 mx-auto mb-4">
             <h2 class="text-2xl font-bold text-gray-800">WeiLinkBot</h2>
             <p class="text-gray-500 mt-1" x-text="'v' + botVersion"></p>
-            <p class="text-gray-600 mt-3">AI Chatbot Platform powered by WeChat iLink Bot SDK</p>
+            <p class="text-gray-600 mt-3" x-text="t('about.description')">AI Chatbot Platform powered by WeChat iLink Bot SDK</p>
         </div>
 
         <div class="bg-white rounded-xl shadow-sm p-6">
-            <h3 class="font-semibold text-gray-800 mb-4">Author</h3>
+            <h3 class="font-semibold text-gray-800 mb-4" x-text="t('about.author')">Author</h3>
             <div class="flex items-center gap-3">
                 <img src="/static/LingyeSoul.png" alt="LingyeSoul"
                      class="w-10 h-10 rounded-full bg-gray-200"
@@ -641,7 +668,7 @@
                     <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
                 </svg>
                 <div>
-                    <div class="text-sm font-medium text-gray-800">GitHub Repository</div>
+                    <div class="text-sm font-medium text-gray-800" x-text="t('about.github')">GitHub Repository</div>
                     <div class="text-xs text-gray-500">github.com/LingyeSoul/WeiLinkBot</div>
                 </div>
             </a>
@@ -651,14 +678,14 @@
                     <path d="M17.813 4.653h.854c1.51.054 2.769.578 3.773 1.574 1.004.995 1.524 2.249 1.56 3.76v7.36c-.036 1.51-.556 2.769-1.56 3.773s-2.262 1.524-3.773 1.56H5.333c-1.51-.036-2.769-.556-3.773-1.56S.036 18.858 0 17.347v-7.36c.036-1.511.556-2.765 1.56-3.76 1.004-.996 2.262-1.52 3.773-1.574h.774l-1.174-1.12a1.234 1.234 0 0 1-.373-.906c0-.356.124-.658.373-.907l.027-.027c.267-.249.573-.373.92-.373.347 0 .653.124.92.373L9.653 4.44c.071.071.134.142.187.213h4.267a.836.836 0 0 1 .16-.213l2.853-2.747c.267-.249.573-.373.92-.373.347 0 .662.151.929.4.267.249.391.551.391.907 0 .355-.124.657-.373.906L17.813 4.653zM5.333 7.24c-.746.018-1.373.276-1.88.773-.506.498-.769 1.13-.786 1.894v7.52c.017.764.28 1.395.786 1.893.507.498 1.134.756 1.88.773h13.334c.746-.017 1.373-.275 1.88-.773.506-.498.769-1.129.786-1.893v-7.52c-.017-.765-.28-1.396-.786-1.894-.507-.497-1.134-.755-1.88-.773H5.333zm4 5.093c.373 0 .684.124.933.373.25.249.383.569.4.96v1.173c-.017.391-.15.711-.4.96-.249.25-.56.374-.933.374s-.684-.125-.933-.374c-.25-.249-.383-.569-.4-.96V13.66c.017-.391.15-.711.4-.96.249-.249.56-.373.933-.373zm5.334 0c.373 0 .684.124.933.373.25.249.383.569.4.96v1.173c-.017.391-.15.711-.4.96-.249.25-.56.374-.933.374s-.684-.125-.933-.374c-.25-.249-.383-.569-.4-.96V13.66c.017-.391.15-.711.4-.96.249-.249.56-.373.933-.373z"/>
                 </svg>
                 <div>
-                    <div class="text-sm font-medium text-gray-800">Bilibili</div>
+                    <div class="text-sm font-medium text-gray-800" x-text="t('about.bilibili')">Bilibili</div>
                     <div class="text-xs text-gray-500">space.bilibili.com/298721157</div>
                 </div>
             </a>
         </div>
 
         <div class="bg-white rounded-xl shadow-sm p-6">
-            <h3 class="font-semibold text-gray-800 mb-3">Tech Stack</h3>
+            <h3 class="font-semibold text-gray-800 mb-3" x-text="t('about.tech_stack')">Tech Stack</h3>
             <div class="flex flex-wrap gap-2">
                 <span class="px-3 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">Python</span>
                 <span class="px-3 py-1 bg-green-100 text-green-700 text-xs rounded-full">FastAPI</span>
@@ -669,7 +696,8 @@
             </div>
         </div>
 
-        <div class="text-center text-xs text-gray-400 py-4">
+        <div class="text-center text-xs text-gray-400 py-4"
+             x-text="t('about.license')">
             Licensed under GPL-3.0
         </div>
     </div>
