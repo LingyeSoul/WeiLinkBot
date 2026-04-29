@@ -15,7 +15,10 @@ from rich.table import Table
 from rich.panel import Panel
 from rich import print as rprint
 
+from weilinkbot import i18n
 from weilinkbot.i18n import t
+
+i18n.init()
 
 app = typer.Typer(
     name="weilinkbot",
