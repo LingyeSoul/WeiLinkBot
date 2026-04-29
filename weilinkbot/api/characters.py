@@ -10,6 +10,7 @@ from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
+from ..i18n import t
 from ..models import CharacterCard
 from ..schemas import (
     CharacterCardCreate,
@@ -54,7 +55,7 @@ async def create_character(
     service = CharacterService(db)
     existing = await service.get_character_by_name(data.name)
     if existing:
-        raise HTTPException(status_code=409, detail="Character name already exists")
+        raise HTTPException(status_code=409, detail=t("api.char_exists"))
     card = await service.create_character(data.model_dump())
     return card
 
@@ -65,7 +66,7 @@ async def get_character(char_id: int, db: AsyncSession = Depends(get_db)):
     service = CharacterService(db)
     card = await service.get_character(char_id)
     if not card:
-        raise HTTPException(status_code=404, detail="Character not found")
+        raise HTTPException(status_code=404, detail=t("api.char_not_found"))
     return card
 
 
@@ -80,10 +81,10 @@ async def update_character(
     if data.name is not None:
         existing = await service.get_character_by_name(data.name)
         if existing and existing.id != char_id:
-            raise HTTPException(status_code=409, detail="Character name already exists")
+            raise HTTPException(status_code=409, detail=t("api.char_exists"))
     card = await service.update_character(char_id, data.model_dump(exclude_unset=True))
     if not card:
-        raise HTTPException(status_code=404, detail="Character not found")
+        raise HTTPException(status_code=404, detail=t("api.char_not_found"))
     return card
 
 
@@ -92,8 +93,8 @@ async def delete_character(char_id: int, db: AsyncSession = Depends(get_db)):
     """Delete a character card."""
     service = CharacterService(db)
     if not await service.delete_character(char_id):
-        raise HTTPException(status_code=404, detail="Character not found")
-    return MessageAction(message="Character deleted")
+        raise HTTPException(status_code=404, detail=t("api.char_not_found"))
+    return MessageAction(message=t("api.char_deleted"))
 
 
 @router.post("/{char_id}/activate", response_model=MessageAction)
@@ -102,8 +103,8 @@ async def activate_character(char_id: int, db: AsyncSession = Depends(get_db)):
     service = CharacterService(db)
     card = await service.activate_character(char_id)
     if not card:
-        raise HTTPException(status_code=404, detail="Character not found")
-    return MessageAction(message=f"Activated character: {card.name}")
+        raise HTTPException(status_code=404, detail=t("api.char_not_found"))
+    return MessageAction(message=t("api.activated_char", name=card.name))
 
 
 @router.post("/deactivate", response_model=MessageAction)
@@ -111,7 +112,7 @@ async def deactivate_character(db: AsyncSession = Depends(get_db)):
     """Deactivate current character card and restore default prompt."""
     service = CharacterService(db)
     await service.deactivate_character()
-    return MessageAction(message="Character deactivated")
+    return MessageAction(message=t("api.char_deactivated"))
 
 
 @router.get("/{char_id}/export/json")
@@ -120,7 +121,7 @@ async def export_character_json(char_id: int, db: AsyncSession = Depends(get_db)
     service = CharacterService(db)
     card = await service.get_character(char_id)
     if not card:
-        raise HTTPException(status_code=404, detail="Character not found")
+        raise HTTPException(status_code=404, detail=t("api.char_not_found"))
     data = export_st_json(card)
     disposition = _content_disposition(f"{card.name}.json")
     return Response(
@@ -136,7 +137,7 @@ async def export_character_png(char_id: int, db: AsyncSession = Depends(get_db))
     service = CharacterService(db)
     card = await service.get_character(char_id)
     if not card:
-        raise HTTPException(status_code=404, detail="Character not found")
+        raise HTTPException(status_code=404, detail=t("api.char_not_found"))
     base_png = None
     if card.avatar_path:
         try:
@@ -164,15 +165,15 @@ async def import_character(
     if filename.lower().endswith(".png"):
         parsed = parse_png_character(file_data)
         if not parsed:
-            raise HTTPException(status_code=400, detail="No character data found in PNG file")
+            raise HTTPException(status_code=400, detail=t("api.no_char_in_png"))
     elif filename.lower().endswith(".json"):
         try:
             json_data = json.loads(file_data)
             parsed = parse_st_json(json_data)
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid JSON: {e}")
+            raise HTTPException(status_code=400, detail=t("api.invalid_json", e=e))
     else:
-        raise HTTPException(status_code=400, detail="Unsupported file format. Use .json or .png")
+        raise HTTPException(status_code=400, detail=t("api.unsupported_format"))
 
     # Validate imported data through Pydantic schema
     validated = CharacterCardCreate(**parsed)
@@ -200,15 +201,15 @@ async def upload_avatar(
     """Upload an avatar image for a character card."""
     # Validate content type
     if file.content_type and not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Only image files are allowed")
+        raise HTTPException(status_code=400, detail=t("api.image_only"))
 
     service = CharacterService(db)
     card = await service.get_character(char_id)
     if not card:
-        raise HTTPException(status_code=404, detail="Character not found")
+        raise HTTPException(status_code=404, detail=t("api.char_not_found"))
     file_data = await _read_upload_with_limit(file)
     await service.save_avatar(char_id, file_data, file.filename or "avatar.png")
-    return MessageAction(message="Avatar uploaded")
+    return MessageAction(message=t("api.avatar_uploaded"))
 
 
 _MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
@@ -221,6 +222,6 @@ async def _read_upload_with_limit(file: UploadFile) -> bytes:
     while chunk := await file.read(8192):
         total += len(chunk)
         if total > _MAX_UPLOAD_SIZE:
-            raise HTTPException(status_code=413, detail="File too large (max 10 MB)")
+            raise HTTPException(status_code=413, detail=t("api.file_too_large"))
         chunks.append(chunk)
     return b"".join(chunks)
