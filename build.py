@@ -99,22 +99,14 @@ def build():
 
         # ── Performance ──────────────────────────────────────────
         "--assume-yes-for-downloads",
-        "--remove-output",
+        "--mingw64",
 
         # ── Package data (templates + static assets) ─────────────
+        f"--include-package=weilinkbot",
         f"--include-package-data=weilinkbot",
 
-        # ── Include modules loaded dynamically at runtime ────────
-        "--include-module=uvicorn.lifespan",
-        "--include-module=uvicorn.lifespan.on",
-        "--include-module=uvicorn.loops",
-        "--include-module=uvicorn.loops.auto",
-        "--include-module=uvicorn.protocols",
-        "--include-module=uvicorn.protocols.http",
-        "--include-module=uvicorn.protocols.http.auto",
-        "--include-module=uvicorn.protocols.websockets",
-        "--include-module=uvicorn.protocols.websockets.auto",
-        "--include-module=uvicorn.logging",
+        # ── Only follow project package imports ────────────────
+        "--follow-import-to=weilinkbot",
 
         # ── Entry point ──────────────────────────────────────────
         str(ENTRY_POINT),

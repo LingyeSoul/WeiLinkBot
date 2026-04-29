@@ -34,10 +34,10 @@ def _run_async(coro):
 def start():
     """Start the bot — login via QR and begin message polling."""
     async def _start():
-        from ..config import get_config
-        from ..database import init_db, get_session_factory
-        from ..services.llm_service import LLMService
-        from ..services.bot_service import BotService
+        from weilinkbot.config import get_config
+        from weilinkbot.database import init_db, get_session_factory
+        from weilinkbot.services.llm_service import LLMService
+        from weilinkbot.services.bot_service import BotService
 
         config = get_config()
         await init_db()
@@ -61,7 +61,7 @@ def start():
 @app.command()
 def status():
     """Show bot and LLM configuration status."""
-    from ..config import get_config
+    from weilinkbot.config import get_config
     config = get_config()
 
     table = Table(title="WeiLinkBot Configuration")
@@ -92,6 +92,7 @@ def serve(
     """Start the web dashboard and API server."""
     import uvicorn
     import time
+    from weilinkbot.api.app import create_app
 
     console.print(f"[bold blue]Starting WeiLinkBot dashboard on {host}:{port}...[/bold blue]")
     console.print(f"[dim]Open http://localhost:{port} in your browser[/dim]")
@@ -106,7 +107,7 @@ def serve(
         threading.Thread(target=_open, daemon=True).start()
 
     uvicorn.run(
-        "weilinkbot.api.app:create_app",
+        create_app,
         factory=True,
         host=host,
         port=port,
@@ -134,7 +135,7 @@ def config_set_llm(
     base_url: Optional[str] = typer.Option(None, help="Custom base URL"),
 ):
     """Configure LLM provider interactively."""
-    from ..config import get_config, LLMService
+    from weilinkbot.config import get_config
     config = get_config()
 
     config.llm.provider = provider
@@ -168,8 +169,8 @@ def history_show(
 ):
     """Show conversation history for a user."""
     async def _show():
-        from ..database import init_db, get_session_factory
-        from ..services.conversation_service import ConversationService
+        from weilinkbot.database import init_db, get_session_factory
+        from weilinkbot.services.conversation_service import ConversationService
 
         await init_db()
         session_factory = get_session_factory()
@@ -206,8 +207,8 @@ def history_show(
 def history_clear(user_id: str = typer.Argument(..., help="User ID")):
     """Clear conversation history for a user."""
     async def _clear():
-        from ..database import init_db, get_session_factory
-        from ..services.conversation_service import ConversationService
+        from weilinkbot.database import init_db, get_session_factory
+        from weilinkbot.services.conversation_service import ConversationService
 
         await init_db()
         session_factory = get_session_factory()
@@ -233,8 +234,8 @@ app.add_typer(prompt_app, name="prompts")
 def prompt_list():
     """List all system prompts."""
     async def _list():
-        from ..database import init_db, get_session_factory
-        from ..models import SystemPrompt
+        from weilinkbot.database import init_db, get_session_factory
+        from weilinkbot.models import SystemPrompt
         from sqlalchemy import select
 
         await init_db()
@@ -272,8 +273,8 @@ def prompt_create(
 ):
     """Create a new system prompt."""
     async def _create():
-        from ..database import init_db, get_session_factory
-        from ..models import SystemPrompt
+        from weilinkbot.database import init_db, get_session_factory
+        from weilinkbot.models import SystemPrompt
         from sqlalchemy import select, update
 
         await init_db()
@@ -295,8 +296,8 @@ def prompt_create(
 def prompt_set_default(prompt_id: int = typer.Argument(..., help="Prompt ID")):
     """Set a prompt as the default."""
     async def _set():
-        from ..database import init_db, get_session_factory
-        from ..models import SystemPrompt
+        from weilinkbot.database import init_db, get_session_factory
+        from weilinkbot.models import SystemPrompt
         from sqlalchemy import update
 
         await init_db()
@@ -326,8 +327,8 @@ app.add_typer(model_app, name="model")
 def model_list():
     """List all LLM model presets."""
     async def _list():
-        from ..database import init_db, get_session_factory
-        from ..models import LLMPreset
+        from weilinkbot.database import init_db, get_session_factory
+        from weilinkbot.models import LLMPreset
         from sqlalchemy import select
 
         await init_db()
@@ -366,10 +367,10 @@ def model_activate(
 ):
     """Activate an LLM model preset."""
     async def _activate():
-        from ..database import init_db, get_session_factory
-        from ..models import LLMPreset
-        from ..config import LLMConfig
-        from ..services.llm_service import LLMService
+        from weilinkbot.database import init_db, get_session_factory
+        from weilinkbot.models import LLMPreset
+        from weilinkbot.config import LLMConfig
+        from weilinkbot.services.llm_service import LLMService
         from sqlalchemy import select, update
 
         await init_db()
@@ -400,8 +401,8 @@ def model_add(
 ):
     """Add a new LLM model preset."""
     async def _add():
-        from ..database import init_db, get_session_factory
-        from ..models import LLMPreset
+        from weilinkbot.database import init_db, get_session_factory
+        from weilinkbot.models import LLMPreset
 
         await init_db()
         session_factory = get_session_factory()
@@ -423,6 +424,9 @@ def model_add(
 # ── Entry point ──────────────────────────────────────────────────
 
 def main():
+    # Double-clicked exe has no args → default to "serve"
+    if len(sys.argv) == 1:
+        sys.argv.append("serve")
     app()
 
 
