@@ -92,6 +92,11 @@
   "models.preprocess_model": "前置处理模型",
   "models.preprocess_voice": "语音前置处理",
   "models.preprocess_image": "图像前置处理",
+  "models.voice_method": "语音处理方式",
+  "models.voice_method_llm": "LLM（对话）",
+  "models.voice_method_asr": "ASR（语音转写）",
+  "models.asr_language": "语言",
+  "models.asr_language_hint": "zh / en / auto",
   "models.none": "无",
 
   "users.title": "用户管理",
