@@ -39,7 +39,8 @@ PROJECT_ROOT = Path(__file__).parent
 ENTRY_POINT = PROJECT_ROOT / "weilinkbot" / "cli" / "main.py"
 ICON_PATH = PROJECT_ROOT / "static" / "icons" / "logo.ico"
 DIST_DIR = PROJECT_ROOT / "dist"
-OUTPUT_EXE = DIST_DIR / f"{APP_NAME}.exe"
+OUTPUT_NAME = f"{APP_NAME}-V{VERSION}.exe"
+OUTPUT_EXE = DIST_DIR / OUTPUT_NAME
 
 FRONTEND_TEMPLATES = PROJECT_ROOT / "weilinkbot" / "frontend" / "templates"
 FRONTEND_STATIC = PROJECT_ROOT / "weilinkbot" / "frontend" / "static"
@@ -77,13 +78,15 @@ def check_prerequisites():
 
 def build():
     """Run Nuitka compilation."""
+    # Ensure output directory exists
+    DIST_DIR.mkdir(parents=True, exist_ok=True)
     cmd = [
         sys.executable, "-m", "nuitka",
 
         # ── Output ───────────────────────────────────────────────
         "--standalone",
         "--onefile",
-        f"--output-filename=WeiLinkBot.exe",
+        f"--output-filename={OUTPUT_NAME}",
         f"--output-dir={DIST_DIR}",
 
         # ── Icon (Windows .exe) ──────────────────────────────────
