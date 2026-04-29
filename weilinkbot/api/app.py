@@ -130,6 +130,11 @@ def create_app() -> FastAPI:
     if _STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
+    # Serve character avatars
+    characters_dir = Path("data/characters")
+    characters_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/characters", StaticFiles(directory=str(characters_dir)), name="characters")
+
     # Register API routes
     app.include_router(bot_routes.router, prefix="/api/bot", tags=["Bot"])
     app.include_router(conv_routes.router, prefix="/api/conversations", tags=["Conversations"])
