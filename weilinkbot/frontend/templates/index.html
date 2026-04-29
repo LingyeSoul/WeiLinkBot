@@ -33,6 +33,10 @@
             </span>
         </div>
         <div class="flex gap-2">
+            <button @click="switchLang()"
+                    class="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 text-sm font-medium"
+                    x-text="langLabel">
+            </button>
             <button @click="startBot()"
                     x-show="botStatus.status !== 'running' && botStatus.status !== 'starting'"
                     class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium">
@@ -683,6 +687,7 @@
      x-text="toast.message">
 </div>
 
+<script src="/static/i18n.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>
