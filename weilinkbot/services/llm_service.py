@@ -8,6 +8,7 @@ from typing import Optional
 
 from openai import AsyncOpenAI, APIConnectionError, APITimeoutError, RateLimitError
 
+from .. import __version__
 from ..config import LLMConfig, LLM_PRESETS
 from ..i18n import t
 
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 # Max retry attempts for transient errors
 MAX_RETRIES = 3
 RETRY_BASE_DELAY = 1.0
+DEFAULT_USER_AGENT = f"WeiLinkBot/{__version__}"
 
 
 class LLMService:
@@ -34,6 +36,7 @@ class LLMService:
         self._client = AsyncOpenAI(
             api_key=self._config.api_key or "not-set",
             base_url=self._config.base_url,
+            default_headers={"User-Agent": DEFAULT_USER_AGENT},
         )
 
     @property
