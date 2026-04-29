@@ -1,6 +1,12 @@
-# WeiLinkBot
+<p align="center">
+  <img src="static/icons/logo.svg" width="128" height="128" alt="WeiLinkBot Logo">
+</p>
 
+<h1 align="center">WeiLinkBot</h1>
+
+<p align="center">
 AI Chatbot Platform powered by WeChat iLink Bot SDK. Connect LLMs (OpenAI, DeepSeek, etc.) to WeChat with a web dashboard for management.
+</p>
 
 ## Features
 
