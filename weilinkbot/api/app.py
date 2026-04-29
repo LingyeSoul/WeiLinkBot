@@ -145,6 +145,12 @@ def create_app() -> FastAPI:
     app.include_router(stats_routes.router, prefix="/api/stats", tags=["Stats"])
     app.include_router(char_routes.router, prefix="/api/characters", tags=["Characters"])
 
+    # Version endpoint
+    @app.get("/api/version", include_in_schema=False)
+    async def get_version():
+        from .. import __version__
+        return {"version": __version__}
+
     # Serve dashboard
     @app.get("/", include_in_schema=False)
     async def dashboard():
