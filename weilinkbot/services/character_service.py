@@ -144,7 +144,7 @@ class CharacterService:
             return False
         # Delete avatar file if exists
         if card.avatar_path:
-            avatar = Path(card.avatar_path)
+            avatar = Path("data") / card.avatar_path
             if avatar.exists():
                 avatar.unlink()
         await self._db.delete(card)
@@ -208,7 +208,7 @@ class CharacterService:
 
         card = await self.get_character(char_id)
         if card:
-            card.avatar_path = str(avatar_path)
+            card.avatar_path = f"characters/avatars/{avatar_filename}"
             await self._db.flush()
 
         return str(avatar_path)
