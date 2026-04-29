@@ -14,6 +14,7 @@ from ..services.conversation_service import ConversationService
 # Module-level singletons (initialized in app lifespan)
 _llm_service: LLMService | None = None
 _bot_service = None  # Avoid circular import with BotService
+_memory_service = None  # Avoid circular import with MemoryService
 
 
 def get_llm_service() -> LLMService:
@@ -36,6 +37,16 @@ def get_bot_service():
 def set_bot_service(service) -> None:
     global _bot_service
     _bot_service = service
+
+
+def get_memory_service():
+    """Get the MemoryService singleton. Returns None if not initialized."""
+    return _memory_service
+
+
+def set_memory_service(service) -> None:
+    global _memory_service
+    _memory_service = service
 
 
 async def get_conversation_service(

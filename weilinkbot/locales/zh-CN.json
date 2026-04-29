@@ -289,5 +289,27 @@
   "api.switched_preset": "已切换至 '{name}' ({model})",
   "api.deleted_prompt": "已删除提示词 '{name}'",
   "api.set_default": "已将 '{name}' 设为默认",
-  "api.cleared_conv": "已清空 {user_id} 的对话"
+  "api.cleared_conv": "已清空 {user_id} 的对话",
+
+  "memory.title": "记忆管理",
+  "memory.status.enabled": "已启用",
+  "memory.status.disabled": "已禁用",
+  "memory.status.not_configured": "未配置嵌入向量模型。请先配置嵌入模型以启用记忆功能。",
+  "memory.status.embedding_model": "嵌入模型",
+  "memory.status.total": "总记忆数",
+  "memory.status.users": "用户数",
+  "memory.users.title": "有记忆的用户",
+  "memory.users.no_users": "暂无用户记忆数据。",
+  "memory.detail.title": "用户记忆",
+  "memory.detail.search": "搜索记忆...",
+  "memory.detail.no_memories": "该用户暂无记忆。",
+  "memory.detail.clear_all": "清空全部记忆",
+  "memory.detail.confirm_clear": "确定要删除该用户的所有记忆吗？",
+  "memory.detail.deleted": "记忆已删除。",
+  "memory.detail.updated": "记忆已更新。",
+  "memory.detail.cleared": "该用户的所有记忆已清空。",
+  "memory.error.not_available": "记忆模块不可用，请先配置嵌入向量模型。",
+  "memory.context_header": "[以下是关于该用户的记忆，供参考]",
+  "memory.config.saved": "记忆配置已保存。",
+  "memory.config.model_required": "请填写嵌入模型名称。"
 }

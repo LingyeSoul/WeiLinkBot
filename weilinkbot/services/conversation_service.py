@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..models import Conversation, Message, SystemPrompt, UserConfig, LLMPreset
+from ..i18n import t as _t
 
 logger = logging.getLogger(__name__)
 
@@ -134,10 +135,12 @@ class ConversationService:
 
     # ── Context Building ──────────────────────────────────────────
 
-    async def build_context(self, user_id: str) -> list[dict[str, str]]:
+    async def build_context(
+        self, user_id: str, memories: list[str] | None = None
+    ) -> list[dict[str, str]]:
         """Build OpenAI-format message list for LLM call.
 
-        Structure: [system_prompt, ...recent_history]
+        Structure: [system_prompt + memories, ...recent_history]
         """
         # 1. Get user config (or create defaults)
         user_config = await self._get_user_config(user_id)
@@ -146,10 +149,18 @@ class ConversationService:
         # 2. Determine system prompt
         system_content = await self._get_system_prompt(user_config)
 
-        # 3. Load recent messages
+        # 3. Inject memories into system prompt
+        if memories:
+            memory_block = "\n".join(f"- {m}" for m in memories)
+            system_content += (
+                f"\n\n{_t('memory.context_header')}\n"
+                + memory_block
+            )
+
+        # 4. Load recent messages
         messages = await self.get_messages(user_id, limit=max_history)
 
-        # 4. Build context
+        # 5. Build context
         context: list[dict[str, str]] = [
             {"role": "system", "content": system_content}
         ]

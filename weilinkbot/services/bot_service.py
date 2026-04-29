@@ -51,9 +51,12 @@ COMMANDS = {
 class BotService:
     """Manages WeChatBot lifecycle and message processing pipeline."""
 
-    def __init__(self, config: AppConfig, llm_service: LLMService) -> None:
+    def __init__(
+        self, config: AppConfig, llm_service: LLMService, memory_service=None
+    ) -> None:
         self._config = config
         self._llm = llm_service
+        self._memory = memory_service
         self._state = BotState.STOPPED
         self._task: Optional[asyncio.Task] = None
         self._error: Optional[str] = None
@@ -394,6 +397,9 @@ class BotService:
                     logger.info("Blocked user %s — ignoring", user_id)
                     return
 
+                # Auto-create UserConfig for new WeChat users
+                await conv_service.get_or_create_user_config(user_id)
+
                 try:
                     await self._bot.send_typing(user_id)
                 except Exception:
@@ -408,7 +414,18 @@ class BotService:
                 await conv_service.add_message(user_id, "user", text)
                 await db.commit()
 
-                context = await conv_service.build_context(user_id)
+                # Memory: search for relevant memories
+                memories: list[str] = []
+                if self._memory and self._memory.available:
+                    try:
+                        memories = await asyncio.wait_for(
+                            self._memory.search(user_id, text), timeout=5.0
+                        )
+                    except asyncio.TimeoutError:
+                        logger.warning("Memory search timed out for user %s", user_id)
+                        memories = []
+
+                context = await conv_service.build_context(user_id, memories=memories)
                 context.append({"role": "user", "content": text})
 
                 logger.info("LLM request for user %s: %s...", user_id, text[:50])
@@ -426,6 +443,10 @@ class BotService:
 
                 await self._bot.reply(msg, response_text)
                 logger.info("Replied to user %s (%d tokens)", user_id, tokens)
+
+                # Memory: extract and store memories (async, non-blocking)
+                if self._memory and self._memory.available:
+                    asyncio.create_task(self._memory.add(user_id, text, response_text))
 
             except Exception as e:
                 logger.exception("Error handling message from %s: %s", user_id, e)

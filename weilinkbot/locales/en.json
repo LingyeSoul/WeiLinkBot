@@ -289,5 +289,27 @@
   "api.switched_preset": "Switched to '{name}' ({model})",
   "api.deleted_prompt": "Deleted prompt '{name}'",
   "api.set_default": "Set '{name}' as default",
-  "api.cleared_conv": "Cleared conversation for {user_id}"
+  "api.cleared_conv": "Cleared conversation for {user_id}",
+
+  "memory.title": "Memories",
+  "memory.status.enabled": "Enabled",
+  "memory.status.disabled": "Disabled",
+  "memory.status.not_configured": "Embedding model not configured. Please set up an embedding model to enable memory.",
+  "memory.status.embedding_model": "Embedding Model",
+  "memory.status.total": "Total Memories",
+  "memory.status.users": "Users",
+  "memory.users.title": "Users with Memories",
+  "memory.users.no_users": "No users with memories yet.",
+  "memory.detail.title": "Memories for User",
+  "memory.detail.search": "Search memories...",
+  "memory.detail.no_memories": "No memories found for this user.",
+  "memory.detail.clear_all": "Clear All Memories",
+  "memory.detail.confirm_clear": "Are you sure you want to delete all memories for this user?",
+  "memory.detail.deleted": "Memory deleted.",
+  "memory.detail.updated": "Memory updated.",
+  "memory.detail.cleared": "All memories cleared for this user.",
+  "memory.error.not_available": "Memory module is not available. Please configure an embedding model first.",
+  "memory.context_header": "[The following are memories about this user, for reference]",
+  "memory.config.saved": "Memory config saved.",
+  "memory.config.model_required": "Embedding model is required."
 }
