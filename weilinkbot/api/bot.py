@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..database import get_db
+from ..models import LLMPreset
 from ..i18n import t
 from ..schemas import BotStatusResponse, MessageAction
 from .deps import get_bot_service
@@ -12,16 +16,19 @@ router = APIRouter()
 
 
 @router.get("/status", response_model=BotStatusResponse)
-async def bot_status():
+async def bot_status(db: AsyncSession = Depends(get_db)):
     """Get current bot status."""
     bot = get_bot_service()
     creds = bot.credentials
+    result = await db.execute(select(LLMPreset).where(LLMPreset.is_active == True))
+    active_preset = result.scalar_one_or_none()
     return BotStatusResponse(
         status=bot.state.value,
         login_url=bot.login_url,
         error=bot.error,
         user_id=creds.user_id if creds else None,
         account_id=creds.account_id if creds else None,
+        active_model_name=active_preset.name if active_preset else None,
         active_model=bot.llm.config.model,
         uptime_seconds=bot.uptime_seconds,
         session_messages=bot.message_count,

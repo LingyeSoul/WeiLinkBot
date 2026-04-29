@@ -193,6 +193,7 @@ class BotStatusResponse(BaseModel):
     error: Optional[str] = None
     user_id: Optional[str] = None
     account_id: Optional[str] = None
+    active_model_name: Optional[str] = None
     active_model: Optional[str] = None
     uptime_seconds: Optional[float] = None
     session_messages: int = 0
