@@ -76,9 +76,9 @@ function dashboard() {
         },
 
         // ── Language switch ──────────────────────────────────────
-        switchLang() {
+        async switchLang() {
             const newLang = window.i18n.lang === "zh-CN" ? "en" : "zh-CN";
-            localStorage.setItem("lang", newLang);
+            await window.i18n.switchLang(newLang);
             location.reload();
         },
 

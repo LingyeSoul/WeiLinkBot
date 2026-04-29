@@ -155,6 +155,8 @@ class ConversationService:
         ]
 
         for msg in messages:
+            if msg.role == "preprocess":
+                continue
             context.append({"role": msg.role, "content": msg.content})
 
         return context
@@ -230,7 +232,7 @@ class ConversationService:
                 func.coalesce(func.sum(Message.tokens_used), 0).label("total_tokens"),
                 func.count(Message.id).label("request_count"),
             )
-            .where(Message.role == "assistant")
+            .where(Message.role.in_(["assistant", "preprocess"]))
             .where(Message.model.isnot(None))
             .group_by(Message.model)
             .order_by(func.sum(Message.tokens_used).desc())
@@ -281,7 +283,7 @@ class ConversationService:
                 func.count(Message.id).label("request_count"),
             )
             .where(Message.conversation_id == conv.id)
-            .where(Message.role == "assistant")
+            .where(Message.role.in_(["assistant", "preprocess"]))
             .where(Message.model.isnot(None))
             .group_by(Message.model)
         )

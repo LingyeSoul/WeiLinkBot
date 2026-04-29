@@ -55,6 +55,22 @@ def get_lang() -> str:
     return _current_lang
 
 
+def set_lang(lang: str) -> bool:
+    """Set the current language at runtime. Returns True if successful."""
+    global _current_lang
+    if lang in _translations:
+        _current_lang = lang
+        logger.info("Language switched to '%s'", lang)
+        return True
+    logger.warning("Locale '%s' not found, keeping '%s'", lang, _current_lang)
+    return False
+
+
+def get_available_langs() -> list[str]:
+    """Return list of available language codes."""
+    return list(_translations.keys())
+
+
 def _detect_language() -> str:
     """Detect language from env var or system locale."""
     # 1. Explicit env var

@@ -17,19 +17,23 @@ window.i18n = {
             xhr.send();
             if (xhr.status === 200) {
                 this.translations = JSON.parse(xhr.responseText);
-                return;
             }
         } catch {}
 
-        // Fallback to English
-        try {
-            const fb = new XMLHttpRequest();
-            fb.open("GET", "/locales/en.json", false);
-            fb.send();
-            if (fb.status === 200) {
-                this.translations = JSON.parse(fb.responseText);
-            }
-        } catch {}
+        // Fallback to English if load failed
+        if (!Object.keys(this.translations).length) {
+            try {
+                const fb = new XMLHttpRequest();
+                fb.open("GET", "/locales/en.json", false);
+                fb.send();
+                if (fb.status === 200) {
+                    this.translations = JSON.parse(fb.responseText);
+                }
+            } catch {}
+        }
+
+        // Sync frontend language choice to backend (async, fire-and-forget)
+        this._syncToBackend(this.lang);
     },
 
     t(key) {
@@ -39,6 +43,8 @@ window.i18n = {
     async switchLang(lang) {
         this.lang = lang;
         localStorage.setItem("lang", lang);
+        // Update backend global language
+        await this._syncToBackend(lang);
         // Re-fetch translations
         try {
             const resp = await fetch(`/locales/${lang}.json`);
@@ -47,6 +53,17 @@ window.i18n = {
             }
         } catch {}
         window.dispatchEvent(new Event("lang-changed"));
+    },
+
+    // Sync language to backend so magic commands use the same language
+    async _syncToBackend(lang) {
+        try {
+            await fetch("/api/lang", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ lang }),
+            });
+        } catch {}
     }
 };
 
