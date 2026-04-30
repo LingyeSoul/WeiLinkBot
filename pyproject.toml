@@ -35,6 +35,7 @@ dev = [
 ]
 packaging = [
     "nuitka>=2.0",
+    "pyinstaller>=6.0",
 ]
 
 [project.scripts]
