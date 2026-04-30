@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 from typing import Optional
 
@@ -12,6 +13,7 @@ except ImportError:
     httpx = None  # type: ignore[misc]
 
 from ..config import AppConfig
+from .local_embedding_service import LOCAL_EMBEDDING_PROVIDER, LocalOnnxEmbeddingService
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +27,8 @@ class MemoryService:
     def __init__(self, config: AppConfig) -> None:
         self._config = config
         self._mem0 = None
+        self._local_embedder: LocalOnnxEmbeddingService | None = None
+        self._local_collection = None
         self._available = False
         self._init_error: Optional[str] = None
         self._init()
@@ -35,6 +39,10 @@ class MemoryService:
         if not mem_cfg.enabled:
             logger.info("Memory module disabled (memory.enabled=false)")
             self._init_error = "Memory module disabled (memory.enabled=false)"
+            return
+
+        if mem_cfg.embedding.provider == LOCAL_EMBEDDING_PROVIDER:
+            self._init_local_modelscope()
             return
 
         # Resolve embedding credentials (fall back to main LLM config)
@@ -70,15 +78,17 @@ class MemoryService:
         try:
             from mem0 import Memory
 
+            embedder_config: dict[str, str] = {
+                "model": emb_model,
+                "api_key": emb_key,
+            }
+
             # Build mem0 config
-            mem0_config: dict = {
+            mem0_config: dict[str, object] = {
                 "version": "v1.1",
                 "embedder": {
                     "provider": mem_cfg.embedding.provider,
-                    "config": {
-                        "model": emb_model,
-                        "api_key": emb_key,
-                    },
+                    "config": embedder_config,
                 },
                 "vector_store": {
                     "provider": "chroma",
@@ -91,21 +101,22 @@ class MemoryService:
 
             # Add embedding base_url if provided (for custom endpoints)
             if emb_url:
-                mem0_config["embedder"]["config"]["openai_base_url"] = emb_url
+                embedder_config["openai_base_url"] = emb_url
 
             # Configure LLM for memory extraction (fall back to main LLM)
             llm_url = mem_cfg.llm.base_url or self._config.llm.base_url
 
             if llm_key and llm_model:
-                llm_config: dict = {
+                llm_provider_config: dict[str, str] = {
+                    "model": llm_model,
+                    "api_key": llm_key,
+                }
+                llm_config: dict[str, object] = {
                     "provider": mem_cfg.llm.provider or "openai",
-                    "config": {
-                        "model": llm_model,
-                        "api_key": llm_key,
-                    },
+                    "config": llm_provider_config,
                 }
                 if llm_url:
-                    llm_config["config"]["openai_base_url"] = llm_url
+                    llm_provider_config["openai_base_url"] = llm_url
                 mem0_config["llm"] = llm_config
 
             self._mem0 = Memory.from_config(mem0_config)
@@ -121,7 +132,7 @@ class MemoryService:
             self._available = False
             self._init_error = str(exc)
 
-    def update_config(self, **kwargs) -> dict:
+    def update_config(self, **kwargs: object) -> dict[str, object]:
         """Update memory/embedding config and reinitialize mem0.
 
         Supported kwargs: memory_enabled, embedding_provider, embedding_api_key,
@@ -143,32 +154,42 @@ class MemoryService:
                 setattr(target, attr, val)
 
         if "memory_enabled" in kwargs:
-            mem_cfg.enabled = kwargs["memory_enabled"]
+            mem_cfg.enabled = bool(kwargs["memory_enabled"])
         _set_if_nonempty("embedding_provider", mem_cfg.embedding, "provider")
         _set_if_nonempty("embedding_api_key", mem_cfg.embedding, "api_key")
         _set_if_provided("embedding_base_url", mem_cfg.embedding, "base_url")
         _set_if_nonempty("embedding_model", mem_cfg.embedding, "model")
+        _set_if_provided("embedding_local_path", mem_cfg.embedding, "local_path")
+        _set_if_nonempty("embedding_quantization", mem_cfg.embedding, "quantization")
+        _set_if_nonempty("embedding_onnx_model_file", mem_cfg.embedding, "onnx_model_file")
+        _set_if_nonempty("embedding_modelscope_model_id", mem_cfg.embedding, "modelscope_model_id")
         _set_if_nonempty("llm_provider", mem_cfg.llm, "provider")
         _set_if_nonempty("llm_api_key", mem_cfg.llm, "api_key")
         _set_if_provided("llm_base_url", mem_cfg.llm, "base_url")
         _set_if_nonempty("llm_model", mem_cfg.llm, "model")
         if "top_k" in kwargs:
-            mem_cfg.top_k = kwargs["top_k"]
+            mem_cfg.top_k = int(str(kwargs["top_k"]))
         if "db_path" in kwargs:
-            mem_cfg.db_path = kwargs["db_path"]
+            mem_cfg.db_path = str(kwargs["db_path"])
 
-        # Auto-enable if embedding AND LLM are both fully configured
-        emb_ready = mem_cfg.embedding.model and (
-            mem_cfg.embedding.api_key or self._config.llm.api_key
-        )
-        llm_ready = (mem_cfg.llm.model or self._config.llm.model) and (
-            mem_cfg.llm.api_key or self._config.llm.api_key
-        )
+        # Auto-enable when the configured memory backend has the required inputs.
+        if mem_cfg.embedding.provider == LOCAL_EMBEDDING_PROVIDER:
+            emb_ready = bool(mem_cfg.embedding.model and mem_cfg.embedding.onnx_model_file)
+            llm_ready = True
+        else:
+            emb_ready = bool(mem_cfg.embedding.model and (
+                mem_cfg.embedding.api_key or self._config.llm.api_key
+            ))
+            llm_ready = bool((mem_cfg.llm.model or self._config.llm.model) and (
+                mem_cfg.llm.api_key or self._config.llm.api_key
+            ))
         if emb_ready and llm_ready:
             mem_cfg.enabled = True
 
         # Tear down and reinitialize
         self._mem0 = None
+        self._local_embedder = None
+        self._local_collection = None
         self._available = False
         self._init_error = None
         self._init()
@@ -189,7 +210,11 @@ class MemoryService:
         model: str | None = None,
         base_url: str | None = None,
         api_key: str | None = None,
-    ) -> dict:
+        local_path: str | None = None,
+        quantization: str | None = None,
+        onnx_model_file: str | None = None,
+        modelscope_model_id: str | None = None,
+    ) -> dict[str, object]:
         """Test embedding API connectivity. Returns {success, message, latency_ms}."""
         import time
 
@@ -205,6 +230,32 @@ class MemoryService:
         emb_model = model or mem_cfg.embedding.model
         emb_url = base_url or mem_cfg.embedding.base_url
         emb_key = api_key or mem_cfg.embedding.api_key or self._config.llm.api_key
+
+        if emb_provider == LOCAL_EMBEDDING_PROVIDER:
+            try:
+                start = time.monotonic()
+                embedder = LocalOnnxEmbeddingService(
+                    model_dir=local_path or mem_cfg.embedding.local_path,
+                    onnx_model_file=onnx_model_file or mem_cfg.embedding.onnx_model_file,
+                    modelscope_model_id=modelscope_model_id or mem_cfg.embedding.modelscope_model_id,
+                )
+                _, dimension = embedder.test()
+                latency_ms = round((time.monotonic() - start) * 1000, 1)
+                selected_quantization = quantization or mem_cfg.embedding.quantization
+                return {
+                    "success": True,
+                    "message": (
+                        f"Local ONNX embedding successful "
+                        f"(quantization: {selected_quantization}, dim: {dimension}, latency: {latency_ms}ms)"
+                    ),
+                    "latency_ms": latency_ms,
+                }
+            except Exception as exc:
+                return {
+                    "success": False,
+                    "message": f"Local ONNX embedding test failed: {exc}",
+                    "latency_ms": None,
+                }
 
         if not emb_model:
             return {"success": False, "message": "No embedding model configured", "latency_ms": None}
@@ -274,10 +325,17 @@ class MemoryService:
         if not self._available:
             return []
 
+        if self._local_collection is not None and self._local_embedder is not None:
+            return await self._local_search(user_id, query)
+
+        if self._mem0 is None:
+            return []
+        mem0 = self._mem0
+
         try:
             top_k = self._config.memory.top_k
             results = await asyncio.to_thread(
-                self._mem0.search, query, filters={"user_id": user_id}, top_k=top_k
+                mem0.search, query, filters={"user_id": user_id}, top_k=top_k
             )
             # mem0 returns {"results": [{"memory": "...", ...}, ...]} or similar
             memories = []
@@ -310,26 +368,41 @@ class MemoryService:
         if not self._available:
             return
 
+        if self._local_collection is not None and self._local_embedder is not None:
+            await self._local_add(user_id, user_msg, assistant_reply)
+            return
+
+        if self._mem0 is None:
+            return
+        mem0 = self._mem0
+
         try:
             messages = [
                 {"role": "user", "content": user_msg},
                 {"role": "assistant", "content": assistant_reply},
             ]
             await asyncio.to_thread(
-                self._mem0.add, messages, user_id=user_id
+                mem0.add, messages, user_id=user_id
             )
             logger.debug("Stored memories for user %s", user_id)
         except Exception:
             logger.warning("Failed to store memory for user %s", user_id, exc_info=True)
 
-    async def get_all(self, user_id: str) -> list[dict]:
+    async def get_all(self, user_id: str) -> list[dict[str, object]]:
         """Get all memories for a user. Returns list of {id, memory, ...}."""
         if not self._available:
             return []
 
+        if self._local_collection is not None:
+            return await self._local_get_all(user_id)
+
+        if self._mem0 is None:
+            return []
+        mem0 = self._mem0
+
         try:
             results = await asyncio.to_thread(
-                self._mem0.get_all, filters={"user_id": user_id}
+                mem0.get_all, filters={"user_id": user_id}
             )
             if isinstance(results, dict):
                 return results.get("results", results.get("memories", []))
@@ -345,9 +418,16 @@ class MemoryService:
         if not self._available:
             return False
 
+        if self._local_collection is not None:
+            return await self._local_update(memory_id, new_text)
+
+        if self._mem0 is None:
+            return False
+        mem0 = self._mem0
+
         try:
             await asyncio.to_thread(
-                self._mem0.update, memory_id, new_text
+                mem0.update, memory_id, new_text
             )
             return True
         except Exception:
@@ -359,8 +439,15 @@ class MemoryService:
         if not self._available:
             return False
 
+        if self._local_collection is not None:
+            return await self._local_delete(memory_id)
+
+        if self._mem0 is None:
+            return False
+        mem0 = self._mem0
+
         try:
-            await asyncio.to_thread(self._mem0.delete, memory_id)
+            await asyncio.to_thread(mem0.delete, memory_id)
             return True
         except Exception:
             logger.warning("Failed to delete memory %s", memory_id, exc_info=True)
@@ -371,9 +458,162 @@ class MemoryService:
         if not self._available:
             return False
 
+        if self._local_collection is not None:
+            return await self._local_delete_all(user_id)
+
+        if self._mem0 is None:
+            return False
+        mem0 = self._mem0
+
         try:
-            await asyncio.to_thread(self._mem0.delete_all, user_id=user_id)
+            await asyncio.to_thread(mem0.delete_all, user_id=user_id)
             return True
         except Exception:
             logger.warning("Failed to delete all memories for user %s", user_id, exc_info=True)
+            return False
+
+    def _init_local_modelscope(self) -> None:
+        """Initialize local ModelScope ONNX embedder and Chroma collection."""
+        mem_cfg = self._config.memory
+        try:
+            import chromadb
+
+            self._local_embedder = LocalOnnxEmbeddingService(
+                model_dir=mem_cfg.embedding.local_path,
+                onnx_model_file=mem_cfg.embedding.onnx_model_file,
+                modelscope_model_id=mem_cfg.embedding.modelscope_model_id,
+            )
+            self._local_embedder.ensure_available()
+            client = chromadb.PersistentClient(path=mem_cfg.db_path)
+            self._local_collection = client.get_or_create_collection(
+                name="weilinkbot_memory_local",
+                metadata={"hnsw:space": "cosine"},
+            )
+            self._available = True
+            self._init_error = None
+            logger.info(
+                "Local memory module initialized (model=%s, onnx=%s, db=%s)",
+                mem_cfg.embedding.model,
+                mem_cfg.embedding.onnx_model_file,
+                mem_cfg.db_path,
+            )
+        except Exception as exc:
+            logger.exception("Failed to initialize local ModelScope memory module")
+            self._local_embedder = None
+            self._local_collection = None
+            self._available = False
+            self._init_error = str(exc)
+
+    async def _local_search(self, user_id: str, query: str) -> list[str]:
+        try:
+            if self._local_embedder is None or self._local_collection is None:
+                return []
+            embedder = self._local_embedder
+            collection = self._local_collection
+            vector = (await asyncio.to_thread(embedder.embed, [query]))[0]
+            result = await asyncio.to_thread(
+                collection.query,
+                query_embeddings=[vector],
+                n_results=self._config.memory.top_k,
+                where={"user_id": user_id},
+                include=["documents", "metadatas"],
+            )
+            docs = result.get("documents") or [[]]
+            return [doc for doc in docs[0] if doc]
+        except Exception:
+            logger.warning("Local memory search failed for user %s", user_id, exc_info=True)
+            return []
+
+    async def _local_add(self, user_id: str, user_msg: str, assistant_reply: str) -> None:
+        text = f"用户：{user_msg}\n助手：{assistant_reply}".strip()
+        if not text:
+            return
+        try:
+            if self._local_embedder is None or self._local_collection is None:
+                return
+            embedder = self._local_embedder
+            collection = self._local_collection
+            memory_id = hashlib.sha256(f"{user_id}:{text}".encode("utf-8")).hexdigest()
+            vector = (await asyncio.to_thread(embedder.embed, [text]))[0]
+            await asyncio.to_thread(
+                collection.upsert,
+                ids=[memory_id],
+                embeddings=[vector],
+                documents=[text],
+                metadatas=[{"user_id": user_id, "memory": text}],
+            )
+        except Exception:
+            logger.warning("Failed to store local memory for user %s", user_id, exc_info=True)
+
+    async def _local_get_all(self, user_id: str) -> list[dict[str, object]]:
+        try:
+            if self._local_collection is None:
+                return []
+            collection = self._local_collection
+            result = await asyncio.to_thread(
+                collection.get,
+                where={"user_id": user_id},
+                include=["documents", "metadatas"],
+            )
+            ids = result.get("ids") or []
+            docs = result.get("documents") or []
+            metadatas = result.get("metadatas") or []
+            items: list[dict[str, object]] = []
+            for idx, memory_id in enumerate(ids):
+                raw_metadata = metadatas[idx] if idx < len(metadatas) and metadatas[idx] else {}
+                metadata = dict(raw_metadata)
+                text = metadata.get("memory") or (docs[idx] if idx < len(docs) else "")
+                items.append({"id": memory_id, "memory": text, **metadata})
+            return items
+        except Exception:
+            logger.warning("Failed to get local memories for user %s", user_id, exc_info=True)
+            return []
+
+    async def _local_update(self, memory_id: str, new_text: str) -> bool:
+        try:
+            if self._local_embedder is None or self._local_collection is None:
+                return False
+            embedder = self._local_embedder
+            collection = self._local_collection
+            existing = await asyncio.to_thread(
+                collection.get,
+                ids=[memory_id],
+                include=["metadatas"],
+            )
+            metadatas = existing.get("metadatas") or []
+            metadata = dict(metadatas[0]) if metadatas and metadatas[0] else {}
+            metadata["memory"] = new_text
+            vector = (await asyncio.to_thread(embedder.embed, [new_text]))[0]
+            await asyncio.to_thread(
+                collection.update,
+                ids=[memory_id],
+                embeddings=[vector],
+                documents=[new_text],
+                metadatas=[metadata],
+            )
+            return True
+        except Exception:
+            logger.warning("Failed to update local memory %s", memory_id, exc_info=True)
+            return False
+
+    async def _local_delete(self, memory_id: str) -> bool:
+        try:
+            if self._local_collection is None:
+                return False
+            collection = self._local_collection
+            await asyncio.to_thread(collection.delete, ids=[memory_id])
+            return True
+        except Exception:
+            logger.warning("Failed to delete local memory %s", memory_id, exc_info=True)
+            return False
+
+    async def _local_delete_all(self, user_id: str) -> bool:
+        try:
+            if self._local_collection is None:
+                return False
+            collection = self._local_collection
+            await asyncio.to_thread(collection.delete, where={"user_id": user_id})
+            return True
+        except Exception:
+            logger.warning("Failed to delete all local memories for user %s", user_id, exc_info=True)
             return False
