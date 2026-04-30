@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import asyncio
+from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select
@@ -34,8 +35,9 @@ async def memory_status():
     mem = get_memory_service()
     available = mem is not None and mem.available
     config = get_config()
-    return {
+    response = {
         "available": available,
+        "init_error": mem.init_error if mem else None,
         "embedding_model": config.memory.embedding.model,
         "embedding_provider": config.memory.embedding.provider,
         "embedding_base_url": config.memory.embedding.base_url,
@@ -47,7 +49,29 @@ async def memory_status():
         "llm_model": config.memory.llm.model or config.llm.model,
         "llm_api_key_set": bool(config.memory.llm.api_key or config.llm.api_key),
         "top_k": config.memory.top_k,
+        "min_score": config.memory.min_score,
+        "max_context_chars": config.memory.max_context_chars,
+        "preload_onnx": config.memory.preload_onnx,
+        "hnsw": {
+            "space": config.memory.hnsw_space,
+            "m": config.memory.hnsw_m,
+            "construction_ef": config.memory.hnsw_construction_ef,
+            "search_ef": config.memory.hnsw_search_ef,
+        },
+        "vector_count": None,
+        "onnx_loaded": None,
     }
+    if mem is not None:
+        collection = getattr(mem, "_local_collection", None)
+        if collection is not None:
+            try:
+                response["vector_count"] = await asyncio.to_thread(collection.count)
+            except Exception:
+                logger.warning("Failed to read local memory vector count", exc_info=True)
+        embedder = getattr(mem, "_local_embedder", None)
+        if embedder is not None:
+            response["onnx_loaded"] = getattr(embedder, "_session", None) is not None
+    return response
 
 
 @router.get("/config")
@@ -74,6 +98,15 @@ async def get_memory_config():
             "api_key_set": bool(mem_cfg.llm.api_key),
         },
         "top_k": mem_cfg.top_k,
+        "min_score": mem_cfg.min_score,
+        "max_context_chars": mem_cfg.max_context_chars,
+        "preload_onnx": mem_cfg.preload_onnx,
+        "hnsw": {
+            "space": mem_cfg.hnsw_space,
+            "m": mem_cfg.hnsw_m,
+            "construction_ef": mem_cfg.hnsw_construction_ef,
+            "search_ef": mem_cfg.hnsw_search_ef,
+        },
         "db_path": mem_cfg.db_path,
         "local_onnx_options": public_onnx_model_options(),
     }
@@ -115,6 +148,20 @@ async def update_memory_config(data: MemoryConfigUpdate):
         kwargs["llm_model"] = data.llm_model
     if data.top_k is not None:
         kwargs["top_k"] = data.top_k
+    if data.min_score is not None:
+        kwargs["min_score"] = data.min_score
+    if data.max_context_chars is not None:
+        kwargs["max_context_chars"] = data.max_context_chars
+    if data.preload_onnx is not None:
+        kwargs["preload_onnx"] = data.preload_onnx
+    if data.hnsw_space is not None:
+        kwargs["hnsw_space"] = data.hnsw_space
+    if data.hnsw_m is not None:
+        kwargs["hnsw_m"] = data.hnsw_m
+    if data.hnsw_construction_ef is not None:
+        kwargs["hnsw_construction_ef"] = data.hnsw_construction_ef
+    if data.hnsw_search_ef is not None:
+        kwargs["hnsw_search_ef"] = data.hnsw_search_ef
 
     result = await asyncio.to_thread(mem.update_config, **kwargs)
     save_config()
@@ -133,6 +180,13 @@ async def update_memory_config(data: MemoryConfigUpdate):
         llm_model=config.memory.llm.model or config.llm.model,
         llm_api_key_set=bool(config.memory.llm.api_key or config.llm.api_key),
         top_k=config.memory.top_k,
+        min_score=config.memory.min_score,
+        max_context_chars=config.memory.max_context_chars,
+        preload_onnx=config.memory.preload_onnx,
+        hnsw_space=config.memory.hnsw_space,
+        hnsw_m=config.memory.hnsw_m,
+        hnsw_construction_ef=config.memory.hnsw_construction_ef,
+        hnsw_search_ef=config.memory.hnsw_search_ef,
         init_error=result.get("init_error") if result else mem.init_error,
     )
 
@@ -144,7 +198,7 @@ async def test_connection(data: MemoryConfigUpdate | None = None):
         raise HTTPException(status_code=503, detail="Memory service not initialized")
 
     if data is None:
-        data = MemoryConfigUpdate(top_k=get_config().memory.top_k)
+        data = MemoryConfigUpdate()
 
     result = mem.test_connection(
         provider=data.embedding_provider,
@@ -157,6 +211,26 @@ async def test_connection(data: MemoryConfigUpdate | None = None):
         modelscope_model_id=data.embedding_modelscope_model_id,
     )
     return MemoryConfigTestResponse(**result)
+
+
+@router.get("/export")
+async def export_memories(user_id: str | None = None):
+    """Export memories as JSON for local backup."""
+    mem = _require_memory()
+    result = await mem.export_memories(user_id)
+    result["exported_at"] = datetime.now().isoformat()
+    return result
+
+
+@router.post("/import")
+async def import_memories(body: dict[str, object]):
+    """Import memories from a JSON backup payload."""
+    mem = _require_memory()
+    memories = body.get("memories", [])
+    if not isinstance(memories, list):
+        raise HTTPException(status_code=400, detail="'memories' must be an array")
+    imported = await mem.import_memories(memories)
+    return {"imported": imported}
 
 
 @router.get("/users")
