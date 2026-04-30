@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import asyncio
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select
@@ -11,6 +12,7 @@ from ..config import get_config, save_config
 from ..database import get_session_factory
 from ..models import Conversation, UserConfig
 from ..schemas import MemoryConfigUpdate, MemoryConfigUpdateResponse, MemoryConfigTestResponse
+from ..services.local_embedding_service import public_onnx_model_options
 from .deps import get_memory_service
 
 logger = logging.getLogger(__name__)
@@ -38,6 +40,10 @@ async def memory_status():
         "embedding_provider": config.memory.embedding.provider,
         "embedding_base_url": config.memory.embedding.base_url,
         "embedding_api_key_set": bool(config.memory.embedding.api_key),
+        "embedding_local_path": config.memory.embedding.local_path,
+        "embedding_quantization": config.memory.embedding.quantization,
+        "embedding_onnx_model_file": config.memory.embedding.onnx_model_file,
+        "embedding_modelscope_model_id": config.memory.embedding.modelscope_model_id,
         "llm_model": config.memory.llm.model or config.llm.model,
         "llm_api_key_set": bool(config.memory.llm.api_key or config.llm.api_key),
         "top_k": config.memory.top_k,
@@ -55,6 +61,10 @@ async def get_memory_config():
             "provider": mem_cfg.embedding.provider,
             "base_url": mem_cfg.embedding.base_url,
             "model": mem_cfg.embedding.model,
+            "local_path": mem_cfg.embedding.local_path,
+            "quantization": mem_cfg.embedding.quantization,
+            "onnx_model_file": mem_cfg.embedding.onnx_model_file,
+            "modelscope_model_id": mem_cfg.embedding.modelscope_model_id,
             "api_key_set": bool(mem_cfg.embedding.api_key),
         },
         "llm": {
@@ -65,6 +75,7 @@ async def get_memory_config():
         },
         "top_k": mem_cfg.top_k,
         "db_path": mem_cfg.db_path,
+        "local_onnx_options": public_onnx_model_options(),
     }
 
 
@@ -86,6 +97,14 @@ async def update_memory_config(data: MemoryConfigUpdate):
         kwargs["embedding_base_url"] = data.embedding_base_url
     if data.embedding_model is not None:
         kwargs["embedding_model"] = data.embedding_model
+    if data.embedding_local_path is not None:
+        kwargs["embedding_local_path"] = data.embedding_local_path
+    if data.embedding_quantization is not None:
+        kwargs["embedding_quantization"] = data.embedding_quantization
+    if data.embedding_onnx_model_file is not None:
+        kwargs["embedding_onnx_model_file"] = data.embedding_onnx_model_file
+    if data.embedding_modelscope_model_id is not None:
+        kwargs["embedding_modelscope_model_id"] = data.embedding_modelscope_model_id
     if data.llm_provider is not None:
         kwargs["llm_provider"] = data.llm_provider
     if data.llm_api_key is not None:
@@ -97,7 +116,7 @@ async def update_memory_config(data: MemoryConfigUpdate):
     if data.top_k is not None:
         kwargs["top_k"] = data.top_k
 
-    result = mem.update_config(**kwargs)
+    result = await asyncio.to_thread(mem.update_config, **kwargs)
     save_config()
 
     config = get_config()
@@ -107,6 +126,10 @@ async def update_memory_config(data: MemoryConfigUpdate):
         embedding_provider=config.memory.embedding.provider,
         embedding_base_url=config.memory.embedding.base_url,
         embedding_api_key_set=bool(config.memory.embedding.api_key),
+        embedding_local_path=config.memory.embedding.local_path,
+        embedding_quantization=config.memory.embedding.quantization,
+        embedding_onnx_model_file=config.memory.embedding.onnx_model_file,
+        embedding_modelscope_model_id=config.memory.embedding.modelscope_model_id,
         llm_model=config.memory.llm.model or config.llm.model,
         llm_api_key_set=bool(config.memory.llm.api_key or config.llm.api_key),
         top_k=config.memory.top_k,
@@ -121,13 +144,17 @@ async def test_connection(data: MemoryConfigUpdate | None = None):
         raise HTTPException(status_code=503, detail="Memory service not initialized")
 
     if data is None:
-        data = MemoryConfigUpdate()
+        data = MemoryConfigUpdate(top_k=get_config().memory.top_k)
 
     result = mem.test_connection(
         provider=data.embedding_provider,
         model=data.embedding_model,
         base_url=data.embedding_base_url,
         api_key=data.embedding_api_key,
+        local_path=data.embedding_local_path,
+        quantization=data.embedding_quantization,
+        onnx_model_file=data.embedding_onnx_model_file,
+        modelscope_model_id=data.embedding_modelscope_model_id,
     )
     return MemoryConfigTestResponse(**result)
 
@@ -195,10 +222,10 @@ async def delete_user_memories(user_id: str):
 
 
 @router.put("/{memory_id}")
-async def update_memory(memory_id: str, body: dict):
+async def update_memory(memory_id: str, body: dict[str, object]):
     """Update a memory's text."""
     mem = _require_memory()
-    new_text = body.get("text", "").strip()
+    new_text = str(body.get("text", "")).strip()
     if not new_text:
         raise HTTPException(status_code=400, detail="'text' is required")
     success = await mem.update(memory_id, new_text)
