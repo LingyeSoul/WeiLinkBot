@@ -12,6 +12,7 @@ Usage:
 import subprocess
 import sys
 import tomllib
+from importlib.util import find_spec
 from pathlib import Path
 
 # ── Version (single source: pyproject.toml) ─────────────────────────
@@ -46,16 +47,39 @@ FRONTEND_TEMPLATES = PROJECT_ROOT / "weilinkbot" / "frontend" / "templates"
 FRONTEND_STATIC = PROJECT_ROOT / "weilinkbot" / "frontend" / "static"
 
 
+def check_environment():
+    """Fail fast if build.py is not running inside the project .venv."""
+    venv_python = PROJECT_ROOT / ".venv" / "Scripts" / "python.exe"
+    actual = Path(sys.executable).resolve()
+    expected = venv_python.resolve()
+    if actual != expected:
+        print()
+        print("=" * 60)
+        print("  [ERROR] build.py must be run via .venv\\Scripts\\python.exe")
+        print("=" * 60)
+        print()
+        print(f"  Detected : {actual}")
+        print(f"  Expected : {expected}")
+        print()
+        print("  To fix, run from the project root:")
+        print(r'    .venv\Scripts\python.exe build.py')
+        print()
+        print("  Or simply use build.bat (recommended):")
+        print(r'    build.bat')
+        print("=" * 60)
+        print()
+        sys.exit(1)
+
+
 def check_prerequisites():
     """Verify that required tools and files are present."""
-    errors = []
+    check_environment()
+    errors: list[str] = []
 
     if sys.version_info < (3, 10):
         errors.append(f"Python >= 3.10 required, got {sys.version}")
 
-    try:
-        import nuitka  # noqa: F401
-    except ImportError:
+    if find_spec("nuitka") is None:
         errors.append("Nuitka not installed. Run: pip install nuitka")
 
     if not ENTRY_POINT.exists():
