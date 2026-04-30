@@ -10,6 +10,7 @@ from sqlalchemy import select
 from ..config import get_config, save_config
 from ..database import get_session_factory
 from ..models import Conversation, UserConfig
+from ..schemas import MemoryConfigUpdate, MemoryConfigUpdateResponse, MemoryConfigTestResponse
 from .deps import get_memory_service
 
 logger = logging.getLogger(__name__)
@@ -37,6 +38,8 @@ async def memory_status():
         "embedding_provider": config.memory.embedding.provider,
         "embedding_base_url": config.memory.embedding.base_url,
         "embedding_api_key_set": bool(config.memory.embedding.api_key),
+        "llm_model": config.memory.llm.model or config.llm.model,
+        "llm_api_key_set": bool(config.memory.llm.api_key or config.llm.api_key),
         "top_k": config.memory.top_k,
     }
 
@@ -54,44 +57,79 @@ async def get_memory_config():
             "model": mem_cfg.embedding.model,
             "api_key_set": bool(mem_cfg.embedding.api_key),
         },
+        "llm": {
+            "provider": mem_cfg.llm.provider,
+            "base_url": mem_cfg.llm.base_url,
+            "model": mem_cfg.llm.model,
+            "api_key_set": bool(mem_cfg.llm.api_key),
+        },
         "top_k": mem_cfg.top_k,
         "db_path": mem_cfg.db_path,
     }
 
 
-@router.put("/config")
-async def update_memory_config(body: dict):
+@router.put("/config", response_model=MemoryConfigUpdateResponse)
+async def update_memory_config(data: MemoryConfigUpdate):
     """Update memory/embedding configuration. Reinitializes the memory service."""
     mem = get_memory_service()
     if mem is None:
         raise HTTPException(status_code=503, detail="Memory service not initialized")
 
     kwargs = {}
-    if "enabled" in body:
-        kwargs["memory_enabled"] = body["enabled"]
-    if "embedding_provider" in body:
-        kwargs["embedding_provider"] = body["embedding_provider"]
-    if "embedding_api_key" in body:
-        kwargs["embedding_api_key"] = body["embedding_api_key"]
-    if "embedding_base_url" in body:
-        kwargs["embedding_base_url"] = body["embedding_base_url"]
-    if "embedding_model" in body:
-        kwargs["embedding_model"] = body["embedding_model"]
-    if "top_k" in body:
-        kwargs["top_k"] = body["top_k"]
+    if data.enabled is not None:
+        kwargs["memory_enabled"] = data.enabled
+    if data.embedding_provider is not None:
+        kwargs["embedding_provider"] = data.embedding_provider
+    if data.embedding_api_key is not None:
+        kwargs["embedding_api_key"] = data.embedding_api_key
+    if data.embedding_base_url is not None:
+        kwargs["embedding_base_url"] = data.embedding_base_url
+    if data.embedding_model is not None:
+        kwargs["embedding_model"] = data.embedding_model
+    if data.llm_provider is not None:
+        kwargs["llm_provider"] = data.llm_provider
+    if data.llm_api_key is not None:
+        kwargs["llm_api_key"] = data.llm_api_key
+    if data.llm_base_url is not None:
+        kwargs["llm_base_url"] = data.llm_base_url
+    if data.llm_model is not None:
+        kwargs["llm_model"] = data.llm_model
+    if data.top_k is not None:
+        kwargs["top_k"] = data.top_k
 
-    mem.update_config(**kwargs)
+    result = mem.update_config(**kwargs)
     save_config()
 
     config = get_config()
-    return {
-        "available": mem.available,
-        "embedding_model": config.memory.embedding.model,
-        "embedding_provider": config.memory.embedding.provider,
-        "embedding_base_url": config.memory.embedding.base_url,
-        "embedding_api_key_set": bool(config.memory.embedding.api_key),
-        "top_k": config.memory.top_k,
-    }
+    return MemoryConfigUpdateResponse(
+        available=mem.available,
+        embedding_model=config.memory.embedding.model,
+        embedding_provider=config.memory.embedding.provider,
+        embedding_base_url=config.memory.embedding.base_url,
+        embedding_api_key_set=bool(config.memory.embedding.api_key),
+        llm_model=config.memory.llm.model or config.llm.model,
+        llm_api_key_set=bool(config.memory.llm.api_key or config.llm.api_key),
+        top_k=config.memory.top_k,
+        init_error=result.get("init_error") if result else mem.init_error,
+    )
+
+
+@router.post("/config/test", response_model=MemoryConfigTestResponse)
+async def test_connection(data: MemoryConfigUpdate | None = None):
+    mem = get_memory_service()
+    if mem is None:
+        raise HTTPException(status_code=503, detail="Memory service not initialized")
+
+    if data is None:
+        data = MemoryConfigUpdate()
+
+    result = mem.test_connection(
+        provider=data.embedding_provider,
+        model=data.embedding_model,
+        base_url=data.embedding_base_url,
+        api_key=data.embedding_api_key,
+    )
+    return MemoryConfigTestResponse(**result)
 
 
 @router.get("/users")

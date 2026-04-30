@@ -42,3 +42,4 @@ wechatbot_credentials.json
 *.log
 /~
 /docs
+/.sisyphus

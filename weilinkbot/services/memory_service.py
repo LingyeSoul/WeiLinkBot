@@ -6,6 +6,11 @@ import asyncio
 import logging
 from typing import Optional
 
+try:
+    import httpx
+except ImportError:
+    httpx = None  # type: ignore[misc]
+
 from ..config import AppConfig
 
 logger = logging.getLogger(__name__)
@@ -21,6 +26,7 @@ class MemoryService:
         self._config = config
         self._mem0 = None
         self._available = False
+        self._init_error: Optional[str] = None
         self._init()
 
     def _init(self) -> None:
@@ -28,6 +34,7 @@ class MemoryService:
         mem_cfg = self._config.memory
         if not mem_cfg.enabled:
             logger.info("Memory module disabled (memory.enabled=false)")
+            self._init_error = "Memory module disabled (memory.enabled=false)"
             return
 
         # Resolve embedding credentials (fall back to main LLM config)
@@ -39,6 +46,24 @@ class MemoryService:
             logger.warning(
                 "Memory module disabled: embedding model not configured. "
                 "Set memory.embedding.model and ensure an API key is available."
+            )
+            self._init_error = (
+                "Memory module disabled: embedding model not configured. "
+                "Set memory.embedding.model and ensure an API key is available."
+            )
+            return
+
+        # Resolve LLM credentials for memory extraction (fall back to main LLM config)
+        llm_key = mem_cfg.llm.api_key or self._config.llm.api_key
+        llm_model = mem_cfg.llm.model or self._config.llm.model
+        if not llm_key or not llm_model:
+            logger.warning(
+                "Memory module disabled: LLM for memory extraction not configured. "
+                "Set memory.llm.api_key (or config.llm.api_key) and memory.llm.model."
+            )
+            self._init_error = (
+                "Memory module disabled: LLM for memory extraction not configured. "
+                "Set memory.llm.api_key (or config.llm.api_key) and memory.llm.model."
             )
             return
 
@@ -69,9 +94,7 @@ class MemoryService:
                 mem0_config["embedder"]["config"]["openai_base_url"] = emb_url
 
             # Configure LLM for memory extraction (fall back to main LLM)
-            llm_key = mem_cfg.llm.api_key or self._config.llm.api_key
             llm_url = mem_cfg.llm.base_url or self._config.llm.base_url
-            llm_model = mem_cfg.llm.model or self._config.llm.model
 
             if llm_key and llm_model:
                 llm_config: dict = {
@@ -87,16 +110,18 @@ class MemoryService:
 
             self._mem0 = Memory.from_config(mem0_config)
             self._available = True
+            self._init_error = None
             logger.info(
                 "Memory module initialized (embedding=%s, db=%s)",
                 emb_model, mem_cfg.db_path,
             )
-        except Exception:
+        except Exception as exc:
             logger.exception("Failed to initialize mem0 — memory module disabled")
             self._mem0 = None
             self._available = False
+            self._init_error = str(exc)
 
-    def update_config(self, **kwargs) -> None:
+    def update_config(self, **kwargs) -> dict:
         """Update memory/embedding config and reinitialize mem0.
 
         Supported kwargs: memory_enabled, embedding_provider, embedding_api_key,
@@ -105,44 +130,141 @@ class MemoryService:
         """
         mem_cfg = self._config.memory
 
+        def _set_if_provided(field: str, target: object, attr: str) -> None:
+            """Set a config field when the caller provides any value (including empty string)."""
+            val = kwargs.get(field)
+            if val is not None:
+                setattr(target, attr, val)
+
+        def _set_if_nonempty(field: str, target: object, attr: str) -> None:
+            """Only overwrite a config field when the caller provides a non-empty value."""
+            val = kwargs.get(field)
+            if val is not None and str(val).strip():
+                setattr(target, attr, val)
+
         if "memory_enabled" in kwargs:
             mem_cfg.enabled = kwargs["memory_enabled"]
-        if "embedding_provider" in kwargs:
-            mem_cfg.embedding.provider = kwargs["embedding_provider"]
-        if "embedding_api_key" in kwargs:
-            mem_cfg.embedding.api_key = kwargs["embedding_api_key"]
-        if "embedding_base_url" in kwargs:
-            mem_cfg.embedding.base_url = kwargs["embedding_base_url"]
-        if "embedding_model" in kwargs:
-            mem_cfg.embedding.model = kwargs["embedding_model"]
-        if "llm_provider" in kwargs:
-            mem_cfg.llm.provider = kwargs["llm_provider"]
-        if "llm_api_key" in kwargs:
-            mem_cfg.llm.api_key = kwargs["llm_api_key"]
-        if "llm_base_url" in kwargs:
-            mem_cfg.llm.base_url = kwargs["llm_base_url"]
-        if "llm_model" in kwargs:
-            mem_cfg.llm.model = kwargs["llm_model"]
+        _set_if_nonempty("embedding_provider", mem_cfg.embedding, "provider")
+        _set_if_nonempty("embedding_api_key", mem_cfg.embedding, "api_key")
+        _set_if_provided("embedding_base_url", mem_cfg.embedding, "base_url")
+        _set_if_nonempty("embedding_model", mem_cfg.embedding, "model")
+        _set_if_nonempty("llm_provider", mem_cfg.llm, "provider")
+        _set_if_nonempty("llm_api_key", mem_cfg.llm, "api_key")
+        _set_if_provided("llm_base_url", mem_cfg.llm, "base_url")
+        _set_if_nonempty("llm_model", mem_cfg.llm, "model")
         if "top_k" in kwargs:
             mem_cfg.top_k = kwargs["top_k"]
         if "db_path" in kwargs:
             mem_cfg.db_path = kwargs["db_path"]
 
-        # Auto-enable if embedding is now fully configured
-        if mem_cfg.embedding.model and (
+        # Auto-enable if embedding AND LLM are both fully configured
+        emb_ready = mem_cfg.embedding.model and (
             mem_cfg.embedding.api_key or self._config.llm.api_key
-        ):
+        )
+        llm_ready = (mem_cfg.llm.model or self._config.llm.model) and (
+            mem_cfg.llm.api_key or self._config.llm.api_key
+        )
+        if emb_ready and llm_ready:
             mem_cfg.enabled = True
 
         # Tear down and reinitialize
         self._mem0 = None
         self._available = False
+        self._init_error = None
         self._init()
         logger.info("Memory service reconfigured (available=%s)", self._available)
+        return {"available": self._available, "init_error": self._init_error}
 
     @property
     def available(self) -> bool:
         return self._available
+
+    @property
+    def init_error(self) -> Optional[str]:
+        return self._init_error
+
+    def test_connection(
+        self,
+        provider: str | None = None,
+        model: str | None = None,
+        base_url: str | None = None,
+        api_key: str | None = None,
+    ) -> dict:
+        """Test embedding API connectivity. Returns {success, message, latency_ms}."""
+        import time
+
+        if httpx is None:
+            return {
+                "success": False,
+                "message": "httpx is not installed (required for connection test)",
+                "latency_ms": None,
+            }
+
+        mem_cfg = self._config.memory
+        emb_provider = provider or mem_cfg.embedding.provider
+        emb_model = model or mem_cfg.embedding.model
+        emb_url = base_url or mem_cfg.embedding.base_url
+        emb_key = api_key or mem_cfg.embedding.api_key or self._config.llm.api_key
+
+        if not emb_model:
+            return {"success": False, "message": "No embedding model configured", "latency_ms": None}
+        if not emb_key:
+            return {"success": False, "message": "No API key configured", "latency_ms": None}
+
+        if emb_provider == "openai" or not emb_provider:
+            api_url = (emb_url or "https://api.openai.com/v1").rstrip("/") + "/embeddings"
+        else:
+            if not emb_url:
+                return {
+                    "success": False,
+                    "message": f"Base URL required for provider '{emb_provider}'",
+                    "latency_ms": None,
+                }
+            api_url = emb_url.rstrip("/") + "/embeddings"
+
+        try:
+            start = time.monotonic()
+            with httpx.Client(timeout=15.0) as client:
+                resp = client.post(
+                    api_url,
+                    headers={
+                        "Authorization": f"Bearer {emb_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": emb_model,
+                        "input": "test",
+                    },
+                )
+            latency_ms = round((time.monotonic() - start) * 1000, 1)
+
+            if resp.status_code == 200:
+                return {
+                    "success": True,
+                    "message": f"Connection successful (model: {emb_model}, latency: {latency_ms}ms)",
+                    "latency_ms": latency_ms,
+                }
+            else:
+                # Don't expose API key in error message
+                try:
+                    error_detail = resp.json().get("error", {}).get("message", resp.text[:200])
+                except Exception:
+                    error_detail = resp.text[:200]
+                return {
+                    "success": False,
+                    "message": f"API returned {resp.status_code}: {error_detail}",
+                    "latency_ms": latency_ms,
+                }
+        except httpx.ConnectError:
+            return {"success": False, "message": f"Cannot connect to {api_url}", "latency_ms": None}
+        except httpx.TimeoutException:
+            return {"success": False, "message": f"Connection timed out ({api_url})", "latency_ms": None}
+        except Exception as exc:
+            return {
+                "success": False,
+                "message": f"Connection test failed: {type(exc).__name__}",
+                "latency_ms": None,
+            }
 
     async def search(self, user_id: str, query: str) -> list[str]:
         """Search memories for a user. Returns list of memory strings.
@@ -194,7 +316,7 @@ class MemoryService:
                 {"role": "assistant", "content": assistant_reply},
             ]
             await asyncio.to_thread(
-                self._mem0.add, messages, filters={"user_id": user_id}
+                self._mem0.add, messages, user_id=user_id
             )
             logger.debug("Stored memories for user %s", user_id)
         except Exception:
@@ -250,7 +372,7 @@ class MemoryService:
             return False
 
         try:
-            await asyncio.to_thread(self._mem0.delete_all, filters={"user_id": user_id})
+            await asyncio.to_thread(self._mem0.delete_all, user_id=user_id)
             return True
         except Exception:
             logger.warning("Failed to delete all memories for user %s", user_id, exc_info=True)

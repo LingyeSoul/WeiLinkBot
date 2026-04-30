@@ -526,6 +526,11 @@ function memoriesPanel() {
             embedding_base_url: '',
             embedding_api_key: '',
             embedding_api_key_set: false,
+            llm_provider: 'openai',
+            llm_model: '',
+            llm_base_url: '',
+            llm_api_key: '',
+            llm_api_key_set: false,
             top_k: 5,
         },
         users: [],
@@ -536,6 +541,8 @@ function memoriesPanel() {
         editingId: null,
         editText: '',
         totalMemories: 0,
+        saving: false,
+        testing: false,
 
         async init() {
             this.initShowToast();
@@ -556,6 +563,11 @@ function memoriesPanel() {
                     this.configForm.embedding_base_url = data.embedding?.base_url || '';
                     this.configForm.embedding_api_key = '';
                     this.configForm.embedding_api_key_set = data.embedding?.api_key_set || false;
+                    this.configForm.llm_provider = data.llm?.provider || 'openai';
+                    this.configForm.llm_model = data.llm?.model || '';
+                    this.configForm.llm_base_url = data.llm?.base_url || '';
+                    this.configForm.llm_api_key = '';
+                    this.configForm.llm_api_key_set = data.llm?.api_key_set || false;
                     this.configForm.top_k = data.top_k || 5;
                     // Auto-show config when not configured
                     if (!this.configForm.embedding_model) {
@@ -584,15 +596,23 @@ function memoriesPanel() {
                 this.showToast(t('memory.config.model_required'), 'error');
                 return;
             }
+            if (this.saving) return;
+            this.saving = true;
             try {
                 const body = {
                     embedding_provider: this.configForm.embedding_provider,
                     embedding_model: this.configForm.embedding_model.trim(),
                     embedding_base_url: this.configForm.embedding_base_url.trim(),
                     top_k: this.configForm.top_k,
+                    llm_provider: this.configForm.llm_provider,
+                    llm_model: this.configForm.llm_model.trim(),
+                    llm_base_url: this.configForm.llm_base_url.trim(),
                 };
                 if (this.configForm.embedding_api_key) {
                     body.embedding_api_key = this.configForm.embedding_api_key;
+                }
+                if (this.configForm.llm_api_key) {
+                    body.llm_api_key = this.configForm.llm_api_key;
                 }
                 const res = await fetch('/api/memories/config', {
                     method: 'PUT',
@@ -600,18 +620,60 @@ function memoriesPanel() {
                     body: JSON.stringify(body),
                 });
                 if (res.ok) {
+                    const data = await res.json();
                     this.showConfig = false;
                     this.configForm.embedding_api_key = '';
-                    // Reload status and config
+                    this.configForm.llm_api_key = '';
                     await this.loadConfig();
                     await this.loadStatus();
                     if (this.status.available) {
                         await this.loadUsers();
                     }
-                    this.showToast(t('memory.config.saved'));
+                    if (data.init_error) {
+                        this.showToast(t('memory.config.saved_with_error') + ': ' + data.init_error, 'error');
+                    } else {
+                        this.showToast(t('memory.config.saved'), 'success');
+                    }
+                } else {
+                    const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+                    this.showToast(err.detail || t('memory.config.save_failed'), 'error');
                 }
             } catch (e) {
                 console.error('Failed to save memory config', e);
+                this.showToast(t('memory.config.save_failed') + ': ' + e.message, 'error');
+            } finally {
+                this.saving = false;
+            }
+        },
+
+        async testConnection() {
+            if (this.testing) return;
+            this.testing = true;
+            try {
+                const body = {
+                    embedding_provider: this.configForm.embedding_provider,
+                    embedding_model: this.configForm.embedding_model.trim(),
+                    embedding_base_url: this.configForm.embedding_base_url.trim(),
+                };
+                if (this.configForm.embedding_api_key) {
+                    body.embedding_api_key = this.configForm.embedding_api_key;
+                }
+                const res = await fetch('/api/memories/config/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    this.showToast(data.message, 'success');
+                } else {
+                    this.showToast(data.message, 'error');
+                }
+            } catch (e) {
+                console.error('Connection test failed', e);
+                this.showToast(t('memory.config.save_failed') + ': ' + e.message, 'error');
+            } finally {
+                this.testing = false;
             }
         },
 
