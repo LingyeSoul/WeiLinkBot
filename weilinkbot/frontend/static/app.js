@@ -536,6 +536,13 @@ function memoriesPanel() {
             llm_api_key: '',
             llm_api_key_set: false,
             top_k: 5,
+            min_score: 0,
+            max_context_chars: 2000,
+            preload_onnx: false,
+            hnsw_space: 'cosine',
+            hnsw_m: 16,
+            hnsw_construction_ef: 200,
+            hnsw_search_ef: 100,
         },
         users: [],
         selectedUser: null,
@@ -577,6 +584,13 @@ function memoriesPanel() {
                     this.configForm.llm_api_key = '';
                     this.configForm.llm_api_key_set = data.llm?.api_key_set || false;
                     this.configForm.top_k = data.top_k || 5;
+                    this.configForm.min_score = data.min_score ?? 0;
+                    this.configForm.max_context_chars = data.max_context_chars || 2000;
+                    this.configForm.preload_onnx = data.preload_onnx || false;
+                    this.configForm.hnsw_space = data.hnsw?.space || 'cosine';
+                    this.configForm.hnsw_m = data.hnsw?.m || 16;
+                    this.configForm.hnsw_construction_ef = data.hnsw?.construction_ef || 200;
+                    this.configForm.hnsw_search_ef = data.hnsw?.search_ef || 100;
                     // Auto-show config when not configured
                     if (!this.configForm.embedding_model) {
                         this.showConfig = true;
@@ -655,6 +669,13 @@ function memoriesPanel() {
                     embedding_onnx_model_file: this.configForm.embedding_onnx_model_file,
                     embedding_modelscope_model_id: this.configForm.embedding_modelscope_model_id.trim(),
                     top_k: this.configForm.top_k,
+                    min_score: this.configForm.min_score,
+                    max_context_chars: this.configForm.max_context_chars,
+                    preload_onnx: this.configForm.preload_onnx,
+                    hnsw_space: this.configForm.hnsw_space,
+                    hnsw_m: this.configForm.hnsw_m,
+                    hnsw_construction_ef: this.configForm.hnsw_construction_ef,
+                    hnsw_search_ef: this.configForm.hnsw_search_ef,
                     llm_provider: this.configForm.llm_provider,
                     llm_model: this.configForm.llm_model.trim(),
                     llm_base_url: this.configForm.llm_base_url.trim(),
@@ -863,6 +884,29 @@ function memoriesPanel() {
                 }
             } catch (e) {
                 console.error('Failed to clear memories', e);
+            }
+        },
+
+        async exportMemories() {
+            try {
+                const res = await fetch('/api/memories/export');
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+                    throw new Error(err.detail || 'Export failed');
+                }
+                const data = await res.json();
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+                a.href = url;
+                a.download = `weilinkbot-memories-${stamp}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                this.showToast('记忆已导出', 'success');
+            } catch (e) {
+                console.error('Failed to export memories', e);
+                this.showToast('记忆导出失败: ' + e.message, 'error');
             }
         },
     };

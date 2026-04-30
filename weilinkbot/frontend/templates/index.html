@@ -747,12 +747,17 @@
                                     
                                                 <button @click="showConfig = !showConfig" class="text-xs text-blue-500 hover:text-blue-700" x-text="showConfig ? '▲ Hide' : '▼ Config'"></button>
                                 
-                                            <template x-if="status.available">
-                                                <div class="flex gap-6 text-sm text-gray-600">
-                                                    <span><span x-text="t('memory.status.total')"></span>: <strong x-text="totalMemories"></strong></span>
-                                                    <span><span x-text="t('memory.status.users')"></span>: <strong x-text="users.length"></strong></span>
-                                    
-                                            </template>
+                                             <template x-if="status.available">
+                                                <div class="flex flex-wrap gap-6 text-sm text-gray-600">
+                                                     <span><span x-text="t('memory.status.total')"></span>: <strong x-text="totalMemories"></strong></span>
+                                                     <span><span x-text="t('memory.status.users')"></span>: <strong x-text="users.length"></strong></span>
+                                                     <span>向量: <strong x-text="status.vector_count ?? '—'"></strong></span>
+                                                     <span>ONNX: <strong x-text="status.onnx_loaded === null ? '—' : (status.onnx_loaded ? '已加载' : '懒加载')"></strong></span>
+                                     
+                                             </template>
+                                             <template x-if="status.init_error">
+                                                 <p class="text-sm text-amber-600 mt-1" x-text="status.init_error"></p>
+                                             </template>
                                             <template x-if="!status.available && !showConfig">
                                                 <p class="text-sm text-amber-600 mt-1" x-text="t('memory.status.not_configured')"></p>
                                             </template>
@@ -855,15 +860,65 @@
                                     
                                 
 
-                                            <div class="flex items-center justify-between mt-4">
-                                                <div class="flex items-center gap-4 text-xs text-gray-500">
-                                                    <label class="flex items-center gap-1">
-                                                        <span>Top K:</span>
-                                                        <input type="number" x-model.number="configForm.top_k" min="1" max="20"
-                                                               class="w-16 px-2 py-1 border border-gray-300 rounded text-sm">
-                                                    </label>
-                                    
-                                                <div class="flex gap-2">
+                                             <!-- Retrieval tuning -->
+                                             <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-5 mb-2">Retrieval Tuning</p>
+                                             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                 <label class="block">
+                                                     <span class="block text-xs font-medium text-gray-600 mb-1">Top K</span>
+                                                     <input type="number" x-model.number="configForm.top_k" min="1" max="100"
+                                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
+                                                 </label>
+                                                 <label class="block">
+                                                     <span class="block text-xs font-medium text-gray-600 mb-1">Min Score</span>
+                                                     <input type="number" x-model.number="configForm.min_score" min="0" max="1" step="0.05"
+                                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
+                                                 </label>
+                                                 <label class="block">
+                                                     <span class="block text-xs font-medium text-gray-600 mb-1">Max Context Chars</span>
+                                                     <input type="number" x-model.number="configForm.max_context_chars" min="100" max="100000"
+                                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
+                                                 </label>
+                                 
+
+                                             <label x-show="isLocalEmbeddingProvider" class="mt-4 flex items-center gap-2 text-sm text-gray-700">
+                                                 <input type="checkbox" x-model="configForm.preload_onnx" class="rounded">
+                                                 <span>启动时预加载 ONNX（关闭时首次检索/写入再加载，冷启动更快）</span>
+                                             </label>
+
+                                             <!-- Advanced HNSW tuning -->
+                                             <details class="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                                                 <summary class="cursor-pointer text-sm font-medium text-gray-700">高级：Chroma HNSW 参数</summary>
+                                                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-3">
+                                                     <label class="block">
+                                                         <span class="block text-xs font-medium text-gray-600 mb-1">Space</span>
+                                                         <select x-model="configForm.hnsw_space" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                                                             <option value="cosine">cosine</option>
+                                                             <option value="l2">l2</option>
+                                                             <option value="ip">ip</option>
+                                                         </select>
+                                                     </label>
+                                                     <label class="block">
+                                                         <span class="block text-xs font-medium text-gray-600 mb-1">M</span>
+                                                         <input type="number" x-model.number="configForm.hnsw_m" min="1" max="1000" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                                                     </label>
+                                                     <label class="block">
+                                                         <span class="block text-xs font-medium text-gray-600 mb-1">Construction EF</span>
+                                                         <input type="number" x-model.number="configForm.hnsw_construction_ef" min="1" max="1000" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                                                     </label>
+                                                     <label class="block">
+                                                         <span class="block text-xs font-medium text-gray-600 mb-1">Search EF</span>
+                                                         <input type="number" x-model.number="configForm.hnsw_search_ef" min="1" max="1000" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                                                     </label>
+                                     
+                                                 <p class="mt-2 text-xs text-amber-600">提示：既有 Chroma collection 的 HNSW 构建参数通常不能无损原地修改，必要时请先导出备份。</p>
+                                             </details>
+
+                                             <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mt-4">
+                                                 <button @click="exportMemories()" :disabled="!status.available"
+                                                         class="px-3 py-1.5 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                                                     导出记忆 JSON
+                                                 </button>
+                                                 <div class="flex gap-2">
                                                     <button @click="showConfig = false" class="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
                                                     <button @click="testConnection()" :disabled="testing" class="px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
                                                         <span x-show="!testing">Test Connection</span>
