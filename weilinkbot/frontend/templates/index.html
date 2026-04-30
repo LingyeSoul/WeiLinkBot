@@ -768,7 +768,7 @@
                                                     <select x-model="configForm.embedding_provider" @change="onEmbeddingProviderChange()"
                                                             class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
                                                         <option value="openai">OpenAI (兼容)</option>
-                                                        <option value="huggingface">HuggingFace</option>
+                                                        <option value="modelscope-local">ModelScope 本地 ONNX</option>
                                                     </select>
                                     
                                     
@@ -777,17 +777,51 @@
                                                            placeholder="text-embedding-3-small"
                                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
                                     
-                                    
+                                                <div x-show="configForm.embedding_provider !== 'modelscope-local'">
                                                     <label class="block text-xs font-medium text-gray-600 mb-1">Base URL <span class="text-gray-400">(留空复用主模型)</span></label>
                                                     <input type="text" x-model="configForm.embedding_base_url"
                                                            placeholder="https://api.openai.com/v1"
                                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
                                     
-                                    
+                                                <div x-show="configForm.embedding_provider !== 'modelscope-local'">
                                                     <label class="block text-xs font-medium text-gray-600 mb-1">API Key <span class="text-gray-400">(留空复用主模型)</span></label>
                                                     <input type="password" x-model="configForm.embedding_api_key"
                                                            :placeholder="configForm.embedding_api_key_set ? '••••••••' : 'sk-...'"
                                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
+                                    
+                                                <div x-show="configForm.embedding_provider === 'modelscope-local'">
+                                                    <label class="block text-xs font-medium text-gray-600 mb-1">ModelScope 模型 ID</label>
+                                                    <input type="text" x-model="configForm.embedding_modelscope_model_id"
+                                                           placeholder="Xenova/bge-small-zh-v1.5"
+                                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
+                                    
+                                                <div x-show="configForm.embedding_provider === 'modelscope-local'">
+                                                    <label class="block text-xs font-medium text-gray-600 mb-1">本地模型目录</label>
+                                                    <input type="text" x-model="configForm.embedding_local_path"
+                                                           placeholder="./data/models/bge-small-zh-v1.5"
+                                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
+                                    
+                                                <div x-show="configForm.embedding_provider === 'modelscope-local'" class="md:col-span-2">
+                                                    <label class="block text-xs font-medium text-gray-600 mb-1">ONNX 量化模型</label>
+                                                    <select x-model="configForm.embedding_onnx_model_file" @change="onEmbeddingOnnxModelChange()"
+                                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
+                                                        <option value="onnx/model_fp16.onnx">FP16 半精度（默认推荐）— 体积约为 FP32 的一半，精度损失小</option>
+                                                        <option value="onnx/model_quantized.onnx">Quantized 通用量化 — 体积小、加载快</option>
+                                                        <option value="onnx/model_int8.onnx">INT8 量化 — 兼顾速度、体积和检索质量</option>
+                                                        <option value="onnx/model_uint8.onnx">UINT8 量化 — INT8 备选</option>
+                                                        <option value="onnx/model_q4f16.onnx">Q4F16 混合 4-bit — 更小，适合低资源</option>
+                                                        <option value="onnx/model_q4.onnx">Q4 量化 — 低资源备选</option>
+                                                        <option value="onnx/model_bnb4.onnx">BNB4 量化 — 兼容性取决于 ONNX Runtime</option>
+                                                        <option value="onnx/model.onnx">FP32 全精度 — 体积最大，适合优先保证精度和兼容性</option>
+                                                    </select>
+                                    
+                                                <div x-show="isLocalEmbeddingProvider" class="md:col-span-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+                                                    <p class="font-medium">本地 ONNX 模型初始化提示</p>
+                                                    <p class="mt-1" x-text="localEmbeddingBusyText"></p>
+                                                    <div x-show="isLocalEmbeddingBusy" class="mt-2 flex items-center gap-2 text-blue-700" aria-live="polite">
+                                                        <span class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-blue-300 border-t-blue-700"></span>
+                                                        <span>正在处理模型下载 / 加载，请保持页面打开…</span>
+                                        
                                     
                                 
 
@@ -833,11 +867,13 @@
                                                     <button @click="showConfig = false" class="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
                                                     <button @click="testConnection()" :disabled="testing" class="px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
                                                         <span x-show="!testing">Test Connection</span>
-                                                        <span x-show="testing">Testing...</span>
+                                                        <span x-show="testing && !isLocalEmbeddingProvider">Testing...</span>
+                                                        <span x-show="testing && isLocalEmbeddingProvider">下载 / 加载模型中...</span>
                                                     </button>
                                                     <button @click="saveConfig()" :disabled="saving" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed">
                                                         <span x-show="!saving">Save</span>
-                                                        <span x-show="saving">Saving...</span>
+                                                        <span x-show="saving && !isLocalEmbeddingProvider">Saving...</span>
+                                                        <span x-show="saving && isLocalEmbeddingProvider">保存 / 初始化模型中...</span>
                                                     </button>
                                     
                                 

@@ -526,6 +526,10 @@ function memoriesPanel() {
             embedding_base_url: '',
             embedding_api_key: '',
             embedding_api_key_set: false,
+            embedding_local_path: './data/models/bge-small-zh-v1.5',
+            embedding_quantization: 'fp16',
+            embedding_onnx_model_file: 'onnx/model_fp16.onnx',
+            embedding_modelscope_model_id: 'Xenova/bge-small-zh-v1.5',
             llm_provider: 'openai',
             llm_model: '',
             llm_base_url: '',
@@ -563,6 +567,10 @@ function memoriesPanel() {
                     this.configForm.embedding_base_url = data.embedding?.base_url || '';
                     this.configForm.embedding_api_key = '';
                     this.configForm.embedding_api_key_set = data.embedding?.api_key_set || false;
+                    this.configForm.embedding_local_path = data.embedding?.local_path || './data/models/bge-small-zh-v1.5';
+                    this.configForm.embedding_quantization = data.embedding?.quantization || 'fp16';
+                    this.configForm.embedding_onnx_model_file = data.embedding?.onnx_model_file || 'onnx/model_fp16.onnx';
+                    this.configForm.embedding_modelscope_model_id = data.embedding?.modelscope_model_id || 'Xenova/bge-small-zh-v1.5';
                     this.configForm.llm_provider = data.llm?.provider || 'openai';
                     this.configForm.llm_model = data.llm?.model || '';
                     this.configForm.llm_base_url = data.llm?.base_url || '';
@@ -582,13 +590,52 @@ function memoriesPanel() {
         onEmbeddingProviderChange() {
             const presets = {
                 openai: { base_url: 'https://api.openai.com/v1', model: 'text-embedding-3-small' },
-                huggingface: { base_url: '', model: '' },
+                'modelscope-local': { base_url: '', model: 'Xenova/bge-small-zh-v1.5' },
             };
             const p = presets[this.configForm.embedding_provider];
             if (p) {
                 this.configForm.embedding_base_url = p.base_url;
                 this.configForm.embedding_model = p.model;
             }
+            if (this.configForm.embedding_provider === 'modelscope-local') {
+                this.configForm.embedding_local_path ||= './data/models/bge-small-zh-v1.5';
+                this.configForm.embedding_modelscope_model_id ||= 'Xenova/bge-small-zh-v1.5';
+                this.configForm.embedding_onnx_model_file ||= 'onnx/model_fp16.onnx';
+                this.configForm.embedding_quantization ||= 'fp16';
+            }
+        },
+
+        onEmbeddingOnnxModelChange() {
+            const fileName = (this.configForm.embedding_onnx_model_file || '').split('/').pop();
+            const mapping = {
+                'model_fp16.onnx': 'fp16',
+                'model_quantized.onnx': 'quantized',
+                'model_int8.onnx': 'int8',
+                'model_uint8.onnx': 'uint8',
+                'model_q4.onnx': 'q4',
+                'model_q4f16.onnx': 'q4f16',
+                'model_bnb4.onnx': 'bnb4',
+                'model.onnx': 'fp32',
+            };
+            this.configForm.embedding_quantization = mapping[fileName] || 'custom';
+        },
+
+        get isLocalEmbeddingProvider() {
+            return this.configForm.embedding_provider === 'modelscope-local';
+        },
+
+        get isLocalEmbeddingBusy() {
+            return this.isLocalEmbeddingProvider && (this.saving || this.testing);
+        },
+
+        get localEmbeddingBusyText() {
+            if (this.testing) {
+                return '正在检查本地 ONNX 模型。首次使用会从 ModelScope 下载模型文件并加载 ONNX Runtime，可能需要几分钟，请不要关闭页面。';
+            }
+            if (this.saving) {
+                return '正在保存并初始化本地 ONNX 模型。首次使用会从 ModelScope 下载模型文件并加载 ONNX Runtime，可能需要几分钟，请耐心等待。';
+            }
+            return '首次使用本地模型时会从 ModelScope 下载 ONNX 文件并加载模型，过程可能需要几分钟。';
         },
 
         async saveConfig() {
@@ -603,6 +650,10 @@ function memoriesPanel() {
                     embedding_provider: this.configForm.embedding_provider,
                     embedding_model: this.configForm.embedding_model.trim(),
                     embedding_base_url: this.configForm.embedding_base_url.trim(),
+                    embedding_local_path: this.configForm.embedding_local_path.trim(),
+                    embedding_quantization: this.configForm.embedding_quantization,
+                    embedding_onnx_model_file: this.configForm.embedding_onnx_model_file,
+                    embedding_modelscope_model_id: this.configForm.embedding_modelscope_model_id.trim(),
                     top_k: this.configForm.top_k,
                     llm_provider: this.configForm.llm_provider,
                     llm_model: this.configForm.llm_model.trim(),
@@ -654,6 +705,10 @@ function memoriesPanel() {
                     embedding_provider: this.configForm.embedding_provider,
                     embedding_model: this.configForm.embedding_model.trim(),
                     embedding_base_url: this.configForm.embedding_base_url.trim(),
+                    embedding_local_path: this.configForm.embedding_local_path.trim(),
+                    embedding_quantization: this.configForm.embedding_quantization,
+                    embedding_onnx_model_file: this.configForm.embedding_onnx_model_file,
+                    embedding_modelscope_model_id: this.configForm.embedding_modelscope_model_id.trim(),
                 };
                 if (this.configForm.embedding_api_key) {
                     body.embedding_api_key = this.configForm.embedding_api_key;
