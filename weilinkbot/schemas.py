@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Annotated
 
 from pydantic import BaseModel, Field
 
@@ -243,7 +243,14 @@ class MemoryConfigUpdate(BaseModel):
     llm_model: Optional[str] = None
     llm_base_url: Optional[str] = None
     llm_api_key: Optional[str] = None
-    top_k: Optional[int] = Field(None, ge=1, le=100)
+    top_k: Annotated[Optional[int], Field(ge=1, le=100)] = None
+    min_score: Annotated[Optional[float], Field(ge=0.0, le=1.0)] = None
+    max_context_chars: Annotated[Optional[int], Field(ge=100, le=100000)] = None
+    preload_onnx: Optional[bool] = None
+    hnsw_space: Optional[str] = None
+    hnsw_m: Annotated[Optional[int], Field(ge=1, le=1000)] = None
+    hnsw_construction_ef: Annotated[Optional[int], Field(ge=1, le=1000)] = None
+    hnsw_search_ef: Annotated[Optional[int], Field(ge=1, le=1000)] = None
 
 
 class MemoryConfigTestResponse(BaseModel):
@@ -265,6 +272,13 @@ class MemoryConfigUpdateResponse(BaseModel):
     llm_model: Optional[str] = None
     llm_api_key_set: bool
     top_k: int
+    min_score: float = 0.0
+    max_context_chars: int = 2000
+    preload_onnx: bool = False
+    hnsw_space: str = "cosine"
+    hnsw_m: int = 16
+    hnsw_construction_ef: int = 200
+    hnsw_search_ef: int = 100
     init_error: Optional[str] = None
 
 

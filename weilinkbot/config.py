@@ -78,6 +78,13 @@ class MemoryConfig(BaseModel):
     enabled: bool = False
     db_path: str = "./data/chroma_memory"
     top_k: int = 5
+    min_score: float = 0.0
+    max_context_chars: int = 2000
+    preload_onnx: bool = False
+    hnsw_space: str = "cosine"
+    hnsw_m: int = 16
+    hnsw_construction_ef: int = 200
+    hnsw_search_ef: int = 100
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     llm: EmbeddingLLMConfig = Field(default_factory=EmbeddingLLMConfig)
 
