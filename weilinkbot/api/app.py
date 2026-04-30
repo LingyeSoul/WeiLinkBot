@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, Response
 
 from ..config import get_config, AppConfig
 from ..database import init_db, get_session_factory
-from ..models import SystemPrompt, LLMPreset
+from ..models import SystemPrompt, LLMPreset, get_preset_api_key, encrypt_preset_api_key
 from ..services.llm_service import LLMService
 from ..services.bot_service import BotService
 from .deps import set_llm_service, set_bot_service, set_memory_service
@@ -39,9 +39,23 @@ async def lifespan(app: FastAPI):
     """Startup/shutdown lifecycle."""
     config = get_config()
 
-    # Init i18n
+    # Init i18n — read saved language from DB if available
     from .. import i18n
-    i18n.init()
+    saved_lang = None
+    try:
+        from ..config import _get_sync_engine
+        from ..models import SystemSetting
+        from sqlalchemy import select as _select
+        from sqlalchemy.orm import Session as _Session
+        with _Session(_get_sync_engine()) as _s:
+            row = _s.execute(
+                _select(SystemSetting.value).where(SystemSetting.key == "language")
+            ).scalar_one_or_none()
+            if row:
+                saved_lang = row
+    except Exception:
+        pass
+    i18n.init(lang=saved_lang)
     logger.info("i18n initialized (lang=%s)", i18n.get_lang())
 
     # Init database
@@ -71,10 +85,12 @@ async def lifespan(app: FastAPI):
         result = await db.execute(preset_count_stmt)
         preset_count = result.scalar()
         if preset_count == 0 and config.llm.api_key:
+            enc_key, enc_flag = encrypt_preset_api_key(config.llm.api_key)
             db.add(LLMPreset(
                 name=f"{config.llm.provider}/{config.llm.model}",
                 provider=config.llm.provider,
-                api_key=config.llm.api_key,
+                api_key=enc_key,
+                api_key_encrypted=enc_flag,
                 base_url=config.llm.base_url,
                 model=config.llm.model,
                 max_tokens=config.llm.max_tokens,
@@ -96,7 +112,7 @@ async def lifespan(app: FastAPI):
             from ..config import LLMConfig
             active_config = LLMConfig(
                 provider=active_preset.provider,
-                api_key=active_preset.api_key,
+                api_key=get_preset_api_key(active_preset),
                 base_url=active_preset.base_url,
                 model=active_preset.model,
                 max_tokens=active_preset.max_tokens,
@@ -189,11 +205,22 @@ def create_app() -> FastAPI:
     @app.put("/api/lang", include_in_schema=False)
     async def set_language(body: dict):
         from .. import i18n
+        from ..config import _get_sync_engine
+        from ..models import SystemSetting
+        from sqlalchemy.orm import Session as _Session
         lang = body.get("lang")
         if not lang:
             raise HTTPException(status_code=400, detail="'lang' is required")
         if not i18n.set_lang(lang):
             raise HTTPException(status_code=400, detail=f"Unsupported language: {lang}")
+        # Persist to DB
+        with _Session(_get_sync_engine()) as _s:
+            existing = _s.get(SystemSetting, "language")
+            if existing:
+                existing.value = lang
+            else:
+                _s.add(SystemSetting(key="language", value=lang, is_encrypted=False))
+            _s.commit()
         return {"lang": i18n.get_lang()}
 
     # GitHub avatar proxy (cached locally)

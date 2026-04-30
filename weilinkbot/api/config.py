@@ -6,7 +6,7 @@ import logging
 
 from fastapi import APIRouter
 
-from ..config import get_config, LLM_PRESETS
+from ..config import get_config, save_config, LLM_PRESETS
 from ..i18n import t
 from ..schemas import LLMConfigResponse, LLMConfigUpdate, MessageAction
 from .deps import get_bot_service
@@ -56,6 +56,7 @@ async def update_llm_config(data: LLMConfigUpdate):
 
     # Hot-reload LLM service
     llm.update_config(config.llm)
+    save_config()
     logger.info("Config applied: provider=%s model=%s base_url=%s api_key_set=%s",
                 config.llm.provider, config.llm.model, config.llm.base_url,
                 bool(config.llm.api_key))

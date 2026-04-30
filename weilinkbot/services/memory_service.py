@@ -155,7 +155,7 @@ class MemoryService:
         try:
             top_k = self._config.memory.top_k
             results = await asyncio.to_thread(
-                self._mem0.search, query, user_id=user_id, limit=top_k
+                self._mem0.search, query, filters={"user_id": user_id}, limit=top_k
             )
             # mem0 returns {"results": [{"memory": "...", ...}, ...]} or similar
             memories = []
@@ -194,7 +194,7 @@ class MemoryService:
                 {"role": "assistant", "content": assistant_reply},
             ]
             await asyncio.to_thread(
-                self._mem0.add, messages, user_id=user_id
+                self._mem0.add, messages, filters={"user_id": user_id}
             )
             logger.debug("Stored memories for user %s", user_id)
         except Exception:
@@ -207,7 +207,7 @@ class MemoryService:
 
         try:
             results = await asyncio.to_thread(
-                self._mem0.get_all, user_id=user_id
+                self._mem0.get_all, filters={"user_id": user_id}
             )
             if isinstance(results, dict):
                 return results.get("results", results.get("memories", []))
@@ -250,7 +250,7 @@ class MemoryService:
             return False
 
         try:
-            await asyncio.to_thread(self._mem0.delete_all, user_id=user_id)
+            await asyncio.to_thread(self._mem0.delete_all, filters={"user_id": user_id})
             return True
         except Exception:
             logger.warning("Failed to delete all memories for user %s", user_id, exc_info=True)
