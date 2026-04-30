@@ -224,7 +224,7 @@ class BotStatusResponse(BaseModel):
     active_model: Optional[str] = None
     uptime_seconds: Optional[float] = None
     session_messages: int = 0
-    session_token_stats: Optional[dict] = None
+    session_token_stats: Optional[dict[str, object]] = None
 
 
 # ── Memory Config ──────────────────────────────────────────────
@@ -235,6 +235,10 @@ class MemoryConfigUpdate(BaseModel):
     embedding_model: Optional[str] = None
     embedding_base_url: Optional[str] = None
     embedding_api_key: Optional[str] = None
+    embedding_local_path: Optional[str] = None
+    embedding_quantization: Optional[str] = None
+    embedding_onnx_model_file: Optional[str] = None
+    embedding_modelscope_model_id: Optional[str] = None
     llm_provider: Optional[str] = None
     llm_model: Optional[str] = None
     llm_base_url: Optional[str] = None
@@ -254,6 +258,10 @@ class MemoryConfigUpdateResponse(BaseModel):
     embedding_provider: str
     embedding_base_url: str
     embedding_api_key_set: bool
+    embedding_local_path: str = ""
+    embedding_quantization: str = ""
+    embedding_onnx_model_file: str = ""
+    embedding_modelscope_model_id: str = ""
     llm_model: Optional[str] = None
     llm_api_key_set: bool
     top_k: int
