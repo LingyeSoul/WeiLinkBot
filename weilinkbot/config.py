@@ -60,6 +60,10 @@ class EmbeddingConfig(BaseModel):
     api_key: str = ""
     base_url: str = ""
     model: str = ""
+    local_path: str = "./data/models/bge-small-zh-v1.5"
+    quantization: str = "fp16"
+    onnx_model_file: str = "onnx/model_fp16.onnx"
+    modelscope_model_id: str = "Xenova/bge-small-zh-v1.5"
 
 
 class EmbeddingLLMConfig(BaseModel):
@@ -90,7 +94,7 @@ class AppConfig(BaseModel):
 # Helpers for dot-separated key ↔ nested dict conversion
 # ---------------------------------------------------------------------------
 
-def _set_nested(data: dict, key: str, value: Any) -> None:
+def _set_nested(data: dict[str, Any], key: str, value: Any) -> None:
     """Set a value in a nested dict using a dot-separated key."""
     parts = key.split(".")
     d = data
@@ -99,7 +103,7 @@ def _set_nested(data: dict, key: str, value: Any) -> None:
     d[parts[-1]] = value
 
 
-def _flatten_dict(d: dict, prefix: str = "") -> dict[str, Any]:
+def _flatten_dict(d: dict[str, Any], prefix: str = "") -> dict[str, Any]:
     """Flatten a nested dict to dot-separated keys."""
     items: dict[str, Any] = {}
     for k, v in d.items():
