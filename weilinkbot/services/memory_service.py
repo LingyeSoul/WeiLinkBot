@@ -277,7 +277,7 @@ class MemoryService:
         try:
             top_k = self._config.memory.top_k
             results = await asyncio.to_thread(
-                self._mem0.search, query, filters={"user_id": user_id}, limit=top_k
+                self._mem0.search, query, filters={"user_id": user_id}, top_k=top_k
             )
             # mem0 returns {"results": [{"memory": "...", ...}, ...]} or similar
             memories = []
