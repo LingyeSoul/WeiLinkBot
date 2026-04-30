@@ -1,7 +1,0 @@
-﻿feat(memory): 支持记忆模块 LLM 配置与测试；优化 DB 与前端交互
-
-- weilinkbot/api/memories.py: 使用 MemoryConfigUpdate 并新增 /config/test，返回 llm 字段与 init_error
-- weilinkbot/schemas.py: 新增/调整记忆配置模型
-- frontend: 为记忆配置添加 LLM 字段与测试/保存逻辑改进
-- weilinkbot/database.py: 添加 connect timeout 并启用 WAL
-- 删除 config.yaml 与 .env.example，更新 .gitignore
