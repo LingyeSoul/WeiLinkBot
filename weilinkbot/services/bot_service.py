@@ -427,7 +427,11 @@ class BotService:
                         logger.warning("Memory search timed out for user %s", user_id)
                         memories = []
 
-                context = await conv_service.build_context(user_id, memories=memories)
+                context = await conv_service.build_context(
+                    user_id,
+                    memories=memories,
+                    max_context_chars=self._config.memory.max_context_chars,
+                )
                 context.append({"role": "user", "content": text})
 
                 logger.info("LLM request for user %s: %s...", user_id, text[:50])

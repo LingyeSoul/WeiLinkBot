@@ -136,7 +136,10 @@ class ConversationService:
     # ── Context Building ──────────────────────────────────────────
 
     async def build_context(
-        self, user_id: str, memories: list[str] | None = None
+        self,
+        user_id: str,
+        memories: list[str] | None = None,
+        max_context_chars: int = 2000,
     ) -> list[dict[str, str]]:
         """Build OpenAI-format message list for LLM call.
 
@@ -151,11 +154,20 @@ class ConversationService:
 
         # 3. Inject memories into system prompt
         if memories:
-            memory_block = "\n".join(f"- {m}" for m in memories)
-            system_content += (
-                f"\n\n{_t('memory.context_header')}\n"
-                + memory_block
-            )
+            truncated_memories: list[str] = []
+            total_chars = 0
+            for memory in memories:
+                next_total = total_chars + len(memory)
+                if next_total > max_context_chars:
+                    break
+                truncated_memories.append(memory)
+                total_chars = next_total
+            if truncated_memories:
+                memory_block = "\n".join(f"- {m}" for m in truncated_memories)
+                system_content += (
+                    f"\n\n{_t('memory.context_header')}\n"
+                    + memory_block
+                )
 
         # 4. Load recent messages
         messages = await self.get_messages(user_id, limit=max_history)

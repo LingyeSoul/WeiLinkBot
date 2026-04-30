@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, cast
 
 import numpy as np
 
@@ -183,6 +183,7 @@ class LocalOnnxEmbeddingService:
         modelscope_model_id: str = DEFAULT_MODELSCOPE_MODEL_ID,
         auto_download: bool = True,
         max_length: int = 512,
+        preload: bool = False,
     ) -> None:
         self.model_dir: Path = Path(model_dir).expanduser().resolve()
         self.onnx_model_file: str = onnx_model_file or DEFAULT_ONNX_MODEL_FILE
@@ -191,6 +192,8 @@ class LocalOnnxEmbeddingService:
         self.max_length: int = max_length
         self._session: _SessionLike | None = None
         self._tokenizer: _TokenizerLike | None = None
+        if preload:
+            self.ensure_available()
 
     @property
     def model_path(self) -> Path:
@@ -205,6 +208,11 @@ class LocalOnnxEmbeddingService:
 
     def ensure_available(self) -> None:
         """Ensure files are present and the ONNX session/tokenizer can load."""
+        self.ensure_files_available()
+        self._load()
+
+    def ensure_files_available(self) -> None:
+        """Ensure local model/tokenizer files exist without loading the ONNX session."""
         if not self.model_path.exists():
             if not self.auto_download:
                 raise LocalEmbeddingError(f"ONNX model file not found: {self.model_path}")
@@ -213,7 +221,9 @@ class LocalOnnxEmbeddingService:
                 local_dir=str(self.model_dir),
                 onnx_model_file=self.onnx_model_file,
             )
-        self._load()
+        tokenizer_path = self.model_dir / "tokenizer.json"
+        if not tokenizer_path.exists():
+            raise LocalEmbeddingError(f"tokenizer.json not found: {tokenizer_path}")
 
     def embed(self, texts: str | Iterable[str]) -> list[list[float]]:
         """Embed one or more texts and return normalized vectors."""
@@ -275,8 +285,15 @@ class LocalOnnxEmbeddingService:
                 ) from exc
             if not self.model_path.exists():
                 raise LocalEmbeddingError(f"ONNX model file not found: {self.model_path}")
+            session_options = ort.SessionOptions()
+            session_options.intra_op_num_threads = 0
+            session_options.inter_op_num_threads = 0
+            session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+            session_options.enable_mem_pattern = True
+            session_options.enable_cpu_mem_arena = True
             self._session = ort.InferenceSession(
                 str(self.model_path),
+                sess_options=session_options,
                 providers=["CPUExecutionProvider"],
             )
 
@@ -293,7 +310,7 @@ class LocalOnnxEmbeddingService:
             tokenizer = Tokenizer.from_file(str(tokenizer_path))
             tokenizer.enable_truncation(max_length=self.max_length)
             tokenizer.enable_padding(pad_id=0, pad_token="[PAD]", length=None)
-            self._tokenizer = tokenizer
+            self._tokenizer = cast(_TokenizerLike, cast(object, tokenizer))
 
     @staticmethod
     def _mean_pool(token_embeddings: np.ndarray, attention_mask: np.ndarray) -> np.ndarray:

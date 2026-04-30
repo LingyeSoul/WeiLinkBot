@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+from datetime import datetime
 from typing import Optional
 
 try:
@@ -137,7 +138,7 @@ class MemoryService:
 
         Supported kwargs: memory_enabled, embedding_provider, embedding_api_key,
         embedding_base_url, embedding_model, llm_provider, llm_api_key,
-        llm_base_url, llm_model, top_k, db_path.
+        llm_base_url, llm_model, top_k, db_path, tuning fields.
         """
         mem_cfg = self._config.memory
 
@@ -171,6 +172,23 @@ class MemoryService:
             mem_cfg.top_k = int(str(kwargs["top_k"]))
         if "db_path" in kwargs:
             mem_cfg.db_path = str(kwargs["db_path"])
+        if "min_score" in kwargs:
+            mem_cfg.min_score = float(str(kwargs["min_score"]))
+        if "max_context_chars" in kwargs:
+            mem_cfg.max_context_chars = int(str(kwargs["max_context_chars"]))
+        if "preload_onnx" in kwargs:
+            mem_cfg.preload_onnx = bool(kwargs["preload_onnx"])
+        _set_if_nonempty("hnsw_space", mem_cfg, "hnsw_space")
+        if "hnsw_m" in kwargs:
+            mem_cfg.hnsw_m = int(str(kwargs["hnsw_m"]))
+        if "hnsw_construction_ef" in kwargs:
+            mem_cfg.hnsw_construction_ef = int(str(kwargs["hnsw_construction_ef"]))
+        if "hnsw_search_ef" in kwargs:
+            mem_cfg.hnsw_search_ef = int(str(kwargs["hnsw_search_ef"]))
+
+        if mem_cfg.hnsw_search_ef < mem_cfg.top_k:
+            mem_cfg.hnsw_search_ef = mem_cfg.top_k
+            logger.warning("hnsw_search_ef clamped to top_k=%d", mem_cfg.top_k)
 
         # Auto-enable when the configured memory backend has the required inputs.
         if mem_cfg.embedding.provider == LOCAL_EMBEDDING_PROVIDER:
@@ -477,17 +495,28 @@ class MemoryService:
         mem_cfg = self._config.memory
         try:
             import chromadb
+            from chromadb.config import Settings
 
             self._local_embedder = LocalOnnxEmbeddingService(
                 model_dir=mem_cfg.embedding.local_path,
                 onnx_model_file=mem_cfg.embedding.onnx_model_file,
                 modelscope_model_id=mem_cfg.embedding.modelscope_model_id,
+                preload=mem_cfg.preload_onnx,
             )
-            self._local_embedder.ensure_available()
-            client = chromadb.PersistentClient(path=mem_cfg.db_path)
+            if not mem_cfg.preload_onnx:
+                self._local_embedder.ensure_files_available()
+            client = chromadb.PersistentClient(
+                path=mem_cfg.db_path,
+                settings=Settings(anonymized_telemetry=False),
+            )
             self._local_collection = client.get_or_create_collection(
                 name="weilinkbot_memory_local",
-                metadata={"hnsw:space": "cosine"},
+                metadata={
+                    "hnsw:space": mem_cfg.hnsw_space,
+                    "hnsw:M": int(mem_cfg.hnsw_m),
+                    "hnsw:construction_ef": int(mem_cfg.hnsw_construction_ef),
+                    "hnsw:search_ef": int(mem_cfg.hnsw_search_ef),
+                },
             )
             self._available = True
             self._init_error = None
@@ -516,10 +545,19 @@ class MemoryService:
                 query_embeddings=[vector],
                 n_results=self._config.memory.top_k,
                 where={"user_id": user_id},
-                include=["documents", "metadatas"],
+                include=["documents", "distances"],
             )
             docs = result.get("documents") or [[]]
-            return [doc for doc in docs[0] if doc]
+            distances = result.get("distances") or [[]]
+            min_score = self._config.memory.min_score
+            memories: list[str] = []
+            for doc, distance in zip(docs[0], distances[0]):
+                if not doc:
+                    continue
+                similarity = 1.0 - float(distance)
+                if similarity >= min_score:
+                    memories.append(doc)
+            return memories
         except Exception:
             logger.warning("Local memory search failed for user %s", user_id, exc_info=True)
             return []
@@ -540,7 +578,14 @@ class MemoryService:
                 ids=[memory_id],
                 embeddings=[vector],
                 documents=[text],
-                metadatas=[{"user_id": user_id, "memory": text}],
+                metadatas=[{
+                    "user_id": user_id,
+                    "memory": text,
+                    "created_at": datetime.now().isoformat(),
+                    "updated_at": datetime.now().isoformat(),
+                    "source": "chat",
+                    "schema_version": 1,
+                }],
             )
         except Exception:
             logger.warning("Failed to store local memory for user %s", user_id, exc_info=True)
@@ -583,6 +628,7 @@ class MemoryService:
             metadatas = existing.get("metadatas") or []
             metadata = dict(metadatas[0]) if metadatas and metadatas[0] else {}
             metadata["memory"] = new_text
+            metadata["updated_at"] = datetime.now().isoformat()
             vector = (await asyncio.to_thread(embedder.embed, [new_text]))[0]
             await asyncio.to_thread(
                 collection.update,
@@ -617,3 +663,43 @@ class MemoryService:
         except Exception:
             logger.warning("Failed to delete all local memories for user %s", user_id, exc_info=True)
             return False
+
+    async def export_memories(self, user_id: str | None = None) -> dict[str, object]:
+        """Export local memories for backup."""
+        if user_id:
+            memories = await self.get_all(user_id)
+            return {"user_id": user_id, "memories": memories, "count": len(memories)}
+
+        if self._local_collection is None:
+            return {"user_id": None, "memories": [], "count": 0}
+
+        try:
+            result = await asyncio.to_thread(
+                self._local_collection.get,
+                include=["documents", "metadatas"],
+            )
+            ids = result.get("ids") or []
+            docs = result.get("documents") or []
+            metadatas = result.get("metadatas") or []
+            items: list[dict[str, object]] = []
+            for idx, memory_id in enumerate(ids):
+                raw_metadata = metadatas[idx] if idx < len(metadatas) and metadatas[idx] else {}
+                metadata = dict(raw_metadata)
+                text = metadata.get("memory") or (docs[idx] if idx < len(docs) else "")
+                items.append({"id": memory_id, "memory": text, **metadata})
+            return {"user_id": None, "memories": items, "count": len(items)}
+        except Exception:
+            logger.warning("Failed to export local memories", exc_info=True)
+            return {"user_id": None, "memories": [], "count": 0}
+
+    async def import_memories(self, memories: list[dict[str, object]]) -> int:
+        """Import memory backup items into the local store."""
+        imported = 0
+        for item in memories:
+            user_id = str(item.get("user_id", "")).strip()
+            memory = str(item.get("memory", "")).strip()
+            if not user_id or not memory:
+                continue
+            await self._local_add(user_id, memory, "")
+            imported += 1
+        return imported
