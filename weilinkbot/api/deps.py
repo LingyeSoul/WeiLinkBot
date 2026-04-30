@@ -7,7 +7,6 @@ from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db, get_session_factory
-from ..config import get_config
 from ..services.llm_service import LLMService
 from ..services.conversation_service import ConversationService
 

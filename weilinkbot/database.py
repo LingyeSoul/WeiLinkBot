@@ -13,9 +13,10 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase
 
-from .config import get_config
-
 logger = logging.getLogger(__name__)
+
+# Hardcoded database URL — cannot be stored in the DB itself (bootstrap problem).
+DATABASE_URL = "sqlite+aiosqlite:///./data/weilinkbot.db"
 
 
 class Base(DeclarativeBase):
@@ -29,14 +30,10 @@ _session_factory = None
 def get_engine():
     global _engine
     if _engine is None:
-        config = get_config()
-        db_url = config.database.url
-        # Ensure parent directory exists for SQLite file paths
-        if "sqlite" in db_url:
-            db_path = db_url.split("///")[-1] if "///" in db_url else ""
-            if db_path and db_path != ":memory:":
-                Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-        _engine = create_async_engine(db_url, echo=False)
+        db_path = DATABASE_URL.split("///")[-1] if "///" in DATABASE_URL else ""
+        if db_path and db_path != ":memory:":
+            Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        _engine = create_async_engine(DATABASE_URL, echo=False)
     return _engine
 
 
@@ -75,6 +72,7 @@ _MIGRATIONS: list[tuple[str, str, str]] = [
     ("llm_presets", "voice_method", "VARCHAR(10) NOT NULL DEFAULT 'llm'"),
     ("llm_presets", "asr_language", "VARCHAR(10)"),
     ("user_configs", "source", "VARCHAR(20) NOT NULL DEFAULT 'wechat'"),
+    ("llm_presets", "api_key_encrypted", "BOOLEAN NOT NULL DEFAULT 0"),
 ]
 
 
@@ -99,6 +97,22 @@ async def _auto_migrate(conn) -> None:
             "UPDATE llm_presets SET preprocess_image_model_id = preprocess_model_id "
             "WHERE preprocess_image_model_id IS NULL AND preprocess_model_id IS NOT NULL"
         ))
+
+    # Data migration: encrypt existing plaintext api_keys
+    if "api_key_encrypted" in cols:
+        result = await conn.execute(text(
+            "SELECT id, api_key FROM llm_presets WHERE api_key_encrypted = 0 AND api_key != ''"
+        ))
+        rows = result.fetchall()
+        if rows:
+            from .crypto import encrypt
+            for row in rows:
+                encrypted_key = encrypt(row[1])
+                await conn.execute(
+                    text("UPDATE llm_presets SET api_key = :val, api_key_encrypted = 1 WHERE id = :id"),
+                    {"val": encrypted_key, "id": row[0]},
+                )
+            logger.info("Auto-migration: encrypted %d LLMPreset api_keys", len(rows))
 
 
 async def init_db():

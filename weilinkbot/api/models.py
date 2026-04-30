@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
 from ..i18n import t
-from ..models import LLMPreset
+from ..models import LLMPreset, get_preset_api_key, encrypt_preset_api_key
 from ..schemas import (
     LLMPresetCreate,
     LLMPresetUpdate,
@@ -55,6 +55,8 @@ async def create_preset(data: LLMPresetCreate, db: AsyncSession = Depends(get_db
         )
 
     preset = LLMPreset(**data.model_dump())
+    if preset.api_key:
+        preset.api_key, preset.api_key_encrypted = encrypt_preset_api_key(preset.api_key)
     db.add(preset)
     await db.flush()
 
@@ -99,7 +101,7 @@ async def update_preset(
         preset.name = data.name
 
     for field in [
-        "provider", "api_key", "base_url", "model", "max_tokens", "temperature",
+        "provider", "base_url", "model", "max_tokens", "temperature",
         "capability_text", "capability_audio", "capability_image",
         "preprocess_voice_model_id", "preprocess_image_model_id",
         "preprocess_voice", "preprocess_image",
@@ -108,6 +110,10 @@ async def update_preset(
         val = getattr(data, field)
         if val is not None:
             setattr(preset, field, val.strip() if isinstance(val, str) else val)
+
+    # Encrypt api_key if provided
+    if data.api_key is not None:
+        preset.api_key, preset.api_key_encrypted = encrypt_preset_api_key(data.api_key.strip())
 
     was_active = preset.is_active
     if data.is_active is not None and data.is_active and not was_active:
@@ -168,7 +174,7 @@ def _activate_preset_in_service(preset: LLMPreset) -> None:
         bot = get_bot_service()
         config = LLMConfig(
             provider=preset.provider,
-            api_key=preset.api_key,
+            api_key=get_preset_api_key(preset),
             base_url=preset.base_url,
             model=preset.model,
             max_tokens=preset.max_tokens,

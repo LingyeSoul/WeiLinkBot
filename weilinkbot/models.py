@@ -95,6 +95,7 @@ class LLMPreset(Base):
     name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     provider: Mapped[str] = mapped_column(String(50), nullable=False)
     api_key: Mapped[str] = mapped_column(Text, nullable=False)
+    api_key_encrypted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     base_url: Mapped[str] = mapped_column(String(500), nullable=False)
     model: Mapped[str] = mapped_column(String(100), nullable=False)
     max_tokens: Mapped[int] = mapped_column(Integer, default=2048, nullable=False)
@@ -169,3 +170,34 @@ class Message(Base):
 
     def __repr__(self) -> str:
         return f"<Message id={self.id} role={self.role!r} conv={self.conversation_id}>"
+
+
+class SystemSetting(Base):
+    """Key-value system configuration stored in the database."""
+    __tablename__ = "system_settings"
+
+    key: Mapped[str] = mapped_column(String(200), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    is_encrypted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, server_default=func.now(), onupdate=_utcnow
+    )
+
+    def __repr__(self) -> str:
+        return f"<SystemSetting key={self.key!r} encrypted={self.is_encrypted}>"
+
+
+def get_preset_api_key(preset: LLMPreset) -> str:
+    """Return decrypted api_key from a preset."""
+    from .crypto import decrypt
+    if preset.api_key_encrypted and preset.api_key:
+        return decrypt(preset.api_key)
+    return preset.api_key
+
+
+def encrypt_preset_api_key(api_key: str) -> tuple[str, bool]:
+    """Encrypt an api_key for storage in LLMPreset. Returns (encrypted_value, True)."""
+    from .crypto import encrypt
+    if api_key:
+        return encrypt(api_key), True
+    return api_key, False

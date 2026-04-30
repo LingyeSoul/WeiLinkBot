@@ -28,6 +28,9 @@ data/
 *.db
 *.sqlite3
 
+# Encryption key
+data/.secret_key
+
 # OS
 .DS_Store
 Thumbs.db

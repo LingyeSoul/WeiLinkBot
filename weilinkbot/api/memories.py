@@ -7,7 +7,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select
 
-from ..config import get_config
+from ..config import get_config, save_config
 from ..database import get_session_factory
 from ..models import Conversation, UserConfig
 from .deps import get_memory_service
@@ -81,6 +81,7 @@ async def update_memory_config(body: dict):
         kwargs["top_k"] = body["top_k"]
 
     mem.update_config(**kwargs)
+    save_config()
 
     config = get_config()
     return {

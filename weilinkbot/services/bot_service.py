@@ -16,7 +16,7 @@ from sqlalchemy import select, update
 
 from ..config import AppConfig, LLMConfig
 from ..database import get_session_factory
-from ..models import LLMPreset
+from ..models import LLMPreset, get_preset_api_key
 from .llm_service import LLMService
 from .conversation_service import ConversationService
 from ..i18n import t
@@ -229,7 +229,8 @@ class BotService:
                     )
                     pp = result.scalar_one_or_none()
                     if pp:
-                        api_key = pp.api_key or self._main_llm_fallback.api_key
+                        dec_key = get_preset_api_key(pp)
+                        api_key = dec_key or self._main_llm_fallback.api_key
                         base_url = pp.base_url or self._main_llm_fallback.base_url
                         self._preprocess_voice_config = LLMConfig(
                             provider=pp.provider, api_key=api_key,
@@ -238,7 +239,7 @@ class BotService:
                         )
                         self._preprocess_voice_method = pp.voice_method or "llm"
                         self._preprocess_voice_asr_language = pp.asr_language
-                        if not pp.api_key:
+                        if not dec_key:
                             logger.info("Voice preprocess model '%s' has no api_key — using main model credentials", pp.name)
                     else:
                         logger.warning("Voice preprocess model id=%s not found", preset.preprocess_voice_model_id)
@@ -250,14 +251,15 @@ class BotService:
                     )
                     pp = result.scalar_one_or_none()
                     if pp:
-                        api_key = pp.api_key or self._main_llm_fallback.api_key
+                        dec_key = get_preset_api_key(pp)
+                        api_key = dec_key or self._main_llm_fallback.api_key
                         base_url = pp.base_url or self._main_llm_fallback.base_url
                         self._preprocess_image_config = LLMConfig(
                             provider=pp.provider, api_key=api_key,
                             base_url=base_url, model=pp.model,
                             max_tokens=pp.max_tokens, temperature=pp.temperature,
                         )
-                        if not pp.api_key:
+                        if not dec_key:
                             logger.info("Image preprocess model '%s' has no api_key — using main model credentials", pp.name)
                     else:
                         logger.warning("Image preprocess model id=%s not found", preset.preprocess_image_model_id)
@@ -604,7 +606,7 @@ class BotService:
             # Hot-swap LLM config
             config = LLMConfig(
                 provider=preset.provider,
-                api_key=preset.api_key,
+                api_key=get_preset_api_key(preset),
                 base_url=preset.base_url,
                 model=preset.model,
                 max_tokens=preset.max_tokens,

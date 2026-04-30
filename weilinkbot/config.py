@@ -1,15 +1,29 @@
-"""Configuration management — loads from config.yaml + environment variables."""
+"""Configuration management — loads from database system_settings table."""
 
 from __future__ import annotations
 
-import os
+import logging
 from pathlib import Path
 from typing import Any
 
-import yaml
-from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
+logger = logging.getLogger(__name__)
+
+# Hardcoded database URL — cannot be read from DB before DB exists.
+DATABASE_URL = "sqlite+aiosqlite:///./data/weilinkbot.db"
+
+# Keys whose values are stored encrypted in system_settings.
+_ENCRYPTED_KEYS = frozenset({
+    "llm.api_key",
+    "memory.embedding.api_key",
+    "memory.llm.api_key",
+})
+
+
+# ---------------------------------------------------------------------------
+# Pydantic config models (kept for type validation and defaults)
+# ---------------------------------------------------------------------------
 
 class BotConfig(BaseModel):
     base_url: str = "https://ilinkai.weixin.qq.com"
@@ -33,7 +47,7 @@ LLM_PRESETS: dict[str, dict[str, str]] = {
 
 
 class DatabaseConfig(BaseModel):
-    url: str = "sqlite+aiosqlite:///./data/weilinkbot.db"
+    url: str = DATABASE_URL
 
 
 class ServerConfig(BaseModel):
@@ -72,56 +86,117 @@ class AppConfig(BaseModel):
     server: ServerConfig = Field(default_factory=ServerConfig)
 
 
-def _deep_merge(base: dict, override: dict) -> dict:
-    """Merge override into base, recursively."""
-    result = base.copy()
-    for key, value in override.items():
-        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-            result[key] = _deep_merge(result[key], value)
+# ---------------------------------------------------------------------------
+# Helpers for dot-separated key ↔ nested dict conversion
+# ---------------------------------------------------------------------------
+
+def _set_nested(data: dict, key: str, value: Any) -> None:
+    """Set a value in a nested dict using a dot-separated key."""
+    parts = key.split(".")
+    d = data
+    for part in parts[:-1]:
+        d = d.setdefault(part, {})
+    d[parts[-1]] = value
+
+
+def _flatten_dict(d: dict, prefix: str = "") -> dict[str, Any]:
+    """Flatten a nested dict to dot-separated keys."""
+    items: dict[str, Any] = {}
+    for k, v in d.items():
+        new_key = f"{prefix}.{k}" if prefix else k
+        if isinstance(v, dict):
+            items.update(_flatten_dict(v, new_key))
         else:
-            result[key] = value
-    return result
+            items[new_key] = v
+    return items
 
 
-def _env_override(data: dict[str, Any], prefix: str = "WEILINKBOT_") -> dict[str, Any]:
-    """Override config values from environment variables.
-
-    e.g. WEILINKBOT_LLM__API_KEY -> data["llm"]["api_key"]
-    """
-    for key, value in os.environ.items():
-        if not key.startswith(prefix):
-            continue
-        parts = key[len(prefix):].lower().split("__")
-        if len(parts) == 2:
-            section, field = parts
-            if section in data and isinstance(data[section], dict):
-                # Type coerce
-                existing = data[section].get(field)
-                if isinstance(existing, int):
-                    data[section][field] = int(value)
-                elif isinstance(existing, float):
-                    data[section][field] = float(value)
-                elif isinstance(existing, bool):
-                    data[section][field] = value.lower() in ("1", "true", "yes")
-                else:
-                    data[section][field] = value
-    return data
+def _coerce_value(value: str, target_type: type) -> Any:
+    """Coerce a string value to the target type."""
+    if target_type is bool:
+        return value.lower() in ("1", "true", "yes")
+    if target_type is int:
+        return int(value)
+    if target_type is float:
+        return float(value)
+    return value
 
 
-def load_config(config_path: str | Path = "config.yaml") -> AppConfig:
-    """Load configuration from YAML file with environment variable overrides."""
-    # Load .env file into os.environ (if it exists)
-    load_dotenv()
+# ---------------------------------------------------------------------------
+# Sync SQLAlchemy engine for config reads/writes (avoids async complexity)
+# ---------------------------------------------------------------------------
 
-    config_path = Path(config_path)
+_sync_engine = None
+
+
+def _get_sync_engine():
+    global _sync_engine
+    if _sync_engine is None:
+        from sqlalchemy import create_engine
+        db_path = DATABASE_URL.split("///")[-1]
+        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        _sync_engine = create_engine(f"sqlite:///{db_path}", echo=False)
+    return _sync_engine
+
+
+# ---------------------------------------------------------------------------
+# Core config functions
+# ---------------------------------------------------------------------------
+
+def load_config() -> AppConfig:
+    """Load configuration from the system_settings database table."""
+    from .crypto import decrypt
+    from .models import SystemSetting
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+
+    engine = _get_sync_engine()
+
+    # Ensure table exists (safe if already created by async init_db)
+    SystemSetting.__table__.create(engine, checkfirst=True)
+
     data: dict[str, Any] = {}
+    with Session(engine) as session:
+        rows = session.execute(
+            select(SystemSetting.key, SystemSetting.value, SystemSetting.is_encrypted)
+        ).all()
+        for key, value, encrypted in rows:
+            if encrypted and value:
+                try:
+                    value = decrypt(value)
+                except Exception:
+                    logger.warning("Failed to decrypt setting '%s', skipping", key)
+                    continue
+            _set_nested(data, key, value)
 
-    if config_path.exists():
-        with open(config_path, encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
-
-    data = _env_override(data)
     return AppConfig(**data)
+
+
+def save_config() -> None:
+    """Write the current in-memory config to the system_settings table."""
+    global _config
+    if _config is None:
+        return
+
+    from .crypto import encrypt
+    from .models import SystemSetting
+    from sqlalchemy.orm import Session
+
+    flat = _flatten_dict(_config.model_dump())
+    engine = _get_sync_engine()
+
+    with Session(engine) as session:
+        for key, value in flat.items():
+            encrypted = key in _ENCRYPTED_KEYS
+            stored = encrypt(str(value)) if encrypted and value else str(value) if value is not None else ""
+
+            existing = session.get(SystemSetting, key)
+            if existing:
+                existing.value = stored
+                existing.is_encrypted = encrypted
+            else:
+                session.add(SystemSetting(key=key, value=stored, is_encrypted=encrypted))
+        session.commit()
 
 
 # Singleton config instance
@@ -131,13 +206,7 @@ _config: AppConfig | None = None
 def get_config() -> AppConfig:
     global _config
     if _config is None:
-        # Try multiple config paths
-        for path in ["config.yaml", "../config.yaml"]:
-            if Path(path).exists():
-                _config = load_config(path)
-                break
-        else:
-            _config = load_config()
+        _config = load_config()
     return _config
 
 

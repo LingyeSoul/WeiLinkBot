@@ -140,7 +140,7 @@ def config_set_llm(
     base_url: Optional[str] = typer.Option(None, help="Custom base URL"),
 ):
     """Configure LLM provider interactively."""
-    from weilinkbot.config import get_config
+    from weilinkbot.config import get_config, save_config
     config = get_config()
 
     config.llm.provider = provider
@@ -155,6 +155,7 @@ def config_set_llm(
     elif model:
         config.llm.model = model
 
+    save_config()
     console.print(f"[green]{t('cli.llm_configured')}[/green]")
     console.print(f"  {t('cli.provider')} {config.llm.provider}")
     console.print(f"  {t('cli.model')} {config.llm.model}")
@@ -407,15 +408,17 @@ def model_add(
     """Add a new LLM model preset."""
     async def _add():
         from weilinkbot.database import init_db, get_session_factory
-        from weilinkbot.models import LLMPreset
+        from weilinkbot.models import LLMPreset, encrypt_preset_api_key
 
         await init_db()
         session_factory = get_session_factory()
         async with session_factory() as db:
+            enc_key, enc_flag = encrypt_preset_api_key(api_key.strip())
             db.add(LLMPreset(
                 name=name,
                 provider=provider,
-                api_key=api_key.strip(),
+                api_key=enc_key,
+                api_key_encrypted=enc_flag,
                 base_url=base_url,
                 model=model_id,
                 is_active=False,
