@@ -1,6 +1,6 @@
 [project]
 name = "weilinkbot"
-version = "0.1.2"
+version = "0.1.3"
 description = "AI Chatbot Platform powered by WeChat iLink Bot SDK"
 readme = "README.md"
 license = { text = "GPL-3.0" }
