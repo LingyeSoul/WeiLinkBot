@@ -12,21 +12,23 @@ if not exist "%VENV_PYTHON%" (
     echo [build.bat] Creating virtual environment in .venv ...
     python -m venv "%VENV_DIR%"
     if errorlevel 1 goto :fail_venv
+
+    rem Install / upgrade packaging dependencies
+    echo [build.bat] Upgrading pip in .venv ...
+    "%VENV_PYTHON%" -m pip install --upgrade pip
+    if errorlevel 1 goto :fail_pip
+
+    echo [build.bat] Installing packaging dependencies into .venv ...
+    "%VENV_PYTHON%" -m pip install ".[packaging]"
+    if errorlevel 1 goto :fail_packaging
+
+    rem Install project into .venv
+    echo [build.bat] Installing project into .venv ...
+    "%VENV_PYTHON%" -m pip install -e .
+    if errorlevel 1 goto :fail_project
+) else (
+    echo [build.bat] Using existing .venv; skipping dependency installation.
 )
-
-rem Install / upgrade packaging dependencies
-echo [build.bat] Upgrading pip in .venv ...
-"%VENV_PYTHON%" -m pip install --upgrade pip
-if errorlevel 1 goto :fail_pip
-
-echo [build.bat] Installing packaging dependencies into .venv ...
-"%VENV_PYTHON%" -m pip install ".[packaging]"
-if errorlevel 1 goto :fail_packaging
-
-rem Install project into .venv
-echo [build.bat] Installing project into .venv ...
-"%VENV_PYTHON%" -m pip install -e .
-if errorlevel 1 goto :fail_project
 
 rem Run build.py using the venv interpreter
 echo [build.bat] Launching build.py using .venv\Scripts\python.exe ...
