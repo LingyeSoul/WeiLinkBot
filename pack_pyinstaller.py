@@ -114,6 +114,10 @@ def build() -> None:
         f"--icon={ICON_PATH}",
         f"--add-data={FRONTEND_TEMPLATES}{separator}weilinkbot/frontend/templates",
         f"--add-data={FRONTEND_STATIC}{separator}weilinkbot/frontend/static",
+        "--hidden-import=aiosqlite",
+        "--hidden-import=sqlalchemy.dialects.sqlite.aiosqlite",
+        "--hidden-import=chromadb.telemetry.product.posthog",
+        "--collect-all=chromadb",
         "--collect-data=weilinkbot",
         str(ENTRY_POINT),
     ]
