@@ -227,6 +227,39 @@ class BotStatusResponse(BaseModel):
     session_token_stats: Optional[dict] = None
 
 
+# ── Memory Config ──────────────────────────────────────────────
+
+class MemoryConfigUpdate(BaseModel):
+    enabled: Optional[bool] = None
+    embedding_provider: Optional[str] = None
+    embedding_model: Optional[str] = None
+    embedding_base_url: Optional[str] = None
+    embedding_api_key: Optional[str] = None
+    llm_provider: Optional[str] = None
+    llm_model: Optional[str] = None
+    llm_base_url: Optional[str] = None
+    llm_api_key: Optional[str] = None
+    top_k: Optional[int] = Field(None, ge=1, le=100)
+
+
+class MemoryConfigTestResponse(BaseModel):
+    success: bool
+    message: str
+    latency_ms: Optional[float] = None
+
+
+class MemoryConfigUpdateResponse(BaseModel):
+    available: bool
+    embedding_model: str
+    embedding_provider: str
+    embedding_base_url: str
+    embedding_api_key_set: bool
+    llm_model: Optional[str] = None
+    llm_api_key_set: bool
+    top_k: int
+    init_error: Optional[str] = None
+
+
 # ── Generic ─────────────────────────────────────────────────────
 
 class MessageAction(BaseModel):

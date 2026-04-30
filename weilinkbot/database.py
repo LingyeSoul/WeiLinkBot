@@ -33,7 +33,11 @@ def get_engine():
         db_path = DATABASE_URL.split("///")[-1] if "///" in DATABASE_URL else ""
         if db_path and db_path != ":memory:":
             Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-        _engine = create_async_engine(DATABASE_URL, echo=False)
+        _engine = create_async_engine(
+        DATABASE_URL,
+        echo=False,
+        connect_args={"timeout": 30},
+    )
     return _engine
 
 
@@ -119,5 +123,7 @@ async def init_db():
     """Create all tables and apply auto-migrations."""
     engine = get_engine()
     async with engine.begin() as conn:
+        # Enable WAL mode for better concurrent read/write performance
+        await conn.execute(text("PRAGMA journal_mode=WAL"))
         await conn.run_sync(Base.metadata.create_all)
         await _auto_migrate(conn)
