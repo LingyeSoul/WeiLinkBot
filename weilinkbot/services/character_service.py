@@ -254,7 +254,11 @@ class CharacterService:
         return True
 
     async def activate_character(self, char_id: int) -> Optional[CharacterCard]:
-        """Activate a character: set as active, deactivate others, assemble + write system prompt."""
+        """Activate a character: set as active, deactivate others.
+        
+        Character prompt is combined with system prompt during context building,
+        no longer overwrites the default system prompt directly.
+        """
         card = await self.get_character(char_id)
         if not card:
             return None
@@ -265,21 +269,13 @@ class CharacterService:
         )
         card.is_active = True
 
-        # Assemble prompt and write to system_prompts as default
-        prompt_content = assemble_st_prompt(card)
-        await self._set_default_system_prompt(f"[角色] {card.name}", prompt_content)
-
         await self._db.flush()
         return card
 
     async def deactivate_character(self) -> None:
-        """Deactivate current character and restore default assistant prompt."""
+        """Deactivate current character."""
         await self._db.execute(
             update(CharacterCard).where(CharacterCard.is_active == True).values(is_active=False)
-        )
-        await self._set_default_system_prompt(
-            "Default",
-            "You are a helpful AI assistant. Reply concisely and helpfully.",
         )
         await self._db.flush()
 

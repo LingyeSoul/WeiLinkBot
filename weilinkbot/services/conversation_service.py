@@ -135,6 +135,14 @@ class ConversationService:
 
     # ── Context Building ──────────────────────────────────────────
 
+    async def _get_prompt_setting(self, key: str) -> bool:
+        """Get a boolean prompt setting from SystemSetting table."""
+        from ..models import SystemSetting
+        row = await self._db.scalar(
+            select(SystemSetting).where(SystemSetting.key == key)
+        )
+        return row.value.lower() == "true" if row else False
+
     async def build_context(
         self,
         user_id: str,
@@ -143,16 +151,58 @@ class ConversationService:
     ) -> list[dict[str, str]]:
         """Build OpenAI-format message list for LLM call.
 
-        Structure: [system_prompt + memories, ...recent_history]
+        Structure: [character_prompt + system_preset + memories, ...recent_history]
         """
-        # 1. Get user config (or create defaults)
+        from ..models import CharacterCard, STPreset, SystemSetting
+        from .character_service import assemble_st_prompt
+
         user_config = await self._get_user_config(user_id)
         max_history = user_config.max_history if user_config else DEFAULT_MAX_HISTORY
 
-        # 2. Determine system prompt
-        system_content = await self._get_system_prompt(user_config)
+        # Check for active character card, preset, and world book
+        active_char = await self._db.scalar(
+            select(CharacterCard).where(CharacterCard.is_active == True)
+        )
+        active_preset = await self._db.scalar(
+            select(STPreset).where(STPreset.is_active == True)
+        )
+        # Check if world book has entries (passed from bot_service)
+        has_world_book = getattr(self, '_has_world_book_entries', False)
 
-        # 3. Inject memories into system prompt
+        # Read settings for disabling base prompt
+        disable_on_char = await self._get_prompt_setting("disable_base_prompt_on_char")
+        disable_on_preset = await self._get_prompt_setting("disable_base_prompt_on_preset")
+        disable_on_worldbook = await self._get_prompt_setting("disable_base_prompt_on_worldbook")
+
+        # Determine if base prompt should be disabled
+        skip_base_prompt = (
+            (active_char and disable_on_char) or
+            (active_preset and disable_on_preset) or
+            (has_world_book and disable_on_worldbook)
+        )
+
+        system_parts = []
+
+        # Add base system prompt (unless disabled)
+        if not skip_base_prompt:
+            base_prompt = await self._get_system_prompt(user_config)
+            if base_prompt:
+                system_parts.append(base_prompt)
+
+        # Add active character card
+        if active_char:
+            system_parts.append(assemble_st_prompt(active_char))
+
+        # Add active ST preset system prompt
+        if active_preset:
+            if active_preset.system_prompt:
+                system_parts.append(active_preset.system_prompt)
+
+
+
+        system_content = "\n\n".join(system_parts) if system_parts else DEFAULT_SYSTEM_PROMPT
+
+        # Inject memories into system prompt
         if memories:
             truncated_memories: list[str] = []
             total_chars = 0

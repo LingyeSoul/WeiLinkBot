@@ -427,11 +427,33 @@ class BotService:
                         logger.warning("Memory search timed out for user %s", user_id)
                         memories = []
 
+                # Check world book matches before building context (for prompt settings)
+                matched_world_book_entries = []
+                try:
+                    from ..services.world_book_service import WorldBookService
+                    wb_service = WorldBookService(db)
+                    matched_world_book_entries = await wb_service.match_entries(text)
+                except Exception:
+                    logger.debug("World book matching skipped")
+
+                # Pass world book status to conv_service for prompt settings
+                conv_service._has_world_book_entries = bool(matched_world_book_entries)
+
                 context = await conv_service.build_context(
                     user_id,
                     memories=memories,
                     max_context_chars=self._config.memory.max_context_chars,
                 )
+
+                # World Book: inject matched entries into context
+                if matched_world_book_entries:
+                    before_entries = [e for e in matched_world_book_entries if e.position != "after_char"]
+                    after_entries = [e for e in matched_world_book_entries if e.position == "after_char"]
+                    for entry in reversed(before_entries):
+                        context.insert(1, {"role": "system", "content": entry.content})
+                    for entry in after_entries:
+                        context.append({"role": "system", "content": entry.content})
+
                 context.append({"role": "user", "content": text})
 
                 logger.info("LLM request for user %s: %s...", user_id, text[:50])
