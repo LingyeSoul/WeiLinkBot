@@ -442,6 +442,11 @@ class BotService:
                 self._session_tokens[model_name] = self._session_tokens.get(model_name, 0) + tokens
                 self._session_requests[model_name] = self._session_requests.get(model_name, 0) + 1
 
+                # Guard: never persist/send empty or whitespace-only response
+                if not response_text or not response_text.strip():
+                    logger.warning("LLM returned empty/whitespace response for user %s, using fallback", user_id)
+                    response_text = t("bot.error.empty_response")
+
                 await conv_service.add_message(
                     user_id, "assistant", response_text, tokens, model_name
                 )

@@ -217,6 +217,7 @@
   "bot.error.process": "[错误] 处理消息失败。",
   "bot.error.command": "[错误] 命令执行失败：{e}",
   "bot.error.unknown_cmd": "未知命令：{cmd}",
+  "bot.error.empty_response": "[错误] 收到空回复。",
 
   "llm.error.no_key": "[错误] 未配置LLM API密钥。请通过Web面板或CLI设置。",
   "llm.error.request_failed": "[错误] LLM请求失败：{e}",

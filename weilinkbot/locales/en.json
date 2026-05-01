@@ -217,6 +217,7 @@
   "bot.error.process": "[Error] Failed to process your message.",
   "bot.error.command": "[Error] Command failed: {e}",
   "bot.error.unknown_cmd": "Unknown command: {cmd}",
+  "bot.error.empty_response": "[Error] Received empty response.",
 
   "llm.error.no_key": "[Error] LLM API key not configured. Use the dashboard or CLI to set it.",
   "llm.error.request_failed": "[Error] LLM request failed: {e}",
