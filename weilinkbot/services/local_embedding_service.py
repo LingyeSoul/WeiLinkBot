@@ -51,9 +51,8 @@ class OnnxModelOption:
 ONNX_MODEL_OPTIONS: tuple[OnnxModelOption, ...] = (
     OnnxModelOption(
         value="onnx/model_fp16.onnx",
-        label="FP16 半精度（默认推荐）",
+        label="FP16 半精度",
         description="体积约为 FP32 的一半，精度损失很小，适合大多数本地 CPU 场景。",
-        recommended=True,
     ),
     OnnxModelOption(
         value="onnx/model_quantized.onnx",
@@ -87,18 +86,22 @@ ONNX_MODEL_OPTIONS: tuple[OnnxModelOption, ...] = (
     ),
     OnnxModelOption(
         value="onnx/model.onnx",
-        label="FP32 全精度",
-        description="全精度模型，体积最大；仅在明确需要最高精度时手动选择。",
+        label="FP32 全精度（默认推荐）",
+        description="全精度模型，体积最大；默认优先保证精度和兼容性。",
+        recommended=True,
     ),
 )
 
-DEFAULT_ONNX_MODEL_FILE = "onnx/model_fp16.onnx"
-_DEFAULT_DOWNLOAD_FILES = (
-    "tokenizer.json",
-    "tokenizer_config.json",
-    "special_tokens_map.json",
-    "vocab.txt",
-    "config.json",
+DEFAULT_ONNX_MODEL_FILE = "onnx/model.onnx"
+_KNOWN_ONNX_FILES = (
+    "model_fp16.onnx",
+    "model_quantized.onnx",
+    "model_int8.onnx",
+    "model_uint8.onnx",
+    "model_q4f16.onnx",
+    "model_q4.onnx",
+    "model_bnb4.onnx",
+    "model.onnx",
 )
 
 
@@ -109,7 +112,7 @@ class LocalEmbeddingError(RuntimeError):
 def public_onnx_model_options(include_advanced: bool = False) -> list[dict[str, object]]:
     """Return model options for API/UI consumption.
 
-    FP32 full precision is intentionally hidden unless include_advanced=True.
+    Set ``include_advanced`` to hide future advanced-only model variants.
     """
     options = ONNX_MODEL_OPTIONS if include_advanced else tuple(
         item for item in ONNX_MODEL_OPTIONS if not item.advanced
@@ -148,7 +151,12 @@ def download_modelscope_embedding_files(
     local_dir: str = DEFAULT_LOCAL_MODEL_PATH,
     onnx_model_file: str = DEFAULT_ONNX_MODEL_FILE,
 ) -> str:
-    """Download one ONNX variant plus tokenizer/config files from ModelScope."""
+    """Download repository files from ModelScope.
+
+    All files outside the onnx/ folder are downloaded. Inside onnx/ only the
+    selected ``onnx_model_file`` is downloaded; other known ONNX variants are
+    skipped to save bandwidth and disk space.
+    """
     try:
         from modelscope.hub.snapshot_download import snapshot_download
     except ImportError as exc:
@@ -156,11 +164,16 @@ def download_modelscope_embedding_files(
             "modelscope is not installed; install project dependencies first."
         ) from exc
 
-    allow_patterns = [onnx_model_file, *_DEFAULT_DOWNLOAD_FILES]
+    selected_name = Path(onnx_model_file).name
+    allow_patterns = ["*", onnx_model_file]
+    ignore_patterns = [
+        f"onnx/{name}" for name in _KNOWN_ONNX_FILES if name != selected_name
+    ]
     try:
         return snapshot_download(
             model_id=model_id,
             allow_patterns=allow_patterns,
+            ignore_patterns=ignore_patterns,
             local_dir=local_dir,
         )
     except TypeError:
@@ -168,6 +181,7 @@ def download_modelscope_embedding_files(
         return snapshot_download(
             model_id=model_id,
             allow_file_pattern=allow_patterns,
+            ignore_file_pattern=ignore_patterns,
             local_dir=local_dir,
         )
 

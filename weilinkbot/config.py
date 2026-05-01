@@ -61,8 +61,8 @@ class EmbeddingConfig(BaseModel):
     base_url: str = ""
     model: str = ""
     local_path: str = "./data/models/bge-small-zh-v1.5"
-    quantization: str = "fp16"
-    onnx_model_file: str = "onnx/model_fp16.onnx"
+    quantization: str = "fp32"
+    onnx_model_file: str = "onnx/model.onnx"
     modelscope_model_id: str = "Xenova/bge-small-zh-v1.5"
 
 
