@@ -89,8 +89,8 @@ def status():
 
 @app.command()
 def serve(
-    host: str = typer.Option("0.0.0.0", help="Server host"),
-    port: int = typer.Option(8000, help="Server port"),
+    host: str = typer.Option(None, help="Server host"),
+    port: int = typer.Option(None, help="Server port"),
     reload: bool = typer.Option(False, help="Enable auto-reload for development"),
     open_browser: bool = typer.Option(True, "--open/--no-open", help="Auto-open browser on start"),
 ):
@@ -98,6 +98,11 @@ def serve(
     import uvicorn
     import time
     from weilinkbot.api.app import create_app
+    from weilinkbot.config import get_config
+
+    config = get_config()
+    host = host or config.server.host
+    port = port if port is not None else config.server.port
 
     console.print(f"[bold blue]{t('cli.starting_dashboard', host=host, port=port)}[/bold blue]")
     console.print(f"[dim]{t('cli.open_browser', port=port)}[/dim]")
