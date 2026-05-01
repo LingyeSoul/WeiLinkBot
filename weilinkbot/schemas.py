@@ -90,17 +90,52 @@ class UserConfigUpdate(BaseModel):
     max_history: Optional[int] = Field(None, ge=1, le=100)
 
 
+# ── Providers ──────────────────────────────────────────────────
+
+class ProviderCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    provider_type: str = Field("custom", max_length=50)
+    api_key: str = Field(..., min_length=1)
+    base_url: str = Field(..., min_length=1, max_length=500)
+    description: Optional[str] = None
+    is_enabled: bool = True
+
+
+class ProviderUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    provider_type: Optional[str] = None
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+    description: Optional[str] = None
+    is_enabled: Optional[bool] = None
+
+
+class ProviderResponse(BaseModel):
+    id: int
+    name: str
+    provider_type: str
+    base_url: str
+    api_key_set: bool = True
+    description: Optional[str] = None
+    is_enabled: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 # ── LLM Presets ──────────────────────────────────────────────────
 
 class LLMPresetCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     provider: str = Field("custom", max_length=50)
-    api_key: str = Field(..., min_length=1)
-    base_url: str = Field(..., min_length=1, max_length=500)
+    api_key: Optional[str] = None
+    base_url: Optional[str] = Field(None, min_length=1, max_length=500)
     model: str = Field(..., min_length=1, max_length=100)
     max_tokens: int = Field(2048, ge=1, le=128000)
     temperature: float = Field(0.7, ge=0, le=2)
     is_active: bool = False
+    provider_id: Optional[int] = None
     capability_text: bool = True
     capability_audio: bool = False
     capability_image: bool = False
@@ -121,6 +156,7 @@ class LLMPresetUpdate(BaseModel):
     max_tokens: Optional[int] = Field(None, ge=1, le=128000)
     temperature: Optional[float] = Field(None, ge=0, le=2)
     is_active: Optional[bool] = None
+    provider_id: Optional[int] = None
     capability_text: Optional[bool] = None
     capability_audio: Optional[bool] = None
     capability_image: Optional[bool] = None
@@ -141,7 +177,8 @@ class LLMPresetResponse(BaseModel):
     max_tokens: int
     temperature: float
     is_active: bool
-    api_key_set: bool = True  # Never expose actual key
+    api_key_set: bool = True
+    provider_id: Optional[int] = None
     capability_text: bool = True
     capability_audio: bool = False
     capability_image: bool = False
@@ -280,6 +317,115 @@ class MemoryConfigUpdateResponse(BaseModel):
     hnsw_construction_ef: int = 200
     hnsw_search_ef: int = 100
     init_error: Optional[str] = None
+
+
+# ── ST Presets ───────────────────────────────────────────────
+
+class STPresetCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    raw_json: str = Field(..., min_length=1)
+    system_prompt: Optional[str] = None
+
+
+
+class STPresetUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    raw_json: Optional[str] = None
+    system_prompt: Optional[str] = None
+
+
+
+class STPresetResponse(BaseModel):
+    id: int
+    name: str
+    is_active: bool
+    raw_json: str
+    system_prompt: Optional[str] = None
+
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ── World Books ──────────────────────────────────────────────
+
+class WorldBookEntryResponse(BaseModel):
+    id: int
+    world_book_id: int
+    key_primary: str
+    key_secondary: Optional[str] = None
+    content: str
+    comment: Optional[str] = None
+    enabled: bool
+    position: str
+    insertion_order: int
+    case_sensitive: bool
+    selective: bool
+    constant: bool
+    priority: int
+
+    model_config = {"from_attributes": True}
+
+
+class WorldBookEntryUpdate(BaseModel):
+    key_primary: Optional[str] = None
+    key_secondary: Optional[str] = None
+    content: Optional[str] = None
+    comment: Optional[str] = None
+    enabled: Optional[bool] = None
+    position: Optional[str] = None
+    insertion_order: Optional[int] = None
+    case_sensitive: Optional[bool] = None
+    selective: Optional[bool] = None
+    constant: Optional[bool] = None
+    priority: Optional[int] = None
+
+
+class WorldBookCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    description: str = ""
+    raw_json: str = Field(..., min_length=1)
+
+
+class WorldBookUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    description: Optional[str] = None
+    raw_json: Optional[str] = None
+
+
+class WorldBookResponse(BaseModel):
+    id: int
+    name: str
+    description: str
+    is_active: bool
+    raw_json: str
+    created_at: datetime
+    updated_at: datetime
+    entries: list[WorldBookEntryResponse] = []
+
+    model_config = {"from_attributes": True}
+
+
+# ── Settings ─────────────────────────────────────────────────
+
+class SettingsResponse(BaseModel):
+    server_host: str
+    server_port: int
+    listen_lan: bool
+    language: str
+    disable_base_prompt_on_char: bool = False
+    disable_base_prompt_on_preset: bool = False
+    disable_base_prompt_on_worldbook: bool = False
+
+
+class SettingsUpdate(BaseModel):
+    server_host: Optional[str] = None
+    server_port: Optional[int] = Field(None, ge=1, le=65535)
+    listen_lan: Optional[bool] = None
+    language: Optional[str] = None
+    disable_base_prompt_on_char: Optional[bool] = None
+    disable_base_prompt_on_preset: Optional[bool] = None
+    disable_base_prompt_on_worldbook: Optional[bool] = None
 
 
 # ── Generic ─────────────────────────────────────────────────────

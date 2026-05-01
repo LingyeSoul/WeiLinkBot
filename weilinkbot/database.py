@@ -65,6 +65,7 @@ async def get_db():
 # Columns added after initial table creation — safe to re-run.
 _MIGRATIONS: list[tuple[str, str, str]] = [
     # (table, column, column_type)
+    ("llm_presets", "provider_id", "INTEGER REFERENCES providers(id) ON DELETE SET NULL"),
     ("llm_presets", "capability_text", "BOOLEAN NOT NULL DEFAULT 1"),
     ("llm_presets", "capability_audio", "BOOLEAN NOT NULL DEFAULT 0"),
     ("llm_presets", "capability_image", "BOOLEAN NOT NULL DEFAULT 0"),

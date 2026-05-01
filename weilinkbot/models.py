@@ -87,6 +87,32 @@ class Conversation(Base):
         return f"<Conversation id={self.id} user_id={self.user_id!r} msgs={self.message_count}>"
 
 
+class Provider(Base):
+    """LLM API provider — stores shared API key and base URL."""
+    __tablename__ = "providers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    provider_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    api_key: Mapped[str] = mapped_column(Text, nullable=False)
+    api_key_encrypted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    base_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, server_default=func.now(), onupdate=_utcnow
+    )
+
+    # Back-reference from LLMPreset
+    presets: Mapped[list["LLMPreset"]] = relationship(back_populates="provider_ref")
+
+    def __repr__(self) -> str:
+        return f"<Provider id={self.id} name={self.name!r} type={self.provider_type}>"
+
+
 class LLMPreset(Base):
     """A saved LLM model configuration that can be activated."""
     __tablename__ = "llm_presets"
@@ -101,6 +127,11 @@ class LLMPreset(Base):
     max_tokens: Mapped[int] = mapped_column(Integer, default=2048, nullable=False)
     temperature: Mapped[float] = mapped_column(default=0.7, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # Link to Provider (nullable for backward compatibility)
+    provider_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("providers.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Capability flags
     capability_text: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -123,8 +154,78 @@ class LLMPreset(Base):
         DateTime(timezone=True), default=_utcnow, server_default=func.now()
     )
 
+    # Relationship
+    provider_ref: Mapped[Optional["Provider"]] = relationship(back_populates="presets")
+
     def __repr__(self) -> str:
         return f"<LLMPreset id={self.id} name={self.name!r} model={self.model!r} active={self.is_active}>"
+
+
+class STPreset(Base):
+    """SillyTavern prompt preset."""
+    __tablename__ = "st_presets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    raw_json: Mapped[str] = mapped_column(Text, nullable=False)
+    system_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, server_default=func.now()
+    )
+
+    def __repr__(self) -> str:
+        return f"<STPreset id={self.id} name={self.name!r} active={self.is_active}>"
+
+
+class WorldBook(Base):
+    """SillyTavern World Book / Lorebook."""
+    __tablename__ = "world_books"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    raw_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, server_default=func.now(), onupdate=_utcnow
+    )
+
+    entries: Mapped[list["WorldBookEntry"]] = relationship(
+        back_populates="world_book", cascade="all, delete-orphan"
+    )
+
+    def __repr__(self) -> str:
+        return f"<WorldBook id={self.id} name={self.name!r} active={self.is_active}>"
+
+
+class WorldBookEntry(Base):
+    """A single entry in a World Book."""
+    __tablename__ = "world_book_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    world_book_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("world_books.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    key_primary: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    key_secondary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    content: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    position: Mapped[str] = mapped_column(String(50), default="before_char", nullable=False)
+    insertion_order: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    case_sensitive: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    selective: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    constant: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    priority: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+
+    world_book: Mapped["WorldBook"] = relationship(back_populates="entries")
+
+    def __repr__(self) -> str:
+        return f"<WorldBookEntry id={self.id} wb={self.world_book_id} keys={self.key_primary!r}>"
 
 
 class CharacterCard(Base):
@@ -197,6 +298,22 @@ def get_preset_api_key(preset: LLMPreset) -> str:
 
 def encrypt_preset_api_key(api_key: str) -> tuple[str, bool]:
     """Encrypt an api_key for storage in LLMPreset. Returns (encrypted_value, True)."""
+    from .crypto import encrypt
+    if api_key:
+        return encrypt(api_key), True
+    return api_key, False
+
+
+def get_provider_api_key(provider: Provider) -> str:
+    """Return decrypted api_key from a provider."""
+    from .crypto import decrypt
+    if provider.api_key_encrypted and provider.api_key:
+        return decrypt(provider.api_key)
+    return provider.api_key
+
+
+def encrypt_provider_api_key(api_key: str) -> tuple[str, bool]:
+    """Encrypt an api_key for storage in Provider. Returns (encrypted_value, True)."""
     from .crypto import encrypt
     if api_key:
         return encrypt(api_key), True
