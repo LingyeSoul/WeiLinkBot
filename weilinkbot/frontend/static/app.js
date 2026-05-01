@@ -527,8 +527,8 @@ function memoriesPanel() {
             embedding_api_key: '',
             embedding_api_key_set: false,
             embedding_local_path: './data/models/bge-small-zh-v1.5',
-            embedding_quantization: 'fp16',
-            embedding_onnx_model_file: 'onnx/model_fp16.onnx',
+            embedding_quantization: 'fp32',
+            embedding_onnx_model_file: 'onnx/model.onnx',
             embedding_modelscope_model_id: 'Xenova/bge-small-zh-v1.5',
             llm_provider: 'openai',
             llm_model: '',
@@ -575,8 +575,8 @@ function memoriesPanel() {
                     this.configForm.embedding_api_key = '';
                     this.configForm.embedding_api_key_set = data.embedding?.api_key_set || false;
                     this.configForm.embedding_local_path = data.embedding?.local_path || './data/models/bge-small-zh-v1.5';
-                    this.configForm.embedding_quantization = data.embedding?.quantization || 'fp16';
-                    this.configForm.embedding_onnx_model_file = data.embedding?.onnx_model_file || 'onnx/model_fp16.onnx';
+                    this.configForm.embedding_quantization = data.embedding?.quantization || 'fp32';
+                    this.configForm.embedding_onnx_model_file = data.embedding?.onnx_model_file || 'onnx/model.onnx';
                     this.configForm.embedding_modelscope_model_id = data.embedding?.modelscope_model_id || 'Xenova/bge-small-zh-v1.5';
                     this.configForm.llm_provider = data.llm?.provider || 'openai';
                     this.configForm.llm_model = data.llm?.model || '';
@@ -614,8 +614,8 @@ function memoriesPanel() {
             if (this.configForm.embedding_provider === 'modelscope-local') {
                 this.configForm.embedding_local_path ||= './data/models/bge-small-zh-v1.5';
                 this.configForm.embedding_modelscope_model_id ||= 'Xenova/bge-small-zh-v1.5';
-                this.configForm.embedding_onnx_model_file ||= 'onnx/model_fp16.onnx';
-                this.configForm.embedding_quantization ||= 'fp16';
+                this.configForm.embedding_onnx_model_file ||= 'onnx/model.onnx';
+                this.configForm.embedding_quantization ||= 'fp32';
             }
         },
 

@@ -810,14 +810,14 @@
                                                     <label class="block text-xs font-medium text-gray-600 mb-1">ONNX 量化模型</label>
                                                     <select x-model="configForm.embedding_onnx_model_file" @change="onEmbeddingOnnxModelChange()"
                                                             class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
-                                                        <option value="onnx/model_fp16.onnx">FP16 半精度（默认推荐）— 体积约为 FP32 的一半，精度损失小</option>
+                                                        <option value="onnx/model_fp16.onnx">FP16 半精度 — 体积约为 FP32 的一半，精度损失小</option>
                                                         <option value="onnx/model_quantized.onnx">Quantized 通用量化 — 体积小、加载快</option>
                                                         <option value="onnx/model_int8.onnx">INT8 量化 — 兼顾速度、体积和检索质量</option>
                                                         <option value="onnx/model_uint8.onnx">UINT8 量化 — INT8 备选</option>
                                                         <option value="onnx/model_q4f16.onnx">Q4F16 混合 4-bit — 更小，适合低资源</option>
                                                         <option value="onnx/model_q4.onnx">Q4 量化 — 低资源备选</option>
                                                         <option value="onnx/model_bnb4.onnx">BNB4 量化 — 兼容性取决于 ONNX Runtime</option>
-                                                        <option value="onnx/model.onnx">FP32 全精度 — 体积最大，适合优先保证精度和兼容性</option>
+                                                        <option value="onnx/model.onnx">FP32 全精度（默认推荐）— 体积最大，适合优先保证精度和兼容性</option>
                                                     </select>
                                     
                                                 <div x-show="isLocalEmbeddingProvider" class="md:col-span-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
