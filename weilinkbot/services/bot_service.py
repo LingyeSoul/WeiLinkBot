@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Optional
 
 from wechatbot import WeChatBot, IncomingMessage, Credentials
+from wechatbot.auth import clear_credentials
 from sqlalchemy import select, update
 
 from ..config import AppConfig, LLMConfig
@@ -119,6 +120,8 @@ class BotService:
         self._main_llm_fallback: Optional[LLMConfig] = None
         # Whether the active model supports native function calling
         self._supports_tools: bool = True
+        # Force re-login on next start (used by unbind_and_relogin)
+        self._force_login: bool = False
 
     @property
     def state(self) -> BotState:
@@ -183,6 +186,8 @@ class BotService:
         """Internal: login and start long-poll loop."""
         try:
             cred_path = str(Path(self._config.bot.cred_path).expanduser())
+            force = self._force_login
+            self._force_login = False
 
             self._bot = WeChatBot(
                 base_url=self._config.bot.base_url,
@@ -195,8 +200,8 @@ class BotService:
 
             self._bot.on_message(self._handle_message)
 
-            logger.info("Logging in...")
-            self._credentials = await self._bot.login()
+            logger.info("Logging in... (force=%s)", force)
+            self._credentials = await self._bot.login(force=force)
             self._login_url = None
             self._state = BotState.RUNNING
             self._start_time = time.time()
@@ -242,6 +247,26 @@ class BotService:
         self._state = BotState.STOPPED
         self._login_url = None
         logger.info("Bot stop requested")
+
+    async def unbind_and_relogin(self) -> None:
+        """Unbind current WeChat account and restart with a fresh QR login."""
+        await self.stop()
+
+        cred_path = Path(self._config.bot.cred_path).expanduser()
+        await clear_credentials(cred_path)
+        logger.info("Credentials cleared: %s", cred_path)
+
+        self._credentials = None
+        self._session_tokens.clear()
+        self._session_requests.clear()
+
+        await get_event_log().push(
+            "warning", "bot", "bot.unbind",
+            t("bot.unbind_done"),
+        )
+
+        self._force_login = True
+        await self.start()
 
     def _on_qr_url(self, url: str) -> None:
         self._login_url = url

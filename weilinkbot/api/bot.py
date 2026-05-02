@@ -59,3 +59,11 @@ async def bot_stop():
     bot = get_bot_service()
     await bot.stop()
     return MessageAction(message=t("api.bot_stopped"))
+
+
+@router.post("/unbind", response_model=MessageAction)
+async def bot_unbind():
+    """Unbind current WeChat account and restart with a fresh QR login."""
+    bot = get_bot_service()
+    await bot.unbind_and_relogin()
+    return MessageAction(message=t("api.bot_unbound"))
