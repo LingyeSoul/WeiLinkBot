@@ -117,7 +117,9 @@ def build() -> None:
         "--hidden-import=aiosqlite",
         "--hidden-import=sqlalchemy.dialects.sqlite.aiosqlite",
         "--hidden-import=chromadb.telemetry.product.posthog",
+        "--hidden-import=chromadb_rust_bindings",
         "--collect-all=chromadb",
+        "--collect-all=chromadb_rust_bindings",
         "--collect-data=weilinkbot",
         str(ENTRY_POINT),
     ]

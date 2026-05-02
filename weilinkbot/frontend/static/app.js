@@ -61,13 +61,23 @@ function dashboard() {
         stPresetEntriesPresetId: null,
         stPresetEntriesPresetName: "",
         stPresetEntries: [],
+        stEntryEditIndex: -1,
+        stEntryForm: { name: "", content: "", role: "system", injection_position: 0, injection_depth: 4, identifier: "" },
+        stDragIndex: -1,
+        stExpandedEntry: -1,
 
         // World Books
         worldBooks: [],
         showWorldBookForm: false,
         worldBookForm: { id: null, name: "", description: "", raw_json: "" },
-        expandedWorldBookId: null,
-        worldBookEntries: [],
+        showWBEntriesModal: false,
+        wbEntriesBookId: null,
+        wbEntriesBookName: "",
+        wbEntries: [],
+        wbEntryEditId: null,
+        wbEntryForm: { key_primary: "", key_secondary: "", content: "", comment: "", enabled: true, position: "before_char", insertion_order: 100, case_sensitive: false, selective: false, constant: false, priority: 10 },
+        wbDragIndex: -1,
+        wbExpandedEntry: null,
 
         // Settings
         settingsForm: { server_host: "0.0.0.0", server_port: 5292, listen_lan: true, language: "zh-CN", disable_base_prompt_on_char: false, disable_base_prompt_on_preset: false, disable_base_prompt_on_worldbook: false },
@@ -76,6 +86,12 @@ function dashboard() {
         // Agent Config
         agentConfig: { max_tool_rounds: 5, enabled_tools: [], available_tools: [] },
         agentConfigLoaded: false,
+        skills: { items: [], loaded: false },
+        skillForm: { name: "", description: "", content: "" },
+        showSkillForm: false,
+        mcpServers: { items: [], loaded: false },
+        mcpForm: { name: "", transport: "stdio", command: "", argsStr: "", envStr: "", url: "" },
+        showMcpForm: false,
 
         // Token Stats
         tokenStats: { models: [], total_tokens: 0, total_requests: 0 },       // all-time (from API)
@@ -181,6 +197,8 @@ function dashboard() {
                 this.refreshWorldBooks(),
                 this.refreshSettings(),
                 this.refreshAgentConfig(),
+                this.refreshSkills(),
+                this.refreshMcpServers(),
                 this.refreshTokenStats(),
                 this.refreshVersion(),
             ]);
@@ -305,6 +323,13 @@ function dashboard() {
         async stopBot() {
             await this.api("/api/bot/stop", { method: "POST" });
             this.showToast(t("toast.bot_stopped"), "info");
+            await this.refreshBotStatus();
+        },
+
+        async unbindBot() {
+            if (!confirm(t("confirm.unbind_bot"))) return;
+            await this.api("/api/bot/unbind", { method: "POST" });
+            this.showToast(t("toast.bot_unbound"), "info");
             await this.refreshBotStatus();
         },
 
@@ -485,16 +510,11 @@ function dashboard() {
             } catch { this.users = []; }
         },
 
-        async toggleBlock(user) {
-            await this.api(`/api/users/${user.user_id}`, {
-                method: "PUT",
-                body: JSON.stringify({ is_blocked: !user.is_blocked }),
-            });
+        async deleteUser(user) {
+            if (!confirm(t("confirm.delete_user", { userId: user.user_id }))) return;
+            await this.api(`/api/users/${user.user_id}`, { method: "DELETE" });
             await this.refreshUsers();
-            this.showToast(
-                user.is_blocked ? t("toast.user_unblocked") : t("toast.user_blocked"),
-                "success"
-            );
+            this.showToast(t("toast.user_deleted"), "success");
         },
 
         // ── Characters ─────────────────────────────────────────────
@@ -709,18 +729,258 @@ function dashboard() {
                 await this.refreshSTPresets();
             } catch (e) { this.showToast(e.message, "error"); }
         },
+        // Entry editing
+        resetSTEntryForm() {
+            this.stEntryEditIndex = -1;
+            this.stEntryForm = { name: "", content: "", role: "system", injection_position: 0, injection_depth: 4, identifier: "" };
+        },
+        expandSTEntry(idx) {
+            this.stExpandedEntry = this.stExpandedEntry === idx ? -1 : idx;
+        },
+        editSTEntry(entry, idx) {
+            this.stEntryEditIndex = idx;
+            this.stEntryForm = { ...entry };
+            this.stExpandedEntry = idx;
+        },
+        async saveSTEntry() {
+            const pid = this.stPresetEntriesPresetId;
+            const idx = this.stEntryEditIndex;
+            if (idx < 0) return;
+            try {
+                const data = await this.api(`/api/st-presets/${pid}/entries/${idx}`, {
+                    method: "PUT",
+                    body: JSON.stringify(this.stEntryForm),
+                });
+                this.stPresetEntries = data;
+                this.resetSTEntryForm();
+                await this.refreshSTPresets();
+                this.showToast(t("toast.entry_saved"), "success");
+            } catch (e) { this.showToast(e.message, "error"); }
+        },
+        async addSTEntry() {
+            const pid = this.stPresetEntriesPresetId;
+            const entry = { name: t("st_presets.new_entry"), content: "", role: "system", injection_position: 0, injection_depth: 4, enabled: true, identifier: "" };
+            try {
+                const data = await this.api(`/api/st-presets/${pid}/entries`, {
+                    method: "POST",
+                    body: JSON.stringify(entry),
+                });
+                this.stPresetEntries = data;
+                this.stExpandedEntry = data.length - 1;
+                await this.refreshSTPresets();
+                this.showToast(t("toast.entry_added"), "success");
+            } catch (e) { this.showToast(e.message, "error"); }
+        },
+        async deleteSTEntry(idx) {
+            if (!confirm(t("confirm.delete_entry"))) return;
+            const pid = this.stPresetEntriesPresetId;
+            try {
+                const data = await this.api(`/api/st-presets/${pid}/entries/${idx}`, { method: "DELETE" });
+                this.stPresetEntries = data;
+                if (this.stExpandedEntry === idx) this.stExpandedEntry = -1;
+                else if (this.stExpandedEntry > idx) this.stExpandedEntry--;
+                await this.refreshSTPresets();
+                this.showToast(t("toast.entry_deleted"), "success");
+            } catch (e) { this.showToast(e.message, "error"); }
+        },
+        // Drag & drop reordering
+        stDragStart(idx, ev) {
+            this.stDragIndex = idx;
+            ev.dataTransfer.effectAllowed = "move";
+            ev.dataTransfer.setData("text/plain", idx);
+            ev.target.closest(".st-entry-card")?.classList.add("opacity-50");
+        },
+        stDragOver(idx, ev) {
+            ev.preventDefault();
+            ev.dataTransfer.dropEffect = "move";
+        },
+        async stDrop(idx, ev) {
+            ev.preventDefault();
+            const from = this.stDragIndex;
+            document.querySelectorAll(".st-entry-card").forEach(el => el.classList.remove("opacity-50"));
+            if (from < 0 || from === idx) return;
+            const entries = [...this.stPresetEntries];
+            const [moved] = entries.splice(from, 1);
+            entries.splice(idx, 0, moved);
+            this.stPresetEntries = entries;
+            this.stDragIndex = -1;
+            try {
+                // Build the order array mapping new positions to original indices
+                const original = [...Array(entries.length + 1).keys()];
+                // The entries are already reordered in local state; send the order that produced it
+                // But we need the inverse: which original index ended up at each position
+                // Since we did splice(from,1) then splice(idx,0,moved), the order is:
+                // For simplicity, re-fetch and compute from the original state
+                // Instead, just re-fetch entries from server with the new order applied locally
+                // Actually the server needs the permutation. Let's compute it properly.
+                // We already mutated local. Send indices that map new[i] = old[order[i]]
+                // The local array was mutated by splice, so just send 0..n-1 (identity) won't work.
+                // We need to track original indices. Let's use a simpler approach:
+                const order = [];
+                for (let i = 0; i < entries.length; i++) order.push(i);
+                // We moved item at `from` to `idx`. Compute the inverse permutation.
+                const perm = [...Array(entries.length).keys()];
+                const [item] = perm.splice(from, 1);
+                perm.splice(idx, 0, item);
+                const data = await this.api(`/api/st-presets/${this.stPresetEntriesPresetId}/entries/reorder`, {
+                    method: "PUT",
+                    body: JSON.stringify({ order: perm }),
+                });
+                this.stPresetEntries = data;
+                await this.refreshSTPresets();
+            } catch (e) { this.showToast(e.message, "error"); }
+        },
+        async moveSTEntry(idx, direction) {
+            const newIdx = idx + direction;
+            if (newIdx < 0 || newIdx >= this.stPresetEntries.length) return;
+            const perm = [...Array(this.stPresetEntries.length).keys()];
+            const [item] = perm.splice(idx, 1);
+            perm.splice(newIdx, 0, item);
+            this.stDragIndex = -1;
+            try {
+                const data = await this.api(`/api/st-presets/${this.stPresetEntriesPresetId}/entries/reorder`, {
+                    method: "PUT",
+                    body: JSON.stringify({ order: perm }),
+                });
+                this.stPresetEntries = data;
+                await this.refreshSTPresets();
+            } catch (e) { this.showToast(e.message, "error"); }
+        },
 
         // ── World Books ──────────────────────────────────────────────
         async refreshWorldBooks() { try { this.worldBooks = await this.api("/api/world-books"); } catch { this.worldBooks = []; } },
-        resetWorldBookForm() { this.worldBookForm = { id: null, name: "", description: "", raw_json: "" }; this.showWorldBookForm = false; this.expandedWorldBookId = null; this.worldBookEntries = []; },
+        resetWorldBookForm() { this.worldBookForm = { id: null, name: "", description: "", raw_json: "" }; this.showWorldBookForm = false; },
         async viewWorldBookEntries(wb) {
-            if (this.expandedWorldBookId === wb.id) {
-                this.expandedWorldBookId = null;
-                this.worldBookEntries = [];
-                return;
-            }
-            this.expandedWorldBookId = wb.id;
-            try { const data = await this.api(`/api/world-books/${wb.id}`); this.worldBookEntries = data.entries || []; } catch { this.worldBookEntries = []; }
+            this.wbEntriesBookId = wb.id;
+            this.wbEntriesBookName = wb.name;
+            this.wbEntries = [];
+            this.showWBEntriesModal = true;
+            this.wbExpandedEntry = null;
+            this.wbEntryEditId = null;
+            try { const data = await this.api(`/api/world-books/${wb.id}`); this.wbEntries = data.entries || []; } catch { this.wbEntries = []; }
+        },
+        closeWBEntriesModal() {
+            this.showWBEntriesModal = false;
+            this.wbEntriesBookId = null;
+            this.wbEntriesBookName = "";
+            this.wbEntries = [];
+            this.wbExpandedEntry = null;
+            this.wbEntryEditId = null;
+        },
+        resetWBEntryForm() {
+            this.wbEntryEditId = null;
+            this.wbEntryForm = { key_primary: "", key_secondary: "", content: "", comment: "", enabled: true, position: "before_char", insertion_order: 100, case_sensitive: false, selective: false, constant: false, priority: 10 };
+        },
+        expandWBEntry(id) {
+            this.wbExpandedEntry = this.wbExpandedEntry === id ? null : id;
+        },
+        editWBEntry(entry) {
+            this.wbEntryEditId = entry.id;
+            this.wbEntryForm = { key_primary: entry.key_primary || "", key_secondary: entry.key_secondary || "", content: entry.content || "", comment: entry.comment || "", enabled: entry.enabled, position: entry.position || "before_char", insertion_order: entry.insertion_order ?? 100, case_sensitive: entry.case_sensitive || false, selective: entry.selective || false, constant: entry.constant || false, priority: entry.priority ?? 10 };
+            this.wbExpandedEntry = entry.id;
+        },
+        async saveWBEntry() {
+            const wbId = this.wbEntriesBookId;
+            const entryId = this.wbEntryEditId;
+            if (!entryId) return;
+            try {
+                const data = await this.api(`/api/world-books/${wbId}/entries/${entryId}`, {
+                    method: "PUT",
+                    body: JSON.stringify(this.wbEntryForm),
+                });
+                this.wbEntries = data;
+                this.resetWBEntryForm();
+                await this.refreshWorldBooks();
+                this.showToast(t("toast.wb_entry_saved"), "success");
+            } catch (e) { this.showToast(e.message, "error"); }
+        },
+        async addWBEntry() {
+            const wbId = this.wbEntriesBookId;
+            const entry = { key_primary: "", content: "", comment: t("world_books.new_entry"), enabled: true, position: "before_char", insertion_order: 100, case_sensitive: false, selective: false, constant: false, priority: 10 };
+            try {
+                const data = await this.api(`/api/world-books/${wbId}/entries`, {
+                    method: "POST",
+                    body: JSON.stringify(entry),
+                });
+                this.wbEntries = data;
+                const newEntry = data[data.length - 1];
+                if (newEntry) { this.wbExpandedEntry = newEntry.id; this.editWBEntry(newEntry); }
+                await this.refreshWorldBooks();
+                this.showToast(t("toast.wb_entry_added"), "success");
+            } catch (e) { this.showToast(e.message, "error"); }
+        },
+        async deleteWBEntry(entryId) {
+            if (!confirm(t("confirm.delete_wb_entry"))) return;
+            const wbId = this.wbEntriesBookId;
+            try {
+                const data = await this.api(`/api/world-books/${wbId}/entries/${entryId}`, { method: "DELETE" });
+                this.wbEntries = data;
+                if (this.wbExpandedEntry === entryId) this.wbExpandedEntry = null;
+                await this.refreshWorldBooks();
+                this.showToast(t("toast.wb_entry_deleted"), "success");
+            } catch (e) { this.showToast(e.message, "error"); }
+        },
+        async saveWBEntryDirect(entryId, data) {
+            const wbId = this.wbEntriesBookId;
+            try {
+                const result = await this.api(`/api/world-books/${wbId}/entries/${entryId}`, {
+                    method: "PUT",
+                    body: JSON.stringify(data),
+                });
+                this.wbEntries = result;
+                await this.refreshWorldBooks();
+            } catch (e) { this.showToast(e.message, "error"); }
+        },
+        // Drag & drop reordering
+        wbDragStart(entryId, ev) {
+            this.wbDragIndex = entryId;
+            ev.dataTransfer.effectAllowed = "move";
+            ev.dataTransfer.setData("text/plain", entryId);
+            ev.target.closest(".wb-entry-card")?.classList.add("opacity-50");
+        },
+        wbDragOver(entryId, ev) {
+            ev.preventDefault();
+            ev.dataTransfer.dropEffect = "move";
+        },
+        async wbDrop(entryId, ev) {
+            ev.preventDefault();
+            const fromId = this.wbDragIndex;
+            document.querySelectorAll(".wb-entry-card").forEach(el => el.classList.remove("opacity-50"));
+            if (fromId < 0 || fromId === entryId) return;
+            const entries = [...this.wbEntries];
+            const fromIdx = entries.findIndex(e => e.id === fromId);
+            const toIdx = entries.findIndex(e => e.id === entryId);
+            if (fromIdx < 0 || toIdx < 0) return;
+            const [moved] = entries.splice(fromIdx, 1);
+            entries.splice(toIdx, 0, moved);
+            this.wbEntries = entries;
+            this.wbDragIndex = -1;
+            try {
+                const order = entries.map(e => e.id);
+                const data = await this.api(`/api/world-books/${this.wbEntriesBookId}/entries/reorder`, {
+                    method: "PUT",
+                    body: JSON.stringify({ order }),
+                });
+                this.wbEntries = data;
+                await this.refreshWorldBooks();
+            } catch (e) { this.showToast(e.message, "error"); }
+        },
+        async moveWBEntry(entryId, direction) {
+            const entries = [...this.wbEntries];
+            const idx = entries.findIndex(e => e.id === entryId);
+            const newIdx = idx + direction;
+            if (idx < 0 || newIdx < 0 || newIdx >= entries.length) return;
+            [entries[idx], entries[newIdx]] = [entries[newIdx], entries[idx]];
+            this.wbEntries = entries;
+            try {
+                const order = entries.map(e => e.id);
+                const data = await this.api(`/api/world-books/${this.wbEntriesBookId}/entries/reorder`, {
+                    method: "PUT",
+                    body: JSON.stringify({ order }),
+                });
+                this.wbEntries = data;
+                await this.refreshWorldBooks();
+            } catch (e) { this.showToast(e.message, "error"); }
         },
         async saveWorldBook() {
             const form = this.worldBookForm;
@@ -813,6 +1073,103 @@ function dashboard() {
             } else {
                 tools.push(toolName);
             }
+        },
+
+        // ── Skills ────────────────────────────────────────────────
+        async refreshSkills() {
+            try {
+                const data = await this.api("/api/agent/skills");
+                this.skills = { items: data.skills, loaded: true };
+            } catch (e) { console.error("Failed to load skills", e); }
+        },
+        async toggleSkill(name) {
+            const skill = this.skills.items.find(s => s.name === name);
+            if (!skill) return;
+            const previous = skill.enabled;
+            skill.enabled = !skill.enabled;
+            const enabledNames = this.skills.items.filter(s => s.enabled).map(s => s.name);
+            try {
+                await this.api("/api/agent/skills", { method: "PUT", body: JSON.stringify({ enabled_skills: enabledNames }) });
+            } catch (e) {
+                skill.enabled = previous;
+                this.showToast(e.message, "error");
+            }
+        },
+        async createSkill() {
+            const { name, description, content } = this.skillForm;
+            if (!name || !content) { this.showToast(t("toast.fill_required"), "error"); return; }
+            try {
+                await this.api("/api/agent/skills", { method: "POST", body: JSON.stringify({ name, description, content }) });
+                this.showSkillForm = false;
+                this.skillForm = { name: "", description: "", content: "" };
+                await this.refreshSkills();
+                this.showToast(t("toast.saved"), "success");
+            } catch (e) { this.showToast(e.message, "error"); }
+        },
+        async deleteSkill(name) {
+            if (!confirm(t("agent.confirm_delete_skill"))) return;
+            try {
+                await this.api(`/api/agent/skills/${encodeURIComponent(name)}`, { method: "DELETE" });
+                await this.refreshSkills();
+                await this.refreshAgentConfig();
+                this.showToast(t("toast.deleted"), "success");
+            } catch (e) { this.showToast(e.message, "error"); }
+        },
+
+        // ── MCP Servers ───────────────────────────────────────────
+        async refreshMcpServers() {
+            try {
+                const data = await this.api("/api/agent/mcp");
+                this.mcpServers = { items: data.servers, loaded: true };
+            } catch (e) { console.error("Failed to load MCP servers", e); }
+        },
+        async createMcpServer() {
+            const f = this.mcpForm;
+            if (!f.name) { this.showToast(t("toast.fill_required"), "error"); return; }
+            const body = { name: f.name, transport: f.transport, enabled: true };
+            if (f.transport === "stdio") {
+                body.command = f.command;
+                body.args = f.argsStr ? f.argsStr.split(/\s+/).filter(Boolean) : [];
+                body.env = {};
+                if (f.envStr) {
+                    for (const pair of f.envStr.split(",")) {
+                        const [k, ...v] = pair.split("=");
+                        if (k) body.env[k.trim()] = v.join("=").trim();
+                    }
+                }
+            } else {
+                body.url = f.url;
+            }
+            try {
+                await this.api("/api/agent/mcp", { method: "POST", body: JSON.stringify(body) });
+                this.showMcpForm = false;
+                this.mcpForm = { name: "", transport: "stdio", command: "", argsStr: "", envStr: "", url: "" };
+                await this.refreshMcpServers();
+                this.showToast(t("toast.saved"), "success");
+            } catch (e) { this.showToast(e.message, "error"); }
+        },
+        async toggleMcpEnabled(srv) {
+            try {
+                await this.api(`/api/agent/mcp/${srv.id}`, { method: "PUT", body: JSON.stringify({ enabled: !srv.enabled }) });
+                await this.refreshMcpServers();
+            } catch (e) { this.showToast(e.message, "error"); }
+        },
+        async reconnectMcpServer(id) {
+            try {
+                await this.api(`/api/agent/mcp/${id}/reconnect`, { method: "POST" });
+                await this.refreshMcpServers();
+                await this.refreshAgentConfig();
+                this.showToast(t("toast.saved"), "success");
+            } catch (e) { this.showToast(e.message, "error"); }
+        },
+        async deleteMcpServer(id) {
+            if (!confirm(t("agent.confirm_delete_mcp"))) return;
+            try {
+                await this.api(`/api/agent/mcp/${id}`, { method: "DELETE" });
+                await this.refreshMcpServers();
+                await this.refreshAgentConfig();
+                this.showToast(t("toast.deleted"), "success");
+            } catch (e) { this.showToast(e.message, "error"); }
         },
 
         connectWs() {

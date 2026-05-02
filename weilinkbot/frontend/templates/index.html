@@ -50,6 +50,11 @@
                     x-text="t('header.stop_bot')">
                 Stop Bot
             </button>
+            <button @click="unbindBot()"
+                    x-show="botStatus.status === 'running' || botStatus.status === 'starting'"
+                    class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 text-sm font-medium"
+                    x-text="t('header.unbind_bot')">
+            </button>
         </div>
     </div>
 </header>
@@ -705,7 +710,6 @@
                     <tr>
                         <th class="text-left px-4 py-3 font-medium" x-text="t('users.user_id')">User ID</th>
                         <th class="text-left px-4 py-3 font-medium" x-text="t('users.nickname')">Nickname</th>
-                        <th class="text-left px-4 py-3 font-medium" x-text="t('users.status')">Status</th>
                         <th class="text-left px-4 py-3 font-medium" x-text="t('users.max_history')">Max History</th>
                         <th class="text-left px-4 py-3 font-medium" x-text="t('users.actions')">Actions</th>
                     </tr>
@@ -715,26 +719,17 @@
                         <tr>
                             <td class="px-4 py-3 font-mono text-xs truncate max-w-[200px]" x-text="user.user_id"></td>
                             <td class="px-4 py-3" x-text="user.nickname || '—'"></td>
-                            <td class="px-4 py-3">
-                                <span class="text-xs px-2 py-1 rounded-full"
-                                      :class="user.is_blocked ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'"
-                                      x-text="user.is_blocked ? t('users.blocked') : t('users.active')">
-                                </span>
-                            </td>
                             <td class="px-4 py-3" x-text="user.max_history"></td>
                             <td class="px-4 py-3">
-                                <button @click="toggleBlock(user)"
-                                        class="text-xs px-3 py-1 rounded"
-                                        :class="user.is_blocked
-                                            ? 'bg-green-100 text-green-600 hover:bg-green-200'
-                                            : 'bg-red-100 text-red-600 hover:bg-red-200'"
-                                        x-text="user.is_blocked ? t('users.unblock') : t('users.block')">
+                                <button @click="deleteUser(user)"
+                                        class="text-xs px-3 py-1 rounded bg-red-100 text-red-600 hover:bg-red-200"
+                                        x-text="t('users.delete')">
                                 </button>
                             </td>
                         </tr>
                     </template>
                     <tr x-show="users.length === 0">
-                        <td colspan="5" class="px-4 py-6 text-center text-gray-400" x-text="t('users.empty')">No users yet</td>
+                        <td colspan="4" class="px-4 py-6 text-center text-gray-400" x-text="t('users.empty')">No users yet</td>
                     </tr>
                 </tbody>
             </table>
@@ -1077,35 +1072,140 @@
         </div>
     </div>
 
-    <!-- ST Preset Entries Modal -->
+    <!-- ST Preset Prompt Manager Modal -->
     <div x-show="showSTPresetEntriesModal" x-cloak
          class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
          @keydown.escape.window="closeSTPresetEntriesModal()"
          @click.self="closeSTPresetEntriesModal()">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col">
+            <!-- Header -->
             <div class="flex items-center justify-between px-6 py-4 border-b">
                 <h3 class="text-base font-semibold">
                     <span x-text="t('st_presets.entries_title')"></span>
                     <span class="text-gray-400 font-normal ml-2" x-text="stPresetEntriesPresetName"></span>
                 </h3>
-                <button @click="closeSTPresetEntriesModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+                <div class="flex items-center gap-2">
+                    <button @click="addSTEntry()"
+                            class="text-xs px-3 py-1.5 bg-green-500 text-white rounded hover:bg-green-600">
+                        + <span x-text="t('st_presets.add_entry')">Add Entry</span>
+                    </button>
+                    <button @click="closeSTPresetEntriesModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+                </div>
             </div>
+            <!-- Entries List -->
             <div class="flex-1 overflow-y-auto px-6 py-4 space-y-2">
-                <template x-for="(entry, idx) in stPresetEntries" :key="idx">
-                    <div class="border rounded-lg p-3 text-sm flex items-start gap-3">
-                        <label class="flex-shrink-0 flex items-center mt-0.5 cursor-pointer">
-                            <input type="checkbox" :checked="entry.enabled"
-                                   @change="toggleSTPresetEntry(stPresetEntriesPresetId, entry.index, entry.enabled)"
-                                   class="rounded border-gray-300">
-                        </label>
-                        <div class="flex-1 min-w-0">
-                            <div class="font-medium text-gray-700 flex items-center gap-2">
-                                <span x-text="entry.name || 'Entry ' + entry.index"></span>
-                                <span x-show="entry.role" class="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded" x-text="entry.role"></span>
+                <template x-for="(entry, idx) in stPresetEntries" :key="entry.identifier + '-' + idx">
+                    <div class="st-entry-card border rounded-lg text-sm transition-all"
+                         :class="{ 'border-blue-400 bg-blue-50/50': stExpandedEntry === idx, 'border-gray-200 hover:border-gray-300': stExpandedEntry !== idx }"
+                         draggable="true"
+                         @dragstart="stDragStart(idx, $event)"
+                         @dragover.prevent="stDragOver(idx, $event)"
+                         @drop="stDrop(idx, $event)">
+                        <!-- Collapsed Header -->
+                        <div class="flex items-center gap-2 px-3 py-2.5 cursor-pointer select-none"
+                             @click="expandSTEntry(idx)">
+                            <!-- Drag handle -->
+                            <span class="text-gray-300 hover:text-gray-500 cursor-grab text-lg leading-none" title="Drag to reorder">&#9776;</span>
+                            <!-- Toggle -->
+                            <label class="flex-shrink-0 cursor-pointer" @click.stop>
+                                <input type="checkbox" :checked="entry.enabled"
+                                       @change="toggleSTPresetEntry(stPresetEntriesPresetId, entry.index, entry.enabled)"
+                                       class="rounded border-gray-300">
+                            </label>
+                            <!-- Name -->
+                            <span class="font-medium text-gray-700 flex-1 truncate" x-text="entry.name || 'Entry ' + entry.index"></span>
+                            <!-- Role badge -->
+                            <span class="text-xs px-1.5 py-0.5 rounded font-mono"
+                                  :class="{
+                                      'bg-blue-100 text-blue-600': entry.role === 'system',
+                                      'bg-green-100 text-green-600': entry.role === 'user',
+                                      'bg-purple-100 text-purple-600': entry.role === 'assistant'
+                                  }"
+                                  x-text="entry.role"></span>
+                            <!-- Arrow -->
+                            <svg class="w-4 h-4 text-gray-400 transition-transform" :class="{'rotate-180': stExpandedEntry === idx}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </div>
+                        <!-- Expanded Content -->
+                        <div x-show="stExpandedEntry === idx"
+                             x-transition:enter="transition ease-out duration-200"
+                             x-transition:enter-start="opacity-0 -translate-y-1"
+                             x-transition:enter-end="opacity-100 translate-y-0"
+                             x-transition:leave="transition ease-in duration-150"
+                             x-transition:leave-start="opacity-100"
+                             x-transition:leave-end="opacity-0"
+                             class="border-t px-3 py-3 space-y-3 bg-gray-50/50">
+                            <!-- Name -->
+                            <div class="flex items-center gap-2">
+                                <label class="text-xs text-gray-500 w-14 shrink-0" x-text="t('st_presets.entry_name')"></label>
+                                <input type="text" :value="entry.name"
+                                       @input="stEntryEditIndex === idx && (stEntryForm.name = $event.target.value)"
+                                       @focus="editSTEntry(entry, idx)"
+                                       class="flex-1 border rounded px-2 py-1.5 text-sm" placeholder="Entry name">
                             </div>
-                            <div class="text-gray-500 mt-1 whitespace-pre-wrap break-words" x-text="entry.content || '—'"></div>
-                            <div class="flex gap-3 mt-1 text-xs text-gray-400">
-                                <span x-show="entry.injection_depth != null" x-text="t('st_presets.entry_depth') + ': ' + entry.injection_depth"></span>
+                            <!-- Role + Injection -->
+                            <div class="flex items-center gap-3 flex-wrap">
+                                <div class="flex items-center gap-2">
+                                    <label class="text-xs text-gray-500 w-14 shrink-0" x-text="t('st_presets.entry_role')"></label>
+                                    <select :value="entry.role"
+                                            @change="stEntryEditIndex === idx && (stEntryForm.role = $event.target.value)"
+                                            @focus="editSTEntry(entry, idx)"
+                                            class="border rounded px-2 py-1.5 text-sm bg-white">
+                                        <option value="system">system</option>
+                                        <option value="user">user</option>
+                                        <option value="assistant">assistant</option>
+                                    </select>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <label class="text-xs text-gray-500" x-text="t('st_presets.entry_position')"></label>
+                                    <select :value="entry.injection_position"
+                                            @change="stEntryEditIndex === idx && (stEntryForm.injection_position = parseInt($event.target.value))"
+                                            @focus="editSTEntry(entry, idx)"
+                                            class="border rounded px-2 py-1.5 text-sm bg-white">
+                                        <option value="0" x-text="t('st_presets.pos_before')"></option>
+                                        <option value="1" x-text="t('st_presets.pos_after')"></option>
+                                    </select>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <label class="text-xs text-gray-500" x-text="t('st_presets.entry_depth')"></label>
+                                    <input type="number" min="0" max="100"
+                                           :value="entry.injection_depth"
+                                           @input="stEntryEditIndex === idx && (stEntryForm.injection_depth = parseInt($event.target.value) || 0)"
+                                           @focus="editSTEntry(entry, idx)"
+                                           class="w-16 border rounded px-2 py-1.5 text-sm">
+                                </div>
+                            </div>
+                            <!-- Content -->
+                            <div>
+                                <label class="text-xs text-gray-500 mb-1 block" x-text="t('st_presets.entry_content')"></label>
+                                <textarea :value="entry.content" rows="5"
+                                          @input="stEntryEditIndex === idx && (stEntryForm.content = $event.target.value)"
+                                          @focus="editSTEntry(entry, idx)"
+                                          class="w-full border rounded px-3 py-2 text-sm font-mono resize-y"
+                                          placeholder="Entry content..."></textarea>
+                            </div>
+                            <!-- Actions -->
+                            <div class="flex items-center justify-between pt-1">
+                                <div class="flex gap-1">
+                                    <button @click="moveSTEntry(idx, -1)" :disabled="idx === 0"
+                                            class="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200 disabled:opacity-30"
+                                            title="Move up">&#9650;</button>
+                                    <button @click="moveSTEntry(idx, 1)" :disabled="idx === stPresetEntries.length - 1"
+                                            class="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200 disabled:opacity-30"
+                                            title="Move down">&#9660;</button>
+                                </div>
+                                <div class="flex gap-1">
+                                    <button @click="saveSTEntry()"
+                                            x-show="stEntryEditIndex === idx"
+                                            class="text-xs px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">
+                                        <span x-text="t('st_presets.save_entry')"></span>
+                                    </button>
+                                    <button @click="deleteSTEntry(idx)"
+                                            class="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200">
+                                        <span x-text="t('st_presets.delete_entry')"></span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1203,31 +1303,194 @@
                             </td>
                         </tr>
                     </template>
-                    <!-- Expanded entries view -->
-                    <tr x-show="expandedWorldBookId !== null">
-                        <td colspan="4" class="bg-gray-50 p-4">
-                            <div class="text-xs font-medium mb-2" x-text="t('world_books.entry_count').replace('{count}', worldBookEntries.length)"></div>
-                            <div class="space-y-2 max-h-60 overflow-y-auto">
-                                <template x-for="(entry, idx) in worldBookEntries" :key="idx">
-                                    <div class="bg-white border rounded p-2 text-xs">
-                                        <div class="font-medium text-gray-700" x-text="t('world_books.key_primary') + ': ' + (entry.key || entry.key_primary || '—')"></div>
-                                        <div class="text-gray-600 mt-1" x-text="entry.content || entry.text || '—'"></div>
-                                        <div class="flex gap-3 mt-1 text-gray-400">
-                                            <span x-show="entry.enabled" x-text="t('world_books.enabled') + ': ' + entry.enabled"></span>
-                                            <span x-show="entry.position" x-text="t('world_books.position') + ': ' + entry.position"></span>
-                                            <span x-show="entry.constant" x-text="t('world_books.constant') + ': ' + entry.constant"></span>
-                                        </div>
-                                    </div>
-                                </template>
-                                <div x-show="worldBookEntries.length === 0" class="text-gray-400 text-center py-2">No entries</div>
-                            </div>
-                        </td>
-                    </tr>
                     <tr x-show="worldBooks.length === 0">
                         <td colspan="4" class="px-4 py-6 text-center text-gray-400">No world books configured</td>
                     </tr>
                 </tbody>
             </table>
+        </div>
+    </div>
+
+    <!-- World Book Prompt Manager Modal -->
+    <div x-show="showWBEntriesModal" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+         @keydown.escape.window="closeWBEntriesModal()"
+         @click.self="closeWBEntriesModal()">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col">
+            <!-- Header -->
+            <div class="flex items-center justify-between px-6 py-4 border-b">
+                <h3 class="text-base font-semibold">
+                    <span x-text="t('world_books.entries_manager')">World Book Entries</span>
+                    <span class="text-gray-400 font-normal ml-2" x-text="wbEntriesBookName"></span>
+                    <span class="text-xs text-gray-400 font-normal ml-2" x-text="t('world_books.entry_count').replace('{count}', wbEntries.length)"></span>
+                </h3>
+                <div class="flex items-center gap-2">
+                    <button @click="addWBEntry()"
+                            class="text-xs px-3 py-1.5 bg-green-500 text-white rounded hover:bg-green-600">
+                        + <span x-text="t('world_books.add_entry')">Add Entry</span>
+                    </button>
+                    <button @click="closeWBEntriesModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+                </div>
+            </div>
+            <!-- Entries List -->
+            <div class="flex-1 overflow-y-auto px-6 py-4 space-y-2">
+                <template x-for="entry in wbEntries" :key="entry.id">
+                    <div class="wb-entry-card border rounded-lg text-sm transition-all"
+                         :class="{ 'border-blue-400 bg-blue-50/50': wbExpandedEntry === entry.id, 'border-gray-200 hover:border-gray-300': wbExpandedEntry !== entry.id }"
+                         draggable="true"
+                         @dragstart="wbDragStart(entry.id, $event)"
+                         @dragover.prevent="wbDragOver(entry.id, $event)"
+                         @drop="wbDrop(entry.id, $event)">
+                        <!-- Collapsed Header -->
+                        <div class="flex items-center gap-2 px-3 py-2.5 cursor-pointer select-none"
+                             @click="expandWBEntry(entry.id)">
+                            <span class="text-gray-300 hover:text-gray-500 cursor-grab text-lg leading-none" title="Drag">&#9776;</span>
+                            <label class="flex-shrink-0 cursor-pointer" @click.stop>
+                                <input type="checkbox" :checked="entry.enabled"
+                                       @change="saveWBEntryDirect(entry.id, {enabled: $event.target.checked})"
+                                       class="rounded border-gray-300">
+                            </label>
+                            <!-- Comment or key as title -->
+                            <span class="font-medium text-gray-700 flex-1 truncate" x-text="entry.comment || entry.key_primary || '(no key)'"></span>
+                            <!-- Position badge -->
+                            <span class="text-xs px-1.5 py-0.5 rounded font-mono"
+                                  :class="entry.position === 'before_char' ? 'bg-blue-100 text-blue-600' : 'bg-orange-100 text-orange-600'"
+                                  x-text="entry.position === 'before_char' ? 'before' : 'after'"></span>
+                            <!-- Constant badge -->
+                            <span x-show="entry.constant" class="text-xs px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700">const</span>
+                            <!-- Order -->
+                            <span class="text-xs text-gray-400" x-text="'#' + entry.insertion_order"></span>
+                            <svg class="w-4 h-4 text-gray-400 transition-transform" :class="{'rotate-180': wbExpandedEntry === entry.id}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </div>
+                        <!-- Expanded Content -->
+                        <div x-show="wbExpandedEntry === entry.id"
+                             x-transition:enter="transition ease-out duration-200"
+                             x-transition:enter-start="opacity-0 -translate-y-1"
+                             x-transition:enter-end="opacity-100 translate-y-0"
+                             x-transition:leave="transition ease-in duration-150"
+                             x-transition:leave-start="opacity-100"
+                             x-transition:leave-end="opacity-0"
+                             class="border-t px-3 py-3 space-y-3 bg-gray-50/50">
+                            <!-- Comment -->
+                            <div class="flex items-center gap-2">
+                                <label class="text-xs text-gray-500 w-16 shrink-0" x-text="t('world_books.comment')"></label>
+                                <input type="text" :value="entry.comment || ''"
+                                       @input="wbEntryEditId === entry.id && (wbEntryForm.comment = $event.target.value)"
+                                       @focus="editWBEntry(entry)"
+                                       class="flex-1 border rounded px-2 py-1.5 text-sm" :placeholder="t('world_books.comment_hint')">
+                            </div>
+                            <!-- Primary Key -->
+                            <div class="flex items-center gap-2">
+                                <label class="text-xs text-gray-500 w-16 shrink-0" x-text="t('world_books.key_primary')"></label>
+                                <input type="text" :value="entry.key_primary"
+                                       @input="wbEntryEditId === entry.id && (wbEntryForm.key_primary = $event.target.value)"
+                                       @focus="editWBEntry(entry)"
+                                       class="flex-1 border rounded px-2 py-1.5 text-sm font-mono" placeholder="keyword1,keyword2,...">
+                            </div>
+                            <!-- Secondary Key (selective) -->
+                            <div x-show="entry.selective" class="flex items-center gap-2">
+                                <label class="text-xs text-gray-500 w-16 shrink-0" x-text="t('world_books.key_secondary')"></label>
+                                <input type="text" :value="entry.key_secondary || ''"
+                                       @input="wbEntryEditId === entry.id && (wbEntryForm.key_secondary = $event.target.value)"
+                                       @focus="editWBEntry(entry)"
+                                       class="flex-1 border rounded px-2 py-1.5 text-sm font-mono" placeholder="secondary1,secondary2,...">
+                            </div>
+                            <!-- Content -->
+                            <div>
+                                <label class="text-xs text-gray-500 mb-1 block" x-text="t('world_books.content')"></label>
+                                <textarea :value="entry.content" rows="5"
+                                          @input="wbEntryEditId === entry.id && (wbEntryForm.content = $event.target.value)"
+                                          @focus="editWBEntry(entry)"
+                                          class="w-full border rounded px-3 py-2 text-sm font-mono resize-y"
+                                          placeholder="Lore text..."></textarea>
+                            </div>
+                            <!-- Settings row -->
+                            <div class="flex items-center gap-3 flex-wrap text-xs">
+                                <label class="flex items-center gap-1.5 cursor-pointer">
+                                    <input type="checkbox" :checked="entry.enabled"
+                                           @change="wbEntryEditId === entry.id && (wbEntryForm.enabled = $event.target.checked) || editWBEntry(entry)"
+                                           @focus="editWBEntry(entry)"
+                                           class="rounded border-gray-300">
+                                    <span x-text="t('world_books.enabled')"></span>
+                                </label>
+                                <label class="flex items-center gap-1.5 cursor-pointer">
+                                    <input type="checkbox" :checked="entry.constant"
+                                           @change="wbEntryEditId === entry.id && (wbEntryForm.constant = $event.target.checked) || editWBEntry(entry)"
+                                           @focus="editWBEntry(entry)"
+                                           class="rounded border-gray-300">
+                                    <span x-text="t('world_books.constant')"></span>
+                                </label>
+                                <label class="flex items-center gap-1.5 cursor-pointer">
+                                    <input type="checkbox" :checked="entry.selective"
+                                           @change="wbEntryEditId === entry.id && (wbEntryForm.selective = $event.target.checked) || editWBEntry(entry)"
+                                           @focus="editWBEntry(entry)"
+                                           class="rounded border-gray-300">
+                                    <span x-text="t('world_books.selective')"></span>
+                                </label>
+                                <label class="flex items-center gap-1.5 cursor-pointer">
+                                    <input type="checkbox" :checked="entry.case_sensitive"
+                                           @change="wbEntryEditId === entry.id && (wbEntryForm.case_sensitive = $event.target.checked) || editWBEntry(entry)"
+                                           @focus="editWBEntry(entry)"
+                                           class="rounded border-gray-300">
+                                    <span x-text="t('world_books.case_sensitive')"></span>
+                                </label>
+                            </div>
+                            <!-- Numeric settings -->
+                            <div class="flex items-center gap-4 flex-wrap">
+                                <div class="flex items-center gap-2">
+                                    <label class="text-xs text-gray-500" x-text="t('world_books.position')"></label>
+                                    <select :value="entry.position"
+                                            @change="wbEntryEditId === entry.id && (wbEntryForm.position = $event.target.value)"
+                                            @focus="editWBEntry(entry)"
+                                            class="border rounded px-2 py-1.5 text-xs bg-white">
+                                        <option value="before_char" x-text="t('world_books.pos_before_char')"></option>
+                                        <option value="after_char" x-text="t('world_books.pos_after_char')"></option>
+                                    </select>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <label class="text-xs text-gray-500" x-text="t('world_books.insertion_order')"></label>
+                                    <input type="number" min="0"
+                                           :value="entry.insertion_order"
+                                           @input="wbEntryEditId === entry.id && (wbEntryForm.insertion_order = parseInt($event.target.value) || 0)"
+                                           @focus="editWBEntry(entry)"
+                                           class="w-20 border rounded px-2 py-1.5 text-xs">
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <label class="text-xs text-gray-500" x-text="t('world_books.priority')"></label>
+                                    <input type="number" min="0"
+                                           :value="entry.priority"
+                                           @input="wbEntryEditId === entry.id && (wbEntryForm.priority = parseInt($event.target.value) || 0)"
+                                           @focus="editWBEntry(entry)"
+                                           class="w-16 border rounded px-2 py-1.5 text-xs">
+                                </div>
+                            </div>
+                            <!-- Actions -->
+                            <div class="flex items-center justify-between pt-1">
+                                <div class="flex gap-1">
+                                    <button @click="moveWBEntry(entry.id, -1)" :disabled="wbEntries[0]?.id === entry.id"
+                                            class="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200 disabled:opacity-30">&#9650;</button>
+                                    <button @click="moveWBEntry(entry.id, 1)" :disabled="wbEntries[wbEntries.length-1]?.id === entry.id"
+                                            class="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200 disabled:opacity-30">&#9660;</button>
+                                </div>
+                                <div class="flex gap-1">
+                                    <button @click="saveWBEntry()"
+                                            x-show="wbEntryEditId === entry.id"
+                                            class="text-xs px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">
+                                        <span x-text="t('world_books.save_entry')"></span>
+                                    </button>
+                                    <button @click="deleteWBEntry(entry.id)"
+                                            class="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200">
+                                        <span x-text="t('world_books.delete_entry')"></span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+                <div x-show="wbEntries.length === 0" class="text-gray-400 text-center py-8" x-text="t('world_books.no_entries')"></div>
+            </div>
         </div>
     </div>
 
@@ -1576,8 +1839,9 @@
             <h2 class="text-lg font-semibold" x-text="t('agent.title')"></h2>
         </div>
 
+        <!-- Agent Settings -->
         <div class="bg-white rounded-xl shadow-sm p-6 space-y-6">
-            <!-- Max Tool Rounds -->
+            <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wide" x-text="t('agent.settings_title')"></h3>
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1" x-text="t('agent.max_rounds')"></label>
                 <div class="flex items-center gap-3">
@@ -1605,12 +1869,127 @@
                 </div>
             </div>
 
-            <!-- Save Button -->
-            <div class="flex items-center gap-3">
-                <button @click="saveAgentConfig()"
-                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
-                        x-text="t('agent.save')">
+            <button @click="saveAgentConfig()"
+                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                    x-text="t('agent.save')">
+            </button>
+        </div>
+
+        <!-- Skills -->
+        <div class="bg-white rounded-xl shadow-sm p-6 space-y-4">
+            <div class="flex items-center justify-between">
+                <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wide" x-text="t('agent.skills_title')"></h3>
+                <button @click="showSkillForm = !showSkillForm"
+                        class="px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700"
+                        x-text="t('agent.add_skill')">
                 </button>
+            </div>
+
+            <!-- Skill create form -->
+            <div x-show="showSkillForm" class="border border-green-200 rounded-lg p-4 space-y-3 bg-green-50">
+                <input x-model="skillForm.name" :placeholder="t('agent.skill_name_placeholder')"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                <input x-model="skillForm.description" :placeholder="t('agent.skill_desc_placeholder')"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                <textarea x-model="skillForm.content" rows="4"
+                          :placeholder="t('agent.skill_content_placeholder')"
+                          class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono"></textarea>
+                <div class="flex gap-2">
+                    <button @click="createSkill()" class="px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700"
+                            x-text="t('agent.save')"></button>
+                    <button @click="showSkillForm = false" class="px-3 py-1.5 text-xs bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                            x-text="t('agent.cancel')"></button>
+                </div>
+            </div>
+
+            <!-- Skill list -->
+            <div class="space-y-2">
+                <template x-for="skill in skills.items" :key="skill.name">
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div class="flex items-center gap-3">
+                            <input type="checkbox" :checked="skill.enabled"
+                                   @change="toggleSkill(skill.name)" class="rounded text-blue-600">
+                            <div>
+                                <span class="text-sm font-medium text-gray-800" x-text="skill.name"></span>
+                                <span class="text-xs text-gray-500 ml-2" x-text="skill.description"></span>
+                            </div>
+                        </div>
+                        <button @click="deleteSkill(skill.name)" class="text-xs text-red-500 hover:text-red-700 px-2 py-1"
+                                x-text="t('agent.delete')"></button>
+                    </div>
+                </template>
+                <p x-show="!skills.items.length && skills.loaded" class="text-gray-400 text-sm" x-text="t('agent.no_skills')"></p>
+            </div>
+        </div>
+
+        <!-- MCP Servers -->
+        <div class="bg-white rounded-xl shadow-sm p-6 space-y-4">
+            <div class="flex items-center justify-between">
+                <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wide" x-text="t('agent.mcp_title')"></h3>
+                <button @click="showMcpForm = !showMcpForm"
+                        class="px-3 py-1.5 text-xs bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                        x-text="t('agent.add_mcp')">
+                </button>
+            </div>
+
+            <!-- MCP create form -->
+            <div x-show="showMcpForm" class="border border-purple-200 rounded-lg p-4 space-y-3 bg-purple-50">
+                <div class="grid grid-cols-2 gap-3">
+                    <input x-model="mcpForm.name" :placeholder="t('agent.mcp_name_placeholder')"
+                           class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                    <select x-model="mcpForm.transport"
+                            class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                        <option value="stdio">stdio</option>
+                        <option value="sse">SSE</option>
+                    </select>
+                </div>
+                <template x-if="mcpForm.transport === 'stdio'">
+                    <div class="space-y-3">
+                        <input x-model="mcpForm.command" :placeholder="t('agent.mcp_cmd_placeholder')"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono">
+                        <input x-model="mcpForm.argsStr" :placeholder="t('agent.mcp_args_placeholder')"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono">
+                        <input x-model="mcpForm.envStr" :placeholder="t('agent.mcp_env_placeholder')"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono">
+                    </div>
+                </template>
+                <template x-if="mcpForm.transport === 'sse'">
+                    <input x-model="mcpForm.url" placeholder="http://localhost:8080/sse"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono">
+                </template>
+                <div class="flex gap-2">
+                    <button @click="createMcpServer()" class="px-3 py-1.5 text-xs bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                            x-text="t('agent.save')"></button>
+                    <button @click="showMcpForm = false" class="px-3 py-1.5 text-xs bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                            x-text="t('agent.cancel')"></button>
+                </div>
+            </div>
+
+            <!-- MCP server list -->
+            <div class="space-y-2">
+                <template x-for="srv in mcpServers.items" :key="srv.id">
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div class="flex items-center gap-3">
+                            <span class="w-2 h-2 rounded-full"
+                                  :class="srv.status === 'connected' ? 'bg-green-500' : srv.status === 'error' ? 'bg-red-500' : 'bg-gray-400'"></span>
+                            <div>
+                                <span class="text-sm font-medium text-gray-800" x-text="srv.name"></span>
+                                <span class="text-xs text-gray-500 ml-2" x-text="srv.transport"></span>
+                                <span class="text-xs text-gray-400 ml-2"
+                                      x-text="srv.transport === 'stdio' ? srv.command : srv.url"></span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" :checked="srv.enabled"
+                                   @change="toggleMcpEnabled(srv)" class="rounded text-blue-600">
+                            <button @click="reconnectMcpServer(srv.id)" class="text-xs text-blue-500 hover:text-blue-700 px-2 py-1"
+                                    x-text="t('agent.reconnect')"></button>
+                            <button @click="deleteMcpServer(srv.id)" class="text-xs text-red-500 hover:text-red-700 px-2 py-1"
+                                    x-text="t('agent.delete')"></button>
+                        </div>
+                    </div>
+                </template>
+                <p x-show="!mcpServers.items.length && mcpServers.loaded" class="text-gray-400 text-sm" x-text="t('agent.no_mcp')"></p>
             </div>
         </div>
     </div>
