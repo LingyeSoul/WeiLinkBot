@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import random
+import re
+from datetime import datetime
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -76,6 +79,71 @@ def parse_st_entries(raw_json: str) -> list[dict]:
                     "injection_depth": entry.get("injection_depth", 4),
                 })
     return entries
+
+
+def _resolve_entries_list(data: list | dict) -> tuple[list[dict], bool]:
+    """Return (entries_list, is_wrapped) where is_wrapped=True if data was a dict with 'prompts'."""
+    if isinstance(data, list):
+        return data, False
+    if isinstance(data, dict):
+        items = data.get("prompts")
+        if isinstance(items, list):
+            return items, True
+    return [], isinstance(data, dict)
+
+
+def _set_entries_list(data: list | dict, entries: list[dict]) -> list | dict:
+    """Write entries back into the original data structure."""
+    if isinstance(data, list):
+        return entries
+    if isinstance(data, dict):
+        data["prompts"] = entries
+        return data
+    return entries
+
+
+def expand_macros(text: str, ctx: dict | None = None) -> str:
+    """Expand SillyTavern-style macros in text.
+
+    Supported macros:
+      {{user}}               → ctx["user_name"]
+      {{char}}               → ctx["char_name"]
+      {{random:a|b|c}}       → random choice
+      {{roll:XdY}}           → dice roll (e.g. 2d6 → "8")
+      {{datetime}}           → current datetime
+      {{date}}               → current date
+      {{time}}               → current time
+    """
+    if not text or "{{" not in text:
+        return text
+
+    ctx = ctx or {}
+
+    def _replace(m: re.Match) -> str:
+        macro = m.group(1).strip()
+        if macro == "user":
+            return ctx.get("user_name", "User")
+        if macro == "char":
+            return ctx.get("char_name", "Assistant")
+        if macro.startswith("random:"):
+            options = macro[len("random:"):].split("|")
+            return random.choice(options) if options else ""
+        if macro.startswith("roll:"):
+            dice_str = macro[len("roll:"):]
+            match = re.match(r"(\d+)d(\d+)", dice_str, re.IGNORECASE)
+            if match:
+                count, sides = int(match.group(1)), int(match.group(2))
+                return str(sum(random.randint(1, sides) for _ in range(count)))
+            return dice_str
+        if macro == "datetime":
+            return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        if macro == "date":
+            return datetime.now().strftime("%Y-%m-%d")
+        if macro == "time":
+            return datetime.now().strftime("%H:%M:%S")
+        return m.group(0)
+
+    return re.sub(r"\{\{(.*?)\}\}", _replace, text)
 
 
 class STPresetService:
@@ -183,6 +251,87 @@ class STPresetService:
         else:
             return None
 
+        updated_json = json.dumps(data, ensure_ascii=False, indent=2)
+        preset.raw_json = updated_json
+        parsed = parse_st_preset_json(updated_json)
+        preset.system_prompt = parsed["system_prompt"]
+        await self._db.flush()
+        return parse_st_entries(updated_json)
+
+    async def add_entry(self, preset_id: int, entry: dict, position: int | None = None) -> list[dict] | None:
+        preset = await self.get_preset(preset_id)
+        if not preset:
+            return None
+        try:
+            data = json.loads(preset.raw_json)
+        except json.JSONDecodeError:
+            return None
+        entries, is_wrapped = _resolve_entries_list(data)
+        if position is not None and 0 <= position <= len(entries):
+            entries.insert(position, entry)
+        else:
+            entries.append(entry)
+        data = _set_entries_list(data, entries)
+        updated_json = json.dumps(data, ensure_ascii=False, indent=2)
+        preset.raw_json = updated_json
+        parsed = parse_st_preset_json(updated_json)
+        preset.system_prompt = parsed["system_prompt"]
+        await self._db.flush()
+        return parse_st_entries(updated_json)
+
+    async def update_entry(self, preset_id: int, entry_index: int, updates: dict) -> list[dict] | None:
+        preset = await self.get_preset(preset_id)
+        if not preset:
+            return None
+        try:
+            data = json.loads(preset.raw_json)
+        except json.JSONDecodeError:
+            return None
+        entries, is_wrapped = _resolve_entries_list(data)
+        if entry_index < 0 or entry_index >= len(entries):
+            return None
+        entries[entry_index].update({k: v for k, v in updates.items() if v is not None})
+        data = _set_entries_list(data, entries)
+        updated_json = json.dumps(data, ensure_ascii=False, indent=2)
+        preset.raw_json = updated_json
+        parsed = parse_st_preset_json(updated_json)
+        preset.system_prompt = parsed["system_prompt"]
+        await self._db.flush()
+        return parse_st_entries(updated_json)
+
+    async def delete_entry(self, preset_id: int, entry_index: int) -> list[dict] | None:
+        preset = await self.get_preset(preset_id)
+        if not preset:
+            return None
+        try:
+            data = json.loads(preset.raw_json)
+        except json.JSONDecodeError:
+            return None
+        entries, is_wrapped = _resolve_entries_list(data)
+        if entry_index < 0 or entry_index >= len(entries):
+            return None
+        entries.pop(entry_index)
+        data = _set_entries_list(data, entries)
+        updated_json = json.dumps(data, ensure_ascii=False, indent=2)
+        preset.raw_json = updated_json
+        parsed = parse_st_preset_json(updated_json)
+        preset.system_prompt = parsed["system_prompt"]
+        await self._db.flush()
+        return parse_st_entries(updated_json)
+
+    async def reorder_entries(self, preset_id: int, order: list[int]) -> list[dict] | None:
+        preset = await self.get_preset(preset_id)
+        if not preset:
+            return None
+        try:
+            data = json.loads(preset.raw_json)
+        except json.JSONDecodeError:
+            return None
+        entries, is_wrapped = _resolve_entries_list(data)
+        if sorted(order) != list(range(len(entries))):
+            return None
+        entries = [entries[i] for i in order]
+        data = _set_entries_list(data, entries)
         updated_json = json.dumps(data, ensure_ascii=False, indent=2)
         preset.raw_json = updated_json
         parsed = parse_st_preset_json(updated_json)

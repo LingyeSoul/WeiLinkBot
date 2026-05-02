@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
 from ..i18n import t
-from ..schemas import STPresetCreate, STPresetUpdate, STPresetResponse, MessageAction
+from ..schemas import STPresetCreate, STPresetUpdate, STPresetResponse, STEntryCreate, STEntryUpdate, STEntryReorder, MessageAction
 from ..services.st_preset_service import STPresetService, parse_st_entries
 from ..services.ws_service import get_ws_service
 
@@ -199,3 +199,69 @@ async def import_st_preset(file: UploadFile = File(...), db: AsyncSession = Depe
         preset = await service.create_preset({"name": name, "raw_json": raw_json})
     await _broadcast_st_presets(db)
     return preset
+
+
+# ── Entry Management ─────────────────────────────────────────
+
+
+@router.post("/{preset_id}/entries", response_model=list[dict])
+async def add_st_preset_entry(
+    preset_id: int,
+    data: STEntryCreate,
+    position: int | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Add a new entry to a preset."""
+    service = STPresetService(db)
+    entry = data.model_dump()
+    entries = await service.add_entry(preset_id, entry, position)
+    if entries is None:
+        raise HTTPException(status_code=404, detail=t("api.preset_not_found"))
+    await _broadcast_st_presets(db)
+    return entries
+
+
+@router.put("/{preset_id}/entries/{entry_index}", response_model=list[dict])
+async def update_st_preset_entry(
+    preset_id: int,
+    entry_index: int,
+    data: STEntryUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Edit a single entry's fields."""
+    service = STPresetService(db)
+    entries = await service.update_entry(preset_id, entry_index, data.model_dump(exclude_unset=True))
+    if entries is None:
+        raise HTTPException(status_code=404, detail=t("api.preset_not_found"))
+    await _broadcast_st_presets(db)
+    return entries
+
+
+@router.delete("/{preset_id}/entries/{entry_index}", response_model=list[dict])
+async def delete_st_preset_entry(
+    preset_id: int,
+    entry_index: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete an entry from a preset."""
+    service = STPresetService(db)
+    entries = await service.delete_entry(preset_id, entry_index)
+    if entries is None:
+        raise HTTPException(status_code=404, detail=t("api.preset_not_found"))
+    await _broadcast_st_presets(db)
+    return entries
+
+
+@router.put("/{preset_id}/entries/reorder", response_model=list[dict])
+async def reorder_st_preset_entries(
+    preset_id: int,
+    data: STEntryReorder,
+    db: AsyncSession = Depends(get_db),
+):
+    """Reorder entries in a preset."""
+    service = STPresetService(db)
+    entries = await service.reorder_entries(preset_id, data.order)
+    if entries is None:
+        raise HTTPException(status_code=404, detail=t("api.invalid_reorder"))
+    await _broadcast_st_presets(db)
+    return entries

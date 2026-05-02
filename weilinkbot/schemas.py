@@ -346,6 +346,30 @@ class STPresetResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class STEntryCreate(BaseModel):
+    name: str = Field("New Entry", min_length=1, max_length=200)
+    identifier: str = ""
+    content: str = ""
+    role: str = Field("system", pattern=r"^(system|user|assistant)$")
+    injection_position: int = Field(0, ge=0, le=1)
+    injection_depth: int = Field(4, ge=0, le=100)
+    enabled: bool = True
+
+
+class STEntryUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    identifier: Optional[str] = None
+    content: Optional[str] = None
+    role: Optional[str] = Field(None, pattern=r"^(system|user|assistant)$")
+    injection_position: Optional[int] = Field(None, ge=0, le=1)
+    injection_depth: Optional[int] = Field(None, ge=0, le=100)
+    enabled: Optional[bool] = None
+
+
+class STEntryReorder(BaseModel):
+    order: list[int]
+
+
 # ── World Books ──────────────────────────────────────────────
 
 class WorldBookEntryResponse(BaseModel):
