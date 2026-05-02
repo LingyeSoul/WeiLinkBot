@@ -96,6 +96,7 @@ class MemoryConfig(BaseModel):
 class AgentConfig(BaseModel):
     max_tool_rounds: int = 5
     enabled_tools: list[str] = Field(default_factory=lambda: ["get_current_time", "calculate"])
+    enabled_skills: list[str] = Field(default_factory=list)
 
 
 class AppConfig(BaseModel):

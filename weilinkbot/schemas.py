@@ -484,6 +484,73 @@ class AgentConfigUpdate(BaseModel):
     enabled_tools: Optional[list[str]] = None
 
 
+# ── Skills ─────────────────────────────────────────────────────
+
+class SkillInfo(BaseModel):
+    name: str
+    description: str
+    enabled: bool
+
+
+class SkillCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=64)
+    content: str
+    description: str = ""
+
+
+class SkillUpdate(BaseModel):
+    content: str | None = None
+    description: str | None = None
+
+
+class SkillsResponse(BaseModel):
+    skills: list[SkillInfo]
+
+
+class SkillsUpdate(BaseModel):
+    enabled_skills: list[str]
+
+
+# ── MCP Servers ────────────────────────────────────────────────
+
+class MCPServerCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=64)
+    transport: str = Field(..., pattern=r"^(stdio|sse)$")
+    command: str | None = None
+    args: list[str] = Field(default_factory=list)
+    env: dict[str, str] = Field(default_factory=dict)
+    url: str | None = None
+    enabled: bool = True
+
+
+class MCPServerUpdate(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=64)
+    transport: str | None = Field(None, pattern=r"^(stdio|sse)$")
+    command: str | None = None
+    args: list[str] | None = None
+    env: dict[str, str] | None = None
+    url: str | None = None
+    enabled: bool | None = None
+
+
+class MCPServerResponse(BaseModel):
+    id: int
+    name: str
+    transport: str
+    command: str | None
+    args: list[str]
+    env: dict[str, str]
+    url: str | None
+    enabled: bool
+    status: str = "disconnected"
+
+    model_config = {"from_attributes": True}
+
+
+class MCPServersResponse(BaseModel):
+    servers: list[MCPServerResponse]
+
+
 # ── Generic ─────────────────────────────────────────────────────
 
 class MessageAction(BaseModel):

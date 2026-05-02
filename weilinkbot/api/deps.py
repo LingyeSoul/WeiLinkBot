@@ -15,6 +15,8 @@ _llm_service: LLMService | None = None
 _bot_service = None  # Avoid circular import with BotService
 _memory_service = None  # Avoid circular import with MemoryService
 _agent_service = None
+_skill_service = None
+_mcp_service = None
 
 
 def get_llm_service() -> LLMService:
@@ -57,6 +59,28 @@ def get_agent_service():
 def set_agent_service(service) -> None:
     global _agent_service
     _agent_service = service
+
+
+def get_skill_service():
+    """Get the SkillService singleton."""
+    if _skill_service is None:
+        raise RuntimeError("SkillService not initialized")
+    return _skill_service
+
+
+def set_skill_service(service) -> None:
+    global _skill_service
+    _skill_service = service
+
+
+def get_mcp_service():
+    """Get the MCPService singleton."""
+    return _mcp_service
+
+
+def set_mcp_service(service) -> None:
+    global _mcp_service
+    _mcp_service = service
 
 
 async def get_conversation_service(

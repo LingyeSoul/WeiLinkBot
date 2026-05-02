@@ -291,6 +291,29 @@ class SystemSetting(Base):
         return f"<SystemSetting key={self.key!r} encrypted={self.is_encrypted}>"
 
 
+class MCPServer(Base):
+    """External MCP server connection configuration."""
+    __tablename__ = "mcp_servers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    transport: Mapped[str] = mapped_column(String(8), nullable=False)
+    command: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
+    args: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    env: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, server_default=func.now(), onupdate=_utcnow
+    )
+
+    def __repr__(self) -> str:
+        return f"<MCPServer id={self.id} name={self.name!r} transport={self.transport}>"
+
+
 def get_preset_api_key(preset: LLMPreset) -> str:
     """Return decrypted api_key from a preset."""
     from .crypto import decrypt

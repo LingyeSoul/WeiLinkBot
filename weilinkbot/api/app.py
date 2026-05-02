@@ -15,7 +15,10 @@ from ..database import init_db, get_session_factory
 from ..models import SystemPrompt, LLMPreset, Provider, encrypt_provider_api_key, resolve_provider_credentials
 from ..services.llm_service import LLMService
 from ..services.bot_service import BotService
-from .deps import set_llm_service, set_bot_service, set_memory_service, set_agent_service
+from .deps import (
+    set_llm_service, set_bot_service, set_memory_service,
+    set_agent_service, set_skill_service, set_mcp_service,
+)
 
 from . import bot as bot_routes
 from . import conversations as conv_routes
@@ -159,6 +162,40 @@ async def lifespan(app: FastAPI):
     set_agent_service(agent_service)
     logger.info("Agent service initialized (tools=%s, max_rounds=%d)",
                 config.agent.enabled_tools, config.agent.max_tool_rounds)
+
+    # Init Skill service
+    from ..services.skill_service import SkillService
+    skill_service = SkillService()
+    set_skill_service(skill_service)
+    logger.info("Skill service initialized")
+
+    # Init MCP service and connect enabled servers
+    from ..services.mcp_service import MCPService
+    from ..services.mcp_server_service import MCPServerService
+    from ..database import get_session_factory as _gsf
+    mcp_service = MCPService()
+    set_mcp_service(mcp_service)
+    async with _gsf()() as _db:
+        mcp_crud = MCPServerService(_db)
+        all_servers = await mcp_crud.list_all()
+        _import_json = __import__("json")
+        server_configs = [
+            {
+                "id": s.id,
+                "name": s.name,
+                "transport": s.transport,
+                "command": s.command,
+                "args": _import_json.loads(s.args) if s.args else [],
+                "env": _import_json.loads(s.env) if s.env else {},
+                "url": s.url,
+                "enabled": s.enabled,
+            }
+            for s in all_servers if s.enabled
+        ]
+        if server_configs:
+            await mcp_service.connect_all_enabled(server_configs)
+            logger.info("MCP: connected to %d servers", len(server_configs))
+    logger.info("MCP service initialized")
 
     # Init Bot service
     bot_service = BotService(config, llm_service, memory_service=memory_service, agent_service=agent_service)
