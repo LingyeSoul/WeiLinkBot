@@ -79,24 +79,24 @@
                 <div class="bg-gray-50 rounded-lg p-4">
                     <div class="text-sm text-gray-500" x-text="t('status.status')">Status</div>
                     <div class="text-xl font-bold mt-1" x-text="t('state.' + (botStatus.status || 'unknown'))"></div>
-    
+                </div>
                 <div class="bg-gray-50 rounded-lg p-4">
                     <div class="text-sm text-gray-500" x-text="t('status.user_id')">User ID</div>
                     <div class="text-sm font-mono mt-1 truncate" x-text="botStatus.user_id || '—'"></div>
-    
+                </div>
                 <div class="bg-gray-50 rounded-lg p-4">
                     <div class="text-sm text-gray-500" x-text="t('status.account_id')">Account ID</div>
                     <div class="text-sm font-mono mt-1 truncate" x-text="botStatus.account_id || '—'"></div>
-    
+                </div>
                 <div class="bg-gray-50 rounded-lg p-4">
                     <div class="text-sm text-gray-500" x-text="t('status.active_model')">Active Model</div>
                     <div class="text-sm font-mono mt-1 truncate" x-text="botStatus.active_model_name || '—'"></div>
-    
+                </div>
                 <div class="bg-gray-50 rounded-lg p-4">
                     <div class="text-sm text-gray-500" x-text="t('status.uptime')">Uptime</div>
                     <div class="text-lg font-bold mt-1" x-text="formatUptime(getDisplayUptimeSeconds())"></div>
-    
-
+                </div>
+            </div>
         </div>
 
         <!-- Token Usage -->
@@ -116,23 +116,23 @@
                             x-text="t('status.all_time')">
                         All Time
                     </button>
-    
-
+                </div>
+            </div>
             <!-- Summary cards -->
             <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
                 <div class="bg-gray-50 rounded-lg p-4">
                     <div class="text-sm text-gray-500" x-text="tokenView === 'session' ? t('status.session_tokens') : t('status.total_tokens')"></div>
                     <div class="text-xl font-bold mt-1" x-text="formatNumber(activeTokenStats.total_tokens)"></div>
-    
+                </div>
                 <div class="bg-gray-50 rounded-lg p-4">
                     <div class="text-sm text-gray-500" x-text="tokenView === 'session' ? t('status.session_requests') : t('status.total_requests')"></div>
                     <div class="text-xl font-bold mt-1" x-text="formatNumber(activeTokenStats.total_requests)"></div>
-    
+                </div>
                 <div class="bg-gray-50 rounded-lg p-4">
                     <div class="text-sm text-gray-500" x-text="t('status.avg_tokens_req')">Avg Tokens/Req</div>
                     <div class="text-xl font-bold mt-1" x-text="activeTokenStats.total_requests ? Math.round(activeTokenStats.total_tokens / activeTokenStats.total_requests) : '—'"></div>
-    
-
+                </div>
+            </div>
             <!-- Per-model table -->
             <div x-show="activeTokenStats.models && activeTokenStats.models.length > 0"
                  class="overflow-hidden rounded-lg border">
@@ -160,11 +160,11 @@
                         </template>
                     </tbody>
                 </table>
-
+            </div>
             <div x-show="!activeTokenStats.models || activeTokenStats.models.length === 0"
                  class="text-gray-400 text-sm text-center py-4"
                  x-text="tokenView === 'session' ? t('status.no_session_requests') : t('status.no_token_usage')">
-
+            </div>
         </div>
 
         <!-- QR Code -->
@@ -174,7 +174,7 @@
                 <a :href="botStatus.login_url" target="_blank"
                    class="text-blue-600 underline break-all text-sm" x-text="botStatus.login_url">
                 </a>
-
+            </div>
             <p class="text-sm text-gray-500 mt-2" x-text="t('status.qr_hint')">Open the link above in WeChat to scan the QR code.</p>
         </div>
 
@@ -195,7 +195,7 @@
                           :class="wsConnected ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'"
                           x-text="wsConnected ? t('events.connected') : t('events.disconnected')">
                     </span>
-    
+                </div>
                 <div class="flex items-center gap-2">
                     <div class="flex bg-gray-100 rounded-lg p-0.5">
                         <button @click="eventFilter = 'all'"
@@ -218,7 +218,7 @@
                                 :class="eventFilter === 'error' ? 'bg-red-100 text-red-700' : 'text-gray-500 hover:text-gray-700'">
                             Error
                         </button>
-        
+                    </div>
                     <button @click="toggleAutoScroll()"
                             class="px-2 py-1 text-xs rounded"
                             :class="autoScroll ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'"
@@ -228,8 +228,8 @@
                             class="px-2 py-1 text-xs bg-gray-100 text-gray-500 rounded hover:bg-gray-200"
                             x-text="t('events.clear')">
                     </button>
-    
-
+                </div>
+            </div>
 
             <div id="events-container" class="max-h-[600px] overflow-y-auto p-4 space-y-2">
                 <template x-for="evt in filteredEvents" :key="evt.id">
@@ -241,7 +241,7 @@
                          }">
                         <div class="text-xs text-gray-400 whitespace-nowrap min-w-[60px]">
                             <span x-text="new Date(evt.timestamp * 1000).toLocaleTimeString()"></span>
-            
+                        </div>
                         <div class="flex-shrink-0">
                             <span class="inline-block w-2 h-2 rounded-full mt-1.5"
                                   :class="{
@@ -250,7 +250,7 @@
                                       'bg-red-500': evt.level === 'error',
                                   }">
                             </span>
-            
+                        </div>
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-2">
                                 <span class="text-xs px-1.5 py-0.5 rounded font-mono"
@@ -264,12 +264,12 @@
                                       }"
                                       x-text="evt.event">
                                 </span>
-                
+                            </div>
                             <div class="text-gray-700 mt-1" x-text="evt.message"></div>
                             <div x-show="evt.detail" class="mt-1">
                                 <!-- LLM structured detail -->
                                 <template x-if="evt.detail && isLlmEvent(evt)">
-                        
+                                    <div>
                                         <button @click="toggleEventDetail(evt.id)"
                                                 class="text-xs text-indigo-500 hover:text-indigo-700 flex items-center gap-1 transition-colors">
                                             <svg class="w-3 h-3 transition-transform" :class="isEventExpanded(evt.id) ? 'rotate-90' : ''"
@@ -297,7 +297,7 @@
                                                 <span x-show="evt.detail.user_id"
                                                       class="px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 font-mono"
                                                       x-text="'User: ' + evt.detail.user_id"></span>
-                                
+                                            </div>
                                             <!-- Request context -->
                                             <div x-show="evt.detail.request">
                                                 <div class="text-xs font-medium text-gray-500 mb-1"
@@ -315,38 +315,38 @@
                                                                   x-text="msg.role"></span>
                                                             <pre class="text-xs text-gray-600 whitespace-pre-wrap break-words inline align-top"
                                                                  x-text="msg.content"></pre>
-                                            
+                                                        </div>
                                                     </template>
-                                    
-                                
+                                                </div>
+                                            </div>
                                             <!-- Response -->
                                             <div x-show="evt.detail.response">
                                                 <div class="text-xs font-medium text-gray-500 mb-1"
                                                      x-text="t('events.llm_response')"></div>
                                                 <pre class="text-xs text-gray-600 whitespace-pre-wrap break-words p-2 rounded border border-gray-100 bg-green-50/50"
                                                      x-text="evt.detail.response"></pre>
-                                
-                            
-                        
+                                            </div>
+                                        </div>
+                                    </div>
                                 </template>
                                 <!-- Non-LLM events: raw JSON fallback -->
                                 <div x-show="evt.detail && !isLlmEvent(evt)"
                                      class="text-xs text-gray-400 font-mono">
                                     <span x-text="evt.detail ? JSON.stringify(evt.detail) : ''"></span>
-                    
-                
-            
-        
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </template>
                 <div x-show="events.length === 0" class="text-center text-gray-400 py-8"
                      x-text="t('events.empty')">
                     暂无事件
-    
-
+                </div>
+            </div>
 
             <div class="p-3 border-t text-xs text-gray-400 flex justify-between">
                 <span x-text="t('events.total').replace('{n}', events.length)"></span>
-
+            </div>
         </div>
     </div>
 
@@ -364,14 +364,14 @@
                             <div class="font-medium text-sm truncate" x-text="conv.user_id"></div>
                             <div class="text-xs text-gray-400 mt-1" x-text="conv.message_count + ' ' + t('conv.messages')"></div>
                             <div class="text-xs text-gray-500 mt-1 truncate" x-text="conv.last_message || ''"></div>
-            
+                        </div>
                     </template>
                     <div x-show="conversations.length === 0" class="p-4 text-gray-400 text-sm text-center"
                          x-text="t('conv.no_conversations')">
                         No conversations yet
-        
-    
-
+                    </div>
+                </div>
+            </div>
 
             <!-- Message Detail -->
             <div class="lg:col-span-2 bg-white rounded-xl shadow-sm flex flex-col" x-show="selectedUser">
@@ -382,7 +382,7 @@
                             x-text="t('conv.clear_history')">
                         Clear History
                     </button>
-    
+                </div>
                 <div class="flex-1 overflow-y-auto p-4 space-y-3 max-h-[500px]" id="msg-container">
                     <template x-for="msg in selectedMessages" :key="msg.id">
                         <div class="rounded-lg p-3 max-w-[80%]"
@@ -396,16 +396,16 @@
                             <div class="text-xs text-gray-400 mt-1 flex justify-between">
                                 <span x-text="msg.role"></span>
                                 <span x-text="msg.tokens_used ? msg.tokens_used + ' ' + t('conv.tokens') : ''"></span>
-                
-            
+                            </div>
+                        </div>
                     </template>
-    
-
+                </div>
+            </div>
 
             <div x-show="!selectedUser" class="lg:col-span-2 bg-white rounded-xl shadow-sm p-8 text-center text-gray-400"
                  x-text="t('conv.select_hint')">
                 Select a conversation to view messages
-
+            </div>
         </div>
     </div>
 
@@ -422,20 +422,20 @@
 
         <!-- Create/Edit Form -->
         <div x-show="showPromptForm" class="bg-white rounded-xl shadow-sm p-6 space-y-4">
-
+            <div>
                 <label class="block text-sm font-medium mb-1" x-text="t('prompts.name')">Name</label>
                 <input x-model="promptForm.name" type="text"
                        class="w-full border rounded-lg px-3 py-2 text-sm" :placeholder="t('prompts.name_placeholder')" placeholder="Prompt name">
-
-
+            </div>
+            <div>
                 <label class="block text-sm font-medium mb-1" x-text="t('prompts.content')">Content</label>
                 <textarea x-model="promptForm.content" rows="4"
                           class="w-full border rounded-lg px-3 py-2 text-sm" :placeholder="t('prompts.content_placeholder')" placeholder="System prompt content..."></textarea>
-
+            </div>
             <div class="flex items-center gap-2">
                 <input x-model="promptForm.is_default" type="checkbox" id="is-default" class="rounded">
                 <label for="is-default" class="text-sm" x-text="t('prompts.set_default')">Set as default</label>
-
+            </div>
             <div class="flex gap-2">
                 <button @click="savePrompt()"
                         class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
@@ -446,7 +446,7 @@
                         x-text="t('prompts.cancel')">
                     Cancel
                 </button>
-
+            </div>
         </div>
 
         <!-- Prompt List -->
@@ -459,7 +459,7 @@
                             <span x-show="prompt.is_default"
                                   class="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full"
                                   x-text="t('prompts.default_badge')">default</span>
-            
+                        </div>
                         <div class="flex gap-1">
                             <button @click="editPrompt(prompt)"
                                     class="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200"
@@ -471,10 +471,10 @@
                             <button @click="deletePrompt(prompt.id)"
                                     class="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200"
                                     x-text="t('prompts.delete')">Delete</button>
-            
-        
+                        </div>
+                    </div>
                     <div class="text-sm text-gray-600 whitespace-pre-wrap" x-text="prompt.content"></div>
-    
+                </div>
             </template>
         </div>
     </div>
@@ -493,12 +493,12 @@
         <!-- Add/Edit Model Form -->
         <div x-show="showModelForm" class="bg-white rounded-xl shadow-sm p-6 space-y-4">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-    
+                <div>
                     <label class="block text-sm font-medium mb-1" x-text="t('models.display_name')">Display Name</label>
                     <input x-model="modelForm.name" type="text"
                            class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="e.g. DeepSeek V3">
-    
-    
+                </div>
+                <div>
                     <label class="block text-sm font-medium mb-1" x-text="t('models.provider')">Provider</label>
                     <select x-model="modelForm.provider" @change="onModelProviderChange()"
                             class="w-full border rounded-lg px-3 py-2 text-sm">
@@ -506,33 +506,33 @@
                         <option value="deepseek">DeepSeek</option>
                         <option value="custom">Custom</option>
                     </select>
-    
-    
+                </div>
+                <div>
                     <label class="block text-sm font-medium mb-1" x-text="t('models.model_id')">Model ID</label>
                     <input x-model="modelForm.model" type="text"
                            class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="gpt-4o-mini">
-    
-    
+                </div>
+                <div>
                     <label class="block text-sm font-medium mb-1" x-text="t('models.base_url')">Base URL</label>
                     <input x-model="modelForm.base_url" type="text"
                            class="w-full border rounded-lg px-3 py-2 text-sm">
-    
-    
+                </div>
+                <div>
                     <label class="block text-sm font-medium mb-1" x-text="t('models.api_key')">API Key</label>
                     <input x-model="modelForm.api_key" type="password"
                            class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="sk-...">
-    
-    
+                </div>
+                <div>
                     <label class="block text-sm font-medium mb-1" x-text="t('models.max_tokens')">Max Tokens</label>
                     <input x-model.number="modelForm.max_tokens" type="number"
                            class="w-full border rounded-lg px-3 py-2 text-sm">
-    
-    
+                </div>
+                <div>
                     <label class="block text-sm font-medium mb-1" x-text="t('models.temperature')">Temperature</label>
                     <input x-model.number="modelForm.temperature" type="number" step="0.1" min="0" max="2"
                            class="w-full border rounded-lg px-3 py-2 text-sm">
-    
-
+                </div>
+            </div>
 
             <!-- Capabilities -->
             <div class="border-t pt-4 mt-2">
@@ -550,8 +550,8 @@
                         <input x-model="modelForm.capability_image" type="checkbox" class="rounded">
                         <span x-text="t('models.cap_image')">Image</span>
                     </label>
-    
-
+                </div>
+            </div>
 
             <!-- Preprocessing -->
             <div class="border-t pt-4">
@@ -586,15 +586,15 @@
                                     x-text="t('models.voice_method_asr')">
                                 ASR
                             </button>
-            
+                        </div>
                         <!-- ASR language hint -->
                         <div x-show="modelForm.preprocess_voice && modelForm.preprocess_voice_model_id && modelForm.voice_method === 'asr'">
                             <input x-model="modelForm.asr_language" type="text"
                                    class="w-full border rounded-lg px-3 py-2 text-sm"
                                    :placeholder="t('models.asr_language_hint')"
                                    style="font-size: 12px;">
-            
-        
+                        </div>
+                    </div>
                     <!-- Image preprocessing -->
                     <div class="bg-gray-50 rounded-lg p-3 space-y-2">
                         <label class="flex items-center gap-2 text-sm font-medium">
@@ -609,14 +609,14 @@
                                 <option :value="m.id" x-text="m.name + ' (' + m.model + ')'"></option>
                             </template>
                         </select>
-        
-    
-
+                    </div>
+                </div>
+            </div>
 
             <div class="flex items-center gap-2">
                 <input x-model="modelForm.is_active" type="checkbox" id="model-active" class="rounded">
                 <label for="model-active" class="text-sm" x-text="t('models.activate_now')">Activate immediately</label>
-
+            </div>
             <div class="flex gap-2">
                 <button @click="saveModel()"
                         class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
@@ -627,7 +627,7 @@
                         x-text="t('prompts.cancel')">
                     Cancel
                 </button>
-
+            </div>
         </div>
 
         <!-- Model List -->
@@ -660,7 +660,7 @@
                                     <span x-show="m.capability_image" class="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-orange-100 text-orange-600">
                                         <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                                     </span>
-                    
+                                </div>
                             </td>
                             <td class="px-4 py-3">
                                 <span class="text-xs px-2 py-1 rounded-full"
@@ -763,7 +763,7 @@
                         x-text="t('chars.new')">
                     + New
                 </button>
-
+            </div>
         </div>
 
         <!-- Card Wall -->
@@ -778,20 +778,20 @@
                             <img x-show="card.avatar_path" :src="'/' + card.avatar_path"
                                  class="w-16 h-16 rounded-full object-cover" alt="">
                             <span x-show="!card.avatar_path" x-text="card.name.charAt(0).toUpperCase()"></span>
-            
+                        </div>
                         <div class="font-medium text-sm" x-text="card.name"></div>
                         <div class="text-xs text-gray-500 mt-1 line-clamp-2" x-text="card.description || t('chars.no_description')"></div>
                         <span x-show="card.is_active"
                               class="mt-2 text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full"
                               x-text="t('chars.active_badge')">Active</span>
-        
-    
+                    </div>
+                </div>
             </template>
             <div x-show="characters.length === 0"
                  class="col-span-full bg-white rounded-xl shadow-sm p-8 text-center text-gray-400"
                  x-text="t('chars.empty')">
                 No character cards yet. Click "New" or "Import" to get started.
-
+            </div>
         </div>
 
         <!-- Side Editor Panel -->
@@ -802,45 +802,45 @@
                     <div class="flex items-center justify-between">
                         <h3 class="text-lg font-semibold" x-text="charForm.id ? t('chars.edit_title') : t('chars.new_title')"></h3>
                         <button @click="showCharForm = false" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
-        
+                    </div>
 
-        
+                    <div>
                         <label class="block text-sm font-medium mb-1" x-text="t('prompts.name')">Name</label>
                         <input x-model="charForm.name" type="text"
                                class="w-full border rounded-lg px-3 py-2 text-sm" :placeholder="t('chars.name_placeholder')" placeholder="Character name">
-        
-        
+                    </div>
+                    <div>
                         <label class="block text-sm font-medium mb-1">Description</label>
                         <textarea x-model="charForm.description" rows="3"
                                   class="w-full border rounded-lg px-3 py-2 text-sm" :placeholder="t('chars.desc_placeholder')" placeholder="Character description..."></textarea>
-        
-        
+                    </div>
+                    <div>
                         <label class="block text-sm font-medium mb-1">Personality</label>
                         <textarea x-model="charForm.personality" rows="2"
                                   class="w-full border rounded-lg px-3 py-2 text-sm" :placeholder="t('chars.personality_placeholder')" placeholder="Personality traits..."></textarea>
-        
-        
+                    </div>
+                    <div>
                         <label class="block text-sm font-medium mb-1">Scenario</label>
                         <textarea x-model="charForm.scenario" rows="2"
                                   class="w-full border rounded-lg px-3 py-2 text-sm" :placeholder="t('chars.scenario_placeholder')" placeholder="Scenario / setting..."></textarea>
-        
-        
+                    </div>
+                    <div>
                         <label class="block text-sm font-medium mb-1"><span x-text="t('chars.first_mes')">First Message</span> <span class="text-gray-400" x-text="t('chars.optional')">(optional)</span></label>
                         <textarea x-model="charForm.first_mes" rows="2"
                                   class="w-full border rounded-lg px-3 py-2 text-sm" :placeholder="t('chars.first_mes_placeholder')" placeholder="Opening message..."></textarea>
-        
-        
+                    </div>
+                    <div>
                         <label class="block text-sm font-medium mb-1"><span x-text="t('chars.example_dialog')">Example Dialog</span> <span class="text-gray-400" x-text="t('chars.optional')">(optional)</span></label>
                         <textarea x-model="charForm.mes_example" rows="3"
                                   class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="{{char}}: ...&#10;{{user}}: ..."></textarea>
-        
+                    </div>
 
                     <!-- Prompt Preview -->
-        
+                    <div>
                         <label class="block text-sm font-medium mb-1" x-text="t('chars.prompt_preview')">Prompt Preview</label>
                         <pre class="bg-gray-50 border rounded-lg p-3 text-xs text-gray-600 overflow-auto max-h-40 whitespace-pre-wrap"
                              x-text="charPromptPreview"></pre>
-        
+                    </div>
 
                     <!-- Avatar Upload -->
                     <div x-show="charForm.id">
@@ -850,7 +850,7 @@
                             <input type="file" accept="image/*" class="hidden"
                                    @change="uploadAvatar($event)">
                         </label>
-        
+                    </div>
 
                     <div class="flex gap-2 pt-2">
                         <button @click="saveCharacter()"
@@ -884,16 +884,374 @@
                                         class="block w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100">JSON</button>
                                 <button @click="exportCharacter('png'); open = false"
                                         class="block w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100">PNG</button>
-                
-            
+                            </div>
+                        </div>
                         <button @click="showCharForm = false"
                                 class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm ml-auto"
                                 x-text="t('prompts.cancel')">
                             Cancel
                         </button>
-        
-    
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
+    <!-- Providers Tab -->
+    <div x-show="activeTab === 'providers'" class="space-y-4">
+        <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold" x-text="t('providers.title')">Provider Management</h2>
+            <button @click="showProviderForm = !showProviderForm; if(!showProviderForm) resetProviderForm();"
+                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                    x-text="t('providers.add')">
+                + Add Provider
+            </button>
+        </div>
+
+        <!-- Add/Edit Form -->
+        <div x-show="showProviderForm" class="bg-white rounded-xl shadow-sm p-6 space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1" x-text="t('providers.name')">Name</label>
+                    <input x-model="providerForm.name" type="text"
+                           class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="My Provider">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1" x-text="t('providers.type')">Type</label>
+                    <select x-model="providerForm.provider_type" class="w-full border rounded-lg px-3 py-2 text-sm">
+                        <option value="custom">Custom</option>
+                        <option value="openai">OpenAI</option>
+                        <option value="deepseek">DeepSeek</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1" x-text="t('providers.base_url')">Base URL</label>
+                    <input x-model="providerForm.base_url" type="text"
+                           class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="https://api.openai.com/v1">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1" x-text="t('providers.api_key')">API Key</label>
+                    <input x-model="providerForm.api_key" type="password"
+                           class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="sk-...">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-medium mb-1" x-text="t('providers.description')">Description</label>
+                    <input x-model="providerForm.description" type="text"
+                           class="w-full border rounded-lg px-3 py-2 text-sm">
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <input x-model="providerForm.is_enabled" type="checkbox" id="provider-enabled" class="rounded">
+                <label for="provider-enabled" class="text-sm" x-text="t('providers.enabled')">Enabled</label>
+            </div>
+            <div class="flex gap-2">
+                <button @click="saveProvider()"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                    <span x-text="providerForm.id ? t('models.update') : t('providers.add')"></span>
+                </button>
+                <button @click="resetProviderForm()"
+                        class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm"
+                        x-text="t('prompts.cancel')">
+                    Cancel
+                </button>
+            </div>
+        </div>
+
+        <!-- Provider List -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <template x-for="p in providers" :key="p.id">
+                <div class="bg-white rounded-xl shadow-sm p-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium" x-text="p.name"></span>
+                            <span x-show="p.is_enabled" class="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full" x-text="t('providers.enabled')">Enabled</span>
+                            <span x-show="!p.is_enabled" class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full" x-text="t('models.inactive')">Disabled</span>
+                        </div>
+                        <span class="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-600" x-text="p.provider_type"></span>
+                    </div>
+                    <div class="text-sm text-gray-500 mb-1" x-text="p.base_url"></div>
+                    <div class="text-xs text-gray-400 mb-3" x-text="p.description || ''"></div>
+                    <div class="flex gap-1">
+                        <button @click="editProvider(p)"
+                                class="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200"
+                                x-text="t('models.edit')">Edit</button>
+                        <button @click="deleteProvider(p.id, p.name)"
+                                class="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200"
+                                x-text="t('models.delete')">Delete</button>
+                    </div>
+                </div>
+            </template>
+            <div x-show="providers.length === 0" class="col-span-full bg-white rounded-xl shadow-sm p-8 text-center text-gray-400">
+                No providers configured
+            </div>
+        </div>
+    </div>
+
+    <!-- ST Presets Tab -->
+    <div x-show="activeTab === 'st-presets'" class="space-y-4">
+        <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold" x-text="t('st_presets.title')">SillyTavern Presets</h2>
+            <div class="flex gap-2">
+                <label class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm cursor-pointer">
+                    <span x-text="t('st_presets.import')">Import</span>
+                    <input type="file" accept=".json" class="hidden" @change="importSTPreset($event)">
+                </label>
+                <button @click="showSTPresetForm = !showSTPresetForm; if(!showSTPresetForm) resetSTPresetForm();"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                        x-text="t('st_presets.add')">
+                    + Add Preset
+                </button>
+            </div>
+        </div>
+
+        <!-- Add/Edit Form -->
+        <div x-show="showSTPresetForm" class="bg-white rounded-xl shadow-sm p-6 space-y-4">
+            <div>
+                <label class="block text-sm font-medium mb-1" x-text="t('st_presets.name')">Name</label>
+                <input x-model="stPresetForm.name" type="text"
+                       class="w-full border rounded-lg px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1" x-text="t('st_presets.raw_json')">Raw JSON</label>
+                <textarea x-model="stPresetForm.raw_json" rows="6"
+                          class="w-full border rounded-lg px-3 py-2 text-sm font-mono"></textarea>
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1" x-text="t('st_presets.system_prompt')">System Prompt</label>
+                <textarea x-model="stPresetForm.system_prompt" rows="2"
+                          class="w-full border rounded-lg px-3 py-2 text-sm"></textarea>
+            </div>
+            <div class="flex gap-2">
+                <button @click="saveSTPreset()"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                    <span x-text="stPresetForm.id ? t('models.update') : t('st_presets.add')"></span>
+                </button>
+                <button @click="resetSTPresetForm()"
+                        class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm"
+                        x-text="t('prompts.cancel')">
+                    Cancel
+                </button>
+            </div>
+        </div>
+
+        <!-- Preset List -->
+        <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('st_presets.name')">Name</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('st_presets.system_prompt')">System Prompt</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('users.status')">Status</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('users.actions')">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y">
+                    <template x-for="p in stPresets" :key="p.id">
+                        <tr :class="{'bg-blue-50': p.is_active}">
+                            <td class="px-4 py-3 font-medium" x-text="p.name"></td>
+                            <td class="px-4 py-3 text-gray-600 truncate max-w-xs" x-text="p.system_prompt || '—'"></td>
+                            <td class="px-4 py-3">
+                                <span class="text-xs px-2 py-1 rounded-full"
+                                      :class="p.is_active ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'"
+                                      x-text="p.is_active ? t('st_presets.active') : t('models.inactive')">
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 flex gap-1">
+                                <button @click="activateSTPreset(p.id)" x-show="!p.is_active"
+                                        class="text-xs px-2 py-1 bg-green-100 text-green-600 rounded hover:bg-green-200"
+                                        x-text="t('st_presets.activate')">Activate</button>
+                                <button @click="deactivateSTPreset()" x-show="p.is_active"
+                                        class="text-xs px-2 py-1 bg-yellow-100 text-yellow-600 rounded hover:bg-yellow-200"
+                                        x-text="t('st_presets.deactivate')">Deactivate</button>
+                                <button @click="exportSTPreset(p.id, p.name)"
+                                        class="text-xs px-2 py-1 bg-purple-100 text-purple-600 rounded hover:bg-purple-200"
+                                        x-text="t('st_presets.export')">Export</button>
+                                <button @click="deleteSTPreset(p.id, p.name)"
+                                        class="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200"
+                                        x-text="t('models.delete')">Delete</button>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="stPresets.length === 0">
+                        <td colspan="4" class="px-4 py-6 text-center text-gray-400">No presets configured</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- World Books Tab -->
+    <div x-show="activeTab === 'world-books'" class="space-y-4">
+        <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold" x-text="t('world_books.title')">World Books</h2>
+            <div class="flex gap-2">
+                <label class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm cursor-pointer">
+                    <span x-text="t('world_books.import')">Import</span>
+                    <input type="file" accept=".json" class="hidden" @change="importWorldBook($event)">
+                </label>
+                <button @click="showWorldBookForm = !showWorldBookForm; if(!showWorldBookForm) resetWorldBookForm();"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                        x-text="t('world_books.add')">
+                    + Add World Book
+                </button>
+            </div>
+        </div>
+
+        <!-- Add/Edit Form -->
+        <div x-show="showWorldBookForm" class="bg-white rounded-xl shadow-sm p-6 space-y-4">
+            <div>
+                <label class="block text-sm font-medium mb-1" x-text="t('world_books.name')">Name</label>
+                <input x-model="worldBookForm.name" type="text"
+                       class="w-full border rounded-lg px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1" x-text="t('world_books.description')">Description</label>
+                <input x-model="worldBookForm.description" type="text"
+                       class="w-full border rounded-lg px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1" x-text="t('st_presets.raw_json')">Raw JSON</label>
+                <textarea x-model="worldBookForm.raw_json" rows="6"
+                          class="w-full border rounded-lg px-3 py-2 text-sm font-mono"></textarea>
+            </div>
+            <div class="flex gap-2">
+                <button @click="saveWorldBook()"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                    <span x-text="worldBookForm.id ? t('models.update') : t('world_books.add')"></span>
+                </button>
+                <button @click="resetWorldBookForm()"
+                        class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm"
+                        x-text="t('prompts.cancel')">
+                    Cancel
+                </button>
+            </div>
+        </div>
+
+        <!-- World Book List -->
+        <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('world_books.name')">Name</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('world_books.description')">Description</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('users.status')">Status</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('users.actions')">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y">
+                    <template x-for="wb in worldBooks" :key="wb.id">
+                        <tr :class="{'bg-blue-50': wb.is_active}">
+                            <td class="px-4 py-3 font-medium" x-text="wb.name"></td>
+                            <td class="px-4 py-3 text-gray-600 truncate max-w-xs" x-text="wb.description || '—'"></td>
+                            <td class="px-4 py-3">
+                                <span class="text-xs px-2 py-1 rounded-full"
+                                      :class="wb.is_active ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'"
+                                      x-text="wb.is_active ? t('world_books.active') : t('models.inactive')">
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 flex gap-1">
+                                <button @click="viewWorldBookEntries(wb)"
+                                        class="text-xs px-2 py-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200"
+                                        x-text="t('world_books.view_entries')">View Entries</button>
+                                <button @click="activateWorldBook(wb.id)" x-show="!wb.is_active"
+                                        class="text-xs px-2 py-1 bg-green-100 text-green-600 rounded hover:bg-green-200"
+                                        x-text="t('world_books.activate')">Activate</button>
+                                <button @click="deactivateWorldBook()" x-show="wb.is_active"
+                                        class="text-xs px-2 py-1 bg-yellow-100 text-yellow-600 rounded hover:bg-yellow-200"
+                                        x-text="t('world_books.deactivate')">Deactivate</button>
+                                <button @click="exportWorldBook(wb.id, wb.name)"
+                                        class="text-xs px-2 py-1 bg-purple-100 text-purple-600 rounded hover:bg-purple-200"
+                                        x-text="t('world_books.export')">Export</button>
+                                <button @click="deleteWorldBook(wb.id, wb.name)"
+                                        class="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200"
+                                        x-text="t('models.delete')">Delete</button>
+                            </td>
+                        </tr>
+                    </template>
+                    <!-- Expanded entries view -->
+                    <tr x-show="expandedWorldBookId !== null">
+                        <td colspan="4" class="bg-gray-50 p-4">
+                            <div class="text-xs font-medium mb-2" x-text="t('world_books.entry_count').replace('{count}', worldBookEntries.length)"></div>
+                            <div class="space-y-2 max-h-60 overflow-y-auto">
+                                <template x-for="(entry, idx) in worldBookEntries" :key="idx">
+                                    <div class="bg-white border rounded p-2 text-xs">
+                                        <div class="font-medium text-gray-700" x-text="t('world_books.key_primary') + ': ' + (entry.key || entry.key_primary || '—')"></div>
+                                        <div class="text-gray-600 mt-1" x-text="entry.content || entry.text || '—'"></div>
+                                        <div class="flex gap-3 mt-1 text-gray-400">
+                                            <span x-show="entry.enabled" x-text="t('world_books.enabled') + ': ' + entry.enabled"></span>
+                                            <span x-show="entry.position" x-text="t('world_books.position') + ': ' + entry.position"></span>
+                                            <span x-show="entry.constant" x-text="t('world_books.constant') + ': ' + entry.constant"></span>
+                                        </div>
+                                    </div>
+                                </template>
+                                <div x-show="worldBookEntries.length === 0" class="text-gray-400 text-center py-2">No entries</div>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr x-show="worldBooks.length === 0">
+                        <td colspan="4" class="px-4 py-6 text-center text-gray-400">No world books configured</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Settings Tab -->
+    <div x-show="activeTab === 'settings'" class="space-y-4">
+        <h2 class="text-lg font-semibold" x-text="t('settings.title')">System Settings</h2>
+
+        <div class="bg-white rounded-xl shadow-sm p-6 space-y-4" x-show="settingsLoaded || true">
+            <h3 class="font-medium" x-text="t('settings.server')">Server Settings</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1" x-text="t('settings.port')">Listen Port</label>
+                    <input x-model.number="settingsForm.server_port" type="number"
+                           class="w-full border rounded-lg px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1" x-text="t('settings.language')">Language</label>
+                    <select x-model="settingsForm.language" class="w-full border rounded-lg px-3 py-2 text-sm">
+                        <option value="zh-CN">中文</option>
+                        <option value="en">English</option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <input x-model="settingsForm.listen_lan" type="checkbox" id="listen-lan" class="rounded">
+                <label for="listen-lan" class="text-sm">
+                    <span x-text="t('settings.listen_lan')">Listen on LAN</span>
+                    <span class="text-gray-500 text-xs ml-1" x-text="t('settings.listen_lan_hint')"></span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Prompt Settings -->
+        <div class="bg-white rounded-xl shadow-sm p-6 space-y-4">
+            <h3 class="font-medium" x-text="t('settings.prompt')">Prompt Settings</h3>
+            <p class="text-sm text-gray-500" x-text="t('settings.prompt_hint')">When enabled, the base system prompt will be disabled if the corresponding feature is active.</p>
+            <div class="space-y-3">
+                <div class="flex items-center gap-2">
+                    <input x-model="settingsForm.disable_base_prompt_on_char" type="checkbox" id="disable-char" class="rounded">
+                    <label for="disable-char" class="text-sm" x-text="t('settings.disable_on_char')">Disable base prompt when character card is active</label>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input x-model="settingsForm.disable_base_prompt_on_preset" type="checkbox" id="disable-preset" class="rounded">
+                    <label for="disable-preset" class="text-sm" x-text="t('settings.disable_on_preset')">Disable base prompt when ST preset is active</label>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input x-model="settingsForm.disable_base_prompt_on_worldbook" type="checkbox" id="disable-worldbook" class="rounded">
+                    <label for="disable-worldbook" class="text-sm" x-text="t('settings.disable_on_worldbook')">Disable base prompt when world book entries match</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex gap-2 items-center">
+            <button @click="saveSettings()"
+                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                    x-text="t('settings.save')">
+                Save Settings
+            </button>
+            <span class="text-sm text-gray-500" x-text="t('settings.restart_hint')"></span>
         </div>
     </div>
 
@@ -909,16 +1267,16 @@
                                                     <span class="text-sm font-medium text-gray-700" x-text="t('memory.status.embedding_model')"></span>
                                                     <span class="text-sm text-gray-500" x-text="status.available ? status.embedding_model || 'configured' : t('memory.status.disabled')"></span>
                                                     <span :class="status.available ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'" class="px-2 py-0.5 rounded-full text-xs font-medium" x-text="status.available ? t('memory.status.enabled') : t('memory.status.disabled')"></span>
-                                    
+                                                </div>
                                                 <button @click="showConfig = !showConfig" class="text-xs text-blue-500 hover:text-blue-700" x-text="showConfig ? '▲ Hide' : '▼ Config'"></button>
-                                
+                                            </div>
                                              <template x-if="status.available">
                                                 <div class="flex flex-wrap gap-6 text-sm text-gray-600">
                                                      <span><span x-text="t('memory.status.total')"></span>: <strong x-text="totalMemories"></strong></span>
                                                      <span><span x-text="t('memory.status.users')"></span>: <strong x-text="users.length"></strong></span>
                                                      <span>向量: <strong x-text="status.vector_count ?? '—'"></strong></span>
                                                      <span>ONNX: <strong x-text="status.onnx_loaded === null ? '—' : (status.onnx_loaded ? '已加载' : '懒加载')"></strong></span>
-                                     
+                                                 </div>
                                              </template>
                                              <template x-if="status.init_error">
                                                  <p class="text-sm text-amber-600 mt-1" x-text="status.init_error"></p>
@@ -926,51 +1284,51 @@
                                             <template x-if="!status.available && !showConfig">
                                                 <p class="text-sm text-amber-600 mt-1" x-text="t('memory.status.not_configured')"></p>
                                             </template>
-                            
+                                        </div>
 
                                         <!-- Config form -->
                                         <div x-show="showConfig" class="mt-3 p-4 bg-white border border-gray-200 rounded-lg">
                                             <!-- Embedding section -->
                                             <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Embedding Model</p>
                                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    
+                                                <div>
                                                     <label class="block text-xs font-medium text-gray-600 mb-1">Provider</label>
                                                     <select x-model="configForm.embedding_provider" @change="onEmbeddingProviderChange()"
                                                             class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
                                                         <option value="openai">OpenAI (兼容)</option>
                                                         <option value="modelscope-local">ModelScope 本地 ONNX</option>
                                                     </select>
-                                    
-                                    
+                                                </div>
+                                                <div>
                                                     <label class="block text-xs font-medium text-gray-600 mb-1">Model *</label>
                                                     <input type="text" x-model="configForm.embedding_model"
                                                            placeholder="text-embedding-3-small"
                                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
-                                    
+                                                </div>
                                                 <div x-show="configForm.embedding_provider !== 'modelscope-local'">
                                                     <label class="block text-xs font-medium text-gray-600 mb-1">Base URL <span class="text-gray-400">(留空复用主模型)</span></label>
                                                     <input type="text" x-model="configForm.embedding_base_url"
                                                            placeholder="https://api.openai.com/v1"
                                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
-                                    
+                                                </div>
                                                 <div x-show="configForm.embedding_provider !== 'modelscope-local'">
                                                     <label class="block text-xs font-medium text-gray-600 mb-1">API Key <span class="text-gray-400">(留空复用主模型)</span></label>
                                                     <input type="password" x-model="configForm.embedding_api_key"
                                                            :placeholder="configForm.embedding_api_key_set ? '••••••••' : 'sk-...'"
                                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
-                                    
+                                                </div>
                                                 <div x-show="configForm.embedding_provider === 'modelscope-local'">
                                                     <label class="block text-xs font-medium text-gray-600 mb-1">ModelScope 模型 ID</label>
                                                     <input type="text" x-model="configForm.embedding_modelscope_model_id"
                                                            placeholder="Xenova/bge-small-zh-v1.5"
                                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
-                                    
+                                                </div>
                                                 <div x-show="configForm.embedding_provider === 'modelscope-local'">
                                                     <label class="block text-xs font-medium text-gray-600 mb-1">本地模型目录</label>
                                                     <input type="text" x-model="configForm.embedding_local_path"
                                                            placeholder="./data/models/bge-small-zh-v1.5"
                                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
-                                    
+                                                </div>
                                                 <div x-show="configForm.embedding_provider === 'modelscope-local'" class="md:col-span-2">
                                                     <label class="block text-xs font-medium text-gray-600 mb-1">ONNX 量化模型</label>
                                                     <select x-model="configForm.embedding_onnx_model_file" @change="onEmbeddingOnnxModelChange()"
@@ -984,46 +1342,46 @@
                                                         <option value="onnx/model_bnb4.onnx">BNB4 量化 — 兼容性取决于 ONNX Runtime</option>
                                                         <option value="onnx/model.onnx">FP32 全精度（默认推荐）— 体积最大，适合优先保证精度和兼容性</option>
                                                     </select>
-                                    
+                                                </div>
                                                 <div x-show="isLocalEmbeddingProvider" class="md:col-span-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
                                                     <p class="font-medium">本地 ONNX 模型初始化提示</p>
                                                     <p class="mt-1" x-text="localEmbeddingBusyText"></p>
                                                     <div x-show="isLocalEmbeddingBusy" class="mt-2 flex items-center gap-2 text-blue-700" aria-live="polite">
                                                         <span class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-blue-300 border-t-blue-700"></span>
                                                         <span>正在处理模型下载 / 加载，请保持页面打开…</span>
-                                        
-                                    
-                                
+                                                    </div>
+                                                </div>
+                                            </div>
 
                                             <!-- LLM section for memory extraction -->
                                             <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-5 mb-2">LLM (记忆提取)</p>
                                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    
+                                                <div>
                                                     <label class="block text-xs font-medium text-gray-600 mb-1">Provider</label>
                                                     <select x-model="configForm.llm_provider"
                                                             class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
                                                         <option value="openai">OpenAI (兼容)</option>
                                                     </select>
-                                    
-                                    
+                                                </div>
+                                                <div>
                                                     <label class="block text-xs font-medium text-gray-600 mb-1">Model <span class="text-gray-400">(留空复用主模型)</span></label>
                                                     <input type="text" x-model="configForm.llm_model"
                                                            placeholder="gpt-4o-mini"
                                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
-                                    
-                                    
+                                                </div>
+                                                <div>
                                                     <label class="block text-xs font-medium text-gray-600 mb-1">Base URL <span class="text-gray-400">(留空复用主模型)</span></label>
                                                     <input type="text" x-model="configForm.llm_base_url"
                                                            placeholder="https://api.openai.com/v1"
                                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
-                                    
-                                    
+                                                </div>
+                                                <div>
                                                     <label class="block text-xs font-medium text-gray-600 mb-1">API Key <span class="text-gray-400">(留空复用主模型)</span></label>
                                                     <input type="password" x-model="configForm.llm_api_key"
                                                            :placeholder="configForm.llm_api_key_set ? '••••••••' : 'sk-...'"
                                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
-                                    
-                                
+                                                </div>
+                                            </div>
 
                                              <!-- Retrieval tuning -->
                                              <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-5 mb-2">Retrieval Tuning</p>
@@ -1043,7 +1401,7 @@
                                                      <input type="number" x-model.number="configForm.max_context_chars" min="100" max="100000"
                                                             class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
                                                  </label>
-                                 
+                                             </div>
 
                                              <label x-show="isLocalEmbeddingProvider" class="mt-4 flex items-center gap-2 text-sm text-gray-700">
                                                  <input type="checkbox" x-model="configForm.preload_onnx" class="rounded">
@@ -1074,7 +1432,7 @@
                                                          <span class="block text-xs font-medium text-gray-600 mb-1">Search EF</span>
                                                          <input type="number" x-model.number="configForm.hnsw_search_ef" min="1" max="1000" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
                                                      </label>
-                                     
+                                                 </div>
                                                  <p class="mt-2 text-xs text-amber-600">提示：既有 Chroma collection 的 HNSW 构建参数通常不能无损原地修改，必要时请先导出备份。</p>
                                              </details>
 
@@ -1095,10 +1453,10 @@
                                                         <span x-show="saving && !isLocalEmbeddingProvider">Saving...</span>
                                                         <span x-show="saving && isLocalEmbeddingProvider">保存 / 初始化模型中...</span>
                                                     </button>
-                                    
-                                
-                            
-                        
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
 
                                     <!-- Memory browser -->
                                     <template x-if="status.available">
@@ -1118,8 +1476,8 @@
                                                             <span class="text-xs text-gray-400" x-text="'(' + u.count + ')'"></span>
                                                         </button>
                                                     </template>
-                                    
-                                
+                                                </div>
+                                            </div>
 
                                             <!-- Memory detail -->
                                             <div class="md:col-span-2">
@@ -1127,20 +1485,20 @@
                                                     <p class="text-sm text-gray-400 py-8 text-center">← Select a user</p>
                                                 </template>
                                                 <template x-if="selectedUser">
-                                        
+                                                    <div>
                                                         <div class="flex items-center justify-between mb-4">
                                                             <h3 class="text-sm font-medium text-gray-700">
                                                                 <span x-text="t('memory.detail.title')"></span>: <span x-text="selectedUserNickname || selectedUser"></span>
                                                             </h3>
                                                             <button @click="clearAllMemories()" class="text-xs text-red-500 hover:text-red-700" x-text="t('memory.detail.clear_all')"></button>
-                                            
+                                                        </div>
 
                                                         <!-- Search -->
                                                         <div class="mb-4">
                                                             <input type="text" x-model="searchQuery" @keyup.enter="searchMemories()"
                                                                    :placeholder="t('memory.detail.search')"
                                                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
-                                            
+                                                        </div>
 
                                                         <!-- Memory list -->
                                                         <div class="space-y-2">
@@ -1155,8 +1513,8 @@
                                                                             <div x-show="!mem._isSearchResult" class="flex gap-1 opacity-0 group-hover:opacity-100 ml-2 shrink-0">
                                                                                 <button @click="startEdit(mem)" class="text-xs text-blue-500 hover:text-blue-700">Edit</button>
                                                                                 <button @click="deleteMemory(mem.id)" class="text-xs text-red-500 hover:text-red-700">×</button>
-                                                                
-                                                            
+                                                                            </div>
+                                                                        </div>
                                                                     </template>
                                                                     <template x-if="editingId === mem.id">
                                                                         <div class="flex-1 flex gap-2">
@@ -1164,18 +1522,18 @@
                                                                                    class="flex-1 px-2 py-1 border border-gray-300 rounded text-sm">
                                                                             <button @click="saveEdit(mem.id)" class="text-xs text-green-600">Save</button>
                                                                             <button @click="cancelEdit()" class="text-xs text-gray-400">Cancel</button>
-                                                            
+                                                                        </div>
                                                                     </template>
-                                                    
+                                                                </div>
                                                             </template>
-                                            
-                                        
+                                                        </div>
+                                                    </div>
                                                 </template>
-                                
-                            
+                                            </div>
+                                        </div>
                                     </template>
-                    
-                
+                                </div>
+                            </div>
 
     <!-- About Tab -->
     <div x-show="activeTab === 'about'" class="max-w-2xl mx-auto space-y-6">
@@ -1193,11 +1551,11 @@
                      class="w-10 h-10 rounded-full bg-gray-200"
                      onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                 <div class="w-10 h-10 bg-gradient-to-br from-green-400 to-blue-500 rounded-full items-center justify-center text-white font-bold hidden">L</div>
-    
+                <div>
                     <div class="font-medium text-gray-800">泠夜Soul</div>
                     <div class="text-sm text-gray-500">LingyeSoul</div>
-    
-
+                </div>
+            </div>
         </div>
 
         <div class="bg-white rounded-xl shadow-sm p-6 space-y-3">
@@ -1207,20 +1565,20 @@
                 <svg class="w-5 h-5 text-gray-700" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
                 </svg>
-    
+                <div>
                     <div class="text-sm font-medium text-gray-800" x-text="t('about.github')">GitHub Repository</div>
                     <div class="text-xs text-gray-500">github.com/LingyeSoul/WeiLinkBot</div>
-    
+                </div>
             </a>
             <a href="https://space.bilibili.com/298721157" target="_blank"
                class="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors">
                 <svg class="w-5 h-5 text-pink-500" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M17.813 4.653h.854c1.51.054 2.769.578 3.773 1.574 1.004.995 1.524 2.249 1.56 3.76v7.36c-.036 1.51-.556 2.769-1.56 3.773s-2.262 1.524-3.773 1.56H5.333c-1.51-.036-2.769-.556-3.773-1.56S.036 18.858 0 17.347v-7.36c.036-1.511.556-2.765 1.56-3.76 1.004-.996 2.262-1.52 3.773-1.574h.774l-1.174-1.12a1.234 1.234 0 0 1-.373-.906c0-.356.124-.658.373-.907l.027-.027c.267-.249.573-.373.92-.373.347 0 .653.124.92.373L9.653 4.44c.071.071.134.142.187.213h4.267a.836.836 0 0 1 .16-.213l2.853-2.747c.267-.249.573-.373.92-.373.347 0 .662.151.929.4.267.249.391.551.391.907 0 .355-.124.657-.373.906L17.813 4.653zM5.333 7.24c-.746.018-1.373.276-1.88.773-.506.498-.769 1.13-.786 1.894v7.52c.017.764.28 1.395.786 1.893.507.498 1.134.756 1.88.773h13.334c.746-.017 1.373-.275 1.88-.773.506-.498.769-1.129.786-1.893v-7.52c-.017-.765-.28-1.396-.786-1.894-.507-.497-1.134-.755-1.88-.773H5.333zm4 5.093c.373 0 .684.124.933.373.25.249.383.569.4.96v1.173c-.017.391-.15.711-.4.96-.249.25-.56.374-.933.374s-.684-.125-.933-.374c-.25-.249-.383-.569-.4-.96V13.66c.017-.391.15-.711.4-.96.249-.249.56-.373.933-.373zm5.334 0c.373 0 .684.124.933.373.25.249.383.569.4.96v1.173c-.017.391-.15.711-.4.96-.249.25-.56.374-.933.374s-.684-.125-.933-.374c-.25-.249-.383-.569-.4-.96V13.66c.017-.391.15-.711.4-.96.249-.249.56-.373.933-.373z"/>
                 </svg>
-    
+                <div>
                     <div class="text-sm font-medium text-gray-800" x-text="t('about.bilibili')">Bilibili</div>
                     <div class="text-xs text-gray-500">space.bilibili.com/298721157</div>
-    
+                </div>
             </a>
         </div>
 
@@ -1233,7 +1591,7 @@
                 <span class="px-3 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-full">Alpine.js</span>
                 <span class="px-3 py-1 bg-cyan-100 text-cyan-700 text-xs rounded-full">Tailwind CSS</span>
                 <span class="px-3 py-1 bg-red-100 text-red-700 text-xs rounded-full">WeChat iLink SDK</span>
-
+            </div>
         </div>
 
         <div class="text-center text-xs text-gray-400 py-4"

@@ -25,6 +25,10 @@ from . import users as user_routes
 from . import models as model_routes
 from . import stats as stats_routes
 from . import characters as char_routes
+from . import providers as provider_routes
+from . import settings as settings_routes
+from . import st_presets as st_preset_routes
+from . import world_books as world_book_routes
 
 logger = logging.getLogger(__name__)
 
@@ -191,6 +195,10 @@ def create_app() -> FastAPI:
     app.include_router(model_routes.router, prefix="/api/models", tags=["Models"])
     app.include_router(stats_routes.router, prefix="/api/stats", tags=["Stats"])
     app.include_router(char_routes.router, prefix="/api/characters", tags=["Characters"])
+    app.include_router(provider_routes.router, prefix="/api/providers", tags=["Providers"])
+    app.include_router(settings_routes.router, prefix="/api/settings", tags=["Settings"])
+    app.include_router(st_preset_routes.router, prefix="/api/st-presets", tags=["ST Presets"])
+    app.include_router(world_book_routes.router, prefix="/api/world-books", tags=["World Books"])
 
     from . import memories as memory_routes
     app.include_router(memory_routes.router, prefix="/api/memories", tags=["Memories"])
