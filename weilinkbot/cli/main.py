@@ -412,21 +412,35 @@ def model_add(
 ):
     """Add a new LLM model preset."""
     async def _add():
+        from sqlalchemy import select
         from weilinkbot.database import init_db, get_session_factory
-        from weilinkbot.models import LLMPreset, encrypt_preset_api_key
+        from weilinkbot.models import LLMPreset, Provider, encrypt_provider_api_key
 
         await init_db()
         session_factory = get_session_factory()
         async with session_factory() as db:
-            enc_key, enc_flag = encrypt_preset_api_key(api_key.strip())
+            # Find or create a Provider matching these credentials
+            result = await db.execute(select(Provider).where(Provider.base_url == base_url))
+            prov = result.scalar_one_or_none()
+            if not prov:
+                enc_key, enc_flag = encrypt_provider_api_key(api_key.strip())
+                prov = Provider(
+                    name=f"{provider} (cli)",
+                    provider_type=provider,
+                    api_key=enc_key,
+                    api_key_encrypted=enc_flag,
+                    base_url=base_url,
+                    description="Auto-created from CLI",
+                    is_enabled=True,
+                )
+                db.add(prov)
+                await db.flush()
             db.add(LLMPreset(
                 name=name,
                 provider=provider,
-                api_key=enc_key,
-                api_key_encrypted=enc_flag,
-                base_url=base_url,
                 model=model_id,
                 is_active=False,
+                provider_id=prov.id,
             ))
             await db.commit()
             console.print(f"[green]{t('cli.added_model', name=name)}[/green]")

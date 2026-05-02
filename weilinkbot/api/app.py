@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, Response
 
 from ..config import get_config, AppConfig
 from ..database import init_db, get_session_factory
-from ..models import SystemPrompt, LLMPreset, get_preset_api_key, encrypt_preset_api_key
+from ..models import SystemPrompt, LLMPreset, Provider, encrypt_provider_api_key, resolve_provider_credentials
 from ..services.llm_service import LLMService
 from ..services.bot_service import BotService
 from .deps import set_llm_service, set_bot_service, set_memory_service
@@ -89,20 +89,30 @@ async def lifespan(app: FastAPI):
         result = await db.execute(preset_count_stmt)
         preset_count = result.scalar()
         if preset_count == 0 and config.llm.api_key:
-            enc_key, enc_flag = encrypt_preset_api_key(config.llm.api_key)
-            db.add(LLMPreset(
-                name=f"{config.llm.provider}/{config.llm.model}",
-                provider=config.llm.provider,
+            # Create a default Provider first
+            enc_key, enc_flag = encrypt_provider_api_key(config.llm.api_key)
+            default_provider = Provider(
+                name=f"{config.llm.provider} (default)",
+                provider_type=config.llm.provider,
                 api_key=enc_key,
                 api_key_encrypted=enc_flag,
                 base_url=config.llm.base_url,
+                description="Auto-created from config",
+                is_enabled=True,
+            )
+            db.add(default_provider)
+            await db.flush()
+            db.add(LLMPreset(
+                name=f"{config.llm.provider}/{config.llm.model}",
+                provider=config.llm.provider,
                 model=config.llm.model,
                 max_tokens=config.llm.max_tokens,
                 temperature=config.llm.temperature,
                 is_active=True,
+                provider_id=default_provider.id,
             ))
             await db.commit()
-            logger.info("Created default LLM preset from config")
+            logger.info("Created default LLM preset and provider from config")
 
     # Load active preset from DB (if any), otherwise use config
     active_config = config.llm
@@ -114,10 +124,16 @@ async def lifespan(app: FastAPI):
         active_preset = result.scalar_one_or_none()
         if active_preset:
             from ..config import LLMConfig
+            try:
+                provider_type, api_key, base_url = await resolve_provider_credentials(active_preset, db)
+            except ValueError:
+                provider_type = active_preset.provider
+                api_key = ""
+                base_url = ""
             active_config = LLMConfig(
-                provider=active_preset.provider,
-                api_key=get_preset_api_key(active_preset),
-                base_url=active_preset.base_url,
+                provider=provider_type,
+                api_key=api_key,
+                base_url=base_url,
                 model=active_preset.model,
                 max_tokens=active_preset.max_tokens,
                 temperature=active_preset.temperature,

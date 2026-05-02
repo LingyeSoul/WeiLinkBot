@@ -129,13 +129,11 @@ class ProviderResponse(BaseModel):
 class LLMPresetCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     provider: str = Field("custom", max_length=50)
-    api_key: Optional[str] = None
-    base_url: Optional[str] = Field(None, min_length=1, max_length=500)
     model: str = Field(..., min_length=1, max_length=100)
     max_tokens: int = Field(2048, ge=1, le=128000)
     temperature: float = Field(0.7, ge=0, le=2)
     is_active: bool = False
-    provider_id: Optional[int] = None
+    provider_id: int
     capability_text: bool = True
     capability_audio: bool = False
     capability_image: bool = False
@@ -150,8 +148,6 @@ class LLMPresetCreate(BaseModel):
 class LLMPresetUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     provider: Optional[str] = None
-    api_key: Optional[str] = None
-    base_url: Optional[str] = None
     model: Optional[str] = None
     max_tokens: Optional[int] = Field(None, ge=1, le=128000)
     temperature: Optional[float] = Field(None, ge=0, le=2)
@@ -172,13 +168,12 @@ class LLMPresetResponse(BaseModel):
     id: int
     name: str
     provider: str
-    base_url: str
     model: str
     max_tokens: int
     temperature: float
     is_active: bool
-    api_key_set: bool = True
     provider_id: Optional[int] = None
+    provider_name: Optional[str] = None
     capability_text: bool = True
     capability_audio: bool = False
     capability_image: bool = False
@@ -288,6 +283,9 @@ class MemoryConfigUpdate(BaseModel):
     hnsw_m: Annotated[Optional[int], Field(ge=1, le=1000)] = None
     hnsw_construction_ef: Annotated[Optional[int], Field(ge=1, le=1000)] = None
     hnsw_search_ef: Annotated[Optional[int], Field(ge=1, le=1000)] = None
+    fact_extraction: Optional[bool] = None
+    role_term_blacklist: Optional[list[str]] = None
+    custom_instructions: Optional[str] = None
 
 
 class MemoryConfigTestResponse(BaseModel):

@@ -107,7 +107,6 @@ class WsService:
             UserConfig,
             CharacterCard,
             Provider,
-            get_preset_api_key,
         )
         from ..schemas import (
             SystemPromptResponse,
@@ -156,20 +155,15 @@ class WsService:
 
                 # Models
                 try:
-                    from ..schemas import LLMPresetResponse
+                    from ..api.models import _build_preset_response
+                    from sqlalchemy.orm import selectinload
                     result = await db.execute(
-                        select(LLMPreset).order_by(LLMPreset.is_active.desc(), LLMPreset.id)
+                        select(LLMPreset).options(selectinload(LLMPreset.provider_ref)).order_by(LLMPreset.is_active.desc(), LLMPreset.id)
                     )
                     models = result.scalars().all()
                     await _safe_send(
                         "models",
-                        [
-                            LLMPresetResponse(
-                                **{k: getattr(m, k) for k in LLMPresetResponse.model_fields if k != "api_key_set"},
-                                api_key_set=bool(get_preset_api_key(m)),
-                            ).model_dump(mode="json")
-                            for m in models
-                        ],
+                        [_build_preset_response(m).model_dump(mode="json") for m in models],
                     )
                 except Exception:
                     logger.exception("Failed to send initial models")
@@ -256,14 +250,14 @@ class WsService:
             except Exception:
                 logger.exception("Failed to send initial events")
 
-        # Memory stats
-        try:
-            from ..services.bot_service import BotService
-            stats = await BotService._collect_memory_stats()
-            if stats:
-                await _safe_send("memory_stats", stats)
-        except Exception:
-            logger.exception("Failed to send initial memory stats")
+            # Memory stats
+            try:
+                from ..services.bot_service import BotService
+                stats = await BotService._collect_memory_stats()
+                if stats:
+                    await _safe_send("memory_stats", stats)
+            except Exception:
+                logger.exception("Failed to send initial memory stats")
 
         except Exception:
             logger.exception("Failed to open DB session for initial state")

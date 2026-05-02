@@ -318,3 +318,18 @@ def encrypt_provider_api_key(api_key: str) -> tuple[str, bool]:
     if api_key:
         return encrypt(api_key), True
     return api_key, False
+
+
+async def resolve_provider_credentials(preset: "LLMPreset", db) -> tuple[str, str, str]:
+    """Load the linked Provider and return (provider_type, decrypted_api_key, base_url).
+
+    Raises ValueError if the preset has no provider_id or the provider is not found.
+    """
+    from sqlalchemy import select as _select
+    if not preset.provider_id:
+        raise ValueError(f"Preset '{preset.name}' has no provider_id set")
+    result = await db.execute(_select(Provider).where(Provider.id == preset.provider_id))
+    provider = result.scalar_one_or_none()
+    if not provider:
+        raise ValueError(f"Provider id={preset.provider_id} not found")
+    return provider.provider_type, get_provider_api_key(provider), provider.base_url
