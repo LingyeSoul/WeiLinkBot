@@ -340,6 +340,11 @@
   "st_presets.export": "导出",
   "st_presets.activate": "激活",
   "st_presets.deactivate": "停用",
+  "st_presets.view_entries": "查看",
+  "st_presets.entries_title": "预设条目",
+  "st_presets.entry_depth": "深度",
+  "st_presets.loading": "加载中...",
+  "st_presets.no_entries": "未找到条目",
 
   "world_books.title": "世界书",
   "world_books.add": "添加世界书",
@@ -365,6 +370,7 @@
   "settings.listen_lan": "监听局域网",
   "settings.listen_lan_hint": "开启后允许局域网内其他设备访问",
   "settings.language": "语言",
+  "settings.max_history": "最大历史消息数",
   "settings.restart": "重启服务器",
   "settings.restart_hint": "修改端口后需要重启生效",
   "settings.save": "保存设置",
@@ -404,5 +410,9 @@
   "events.disconnected": "已断开",
   "events.auto_scroll": "自动滚动",
   "events.total": "共 {n} 条事件",
-  "events.empty": "暂无事件"
+  "events.empty": "暂无事件",
+  "events.expand_detail": "展开详情",
+  "events.collapse_detail": "收起详情",
+  "events.sent_to_llm": "发送给 LLM 的内容：",
+  "events.llm_response": "LLM 返回的内容："
 }

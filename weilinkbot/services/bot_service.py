@@ -485,6 +485,15 @@ class BotService:
                     from ..services.world_book_service import WorldBookService
                     wb_service = WorldBookService(db)
                     matched_world_book_entries = await wb_service.match_entries(text)
+                    if matched_world_book_entries:
+                        names = [e.comment or e.key_primary[:20] for e in matched_world_book_entries]
+                        await get_event_log().push("info", "preprocess", "world_book.matched",
+                            f"World book matched {len(matched_world_book_entries)} entries for user {user_id}",
+                            {"user_id": user_id, "entries": names})
+                    else:
+                        await get_event_log().push("info", "preprocess", "world_book.no_match",
+                            f"World book: no entries matched for user {user_id}",
+                            {"user_id": user_id})
                 except Exception:
                     logger.debug("World book matching skipped")
 
@@ -506,8 +515,6 @@ class BotService:
                     for entry in after_entries:
                         context.append({"role": "system", "content": entry.content})
 
-                context.append({"role": "user", "content": text})
-
                 await get_event_log().push("info", "llm", "llm.request", f"LLM request for user {user_id}: {text[:50]}...", {"user_id": user_id, "model": self._llm.config.model})
                 logger.info("LLM request for user %s: %s...", user_id, text[:50])
                 response_text, tokens = await self._llm.chat(context)
@@ -528,9 +535,36 @@ class BotService:
                 )
                 await db.commit()
 
-                await get_event_log().push("info", "llm", "llm.response", f"LLM response for user {user_id} ({tokens} tokens)", {"user_id": user_id, "model": model_name, "tokens": tokens})
+                def _normalize_context(ctx):
+                    """Convert context messages to display-safe format."""
+                    import json as _json
+                    result = []
+                    for m in ctx:
+                        content = m.get("content", "")
+                        if not isinstance(content, str):
+                            try:
+                                content = _json.dumps(content, ensure_ascii=False)
+                            except Exception:
+                                content = str(content)
+                        result.append({"role": m.get("role", "?"), "content": content})
+                    return result
+
+                llm_detail = {
+                    "user_id": user_id,
+                    "model": model_name,
+                    "tokens": tokens,
+                    "request": _normalize_context(context),
+                    "response": response_text,
+                }
+                await get_event_log().push("info", "llm", "llm.response", f"LLM response for user {user_id} ({tokens} tokens)", llm_detail)
                 await self._bot.reply(msg, response_text)
-                await get_event_log().push("info", "message", "message.replied", f"Replied to user {user_id} ({tokens} tokens)", {"user_id": user_id, "tokens": tokens})
+                await get_event_log().push("info", "message", "message.replied", f"Replied to user {user_id} ({tokens} tokens)", {
+                    "user_id": user_id,
+                    "tokens": tokens,
+                    "request": _normalize_context(context),
+                    "response": response_text,
+                })
+                await get_ws_service().broadcast("token_stats", self.session_token_stats)
                 await get_ws_service().broadcast("conversations_updated", {"user_id": user_id})
                 logger.info("Replied to user %s (%d tokens)", user_id, tokens)
 

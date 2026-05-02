@@ -33,17 +33,25 @@ async def _get_prompt_settings(db: AsyncSession) -> dict[str, bool]:
     return result
 
 
+async def _get_max_history(db: AsyncSession) -> int:
+    """Get global max_history setting from database."""
+    row = await db.scalar(select(SystemSetting).where(SystemSetting.key == "max_history"))
+    return int(row.value) if row else 20
+
+
 @router.get("", response_model=SettingsResponse)
 async def get_settings(db: AsyncSession = Depends(get_db)):
     """Get current server settings."""
     config = get_config()
     from .. import i18n
     prompt_settings = await _get_prompt_settings(db)
+    max_history = await _get_max_history(db)
     return SettingsResponse(
         server_host=config.server.host,
         server_port=config.server.port,
         listen_lan=config.server.host == "0.0.0.0",
         language=i18n.get_lang(),
+        max_history=max_history,
         disable_base_prompt_on_char=prompt_settings.get("disable_base_prompt_on_char", False),
         disable_base_prompt_on_preset=prompt_settings.get("disable_base_prompt_on_preset", False),
         disable_base_prompt_on_worldbook=prompt_settings.get("disable_base_prompt_on_worldbook", False),
@@ -75,6 +83,14 @@ async def update_settings(data: SettingsUpdate, db: AsyncSession = Depends(get_d
             _s.commit()
         i18n.set_lang(data.language)
 
+    # Save max_history setting
+    if data.max_history is not None:
+        existing = await db.get(SystemSetting, "max_history")
+        if existing:
+            existing.value = str(data.max_history)
+        else:
+            db.add(SystemSetting(key="max_history", value=str(data.max_history), is_encrypted=False))
+
     # Save prompt settings
     for key in PROMPT_SETTINGS_KEYS:
         value = getattr(data, key, None)
@@ -88,11 +104,13 @@ async def update_settings(data: SettingsUpdate, db: AsyncSession = Depends(get_d
 
     from .. import i18n
     prompt_settings = await _get_prompt_settings(db)
+    max_history = await _get_max_history(db)
     response = SettingsResponse(
         server_host=config.server.host,
         server_port=config.server.port,
         listen_lan=config.server.host == "0.0.0.0",
         language=i18n.get_lang(),
+        max_history=max_history,
         disable_base_prompt_on_char=prompt_settings.get("disable_base_prompt_on_char", False),
         disable_base_prompt_on_preset=prompt_settings.get("disable_base_prompt_on_preset", False),
         disable_base_prompt_on_worldbook=prompt_settings.get("disable_base_prompt_on_worldbook", False),

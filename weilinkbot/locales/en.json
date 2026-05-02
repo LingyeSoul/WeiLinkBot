@@ -340,6 +340,11 @@
   "st_presets.export": "Export",
   "st_presets.activate": "Activate",
   "st_presets.deactivate": "Deactivate",
+  "st_presets.view_entries": "View",
+  "st_presets.entries_title": "Preset Entries",
+  "st_presets.entry_depth": "Depth",
+  "st_presets.loading": "Loading...",
+  "st_presets.no_entries": "No entries found",
 
   "world_books.title": "World Books",
   "world_books.add": "Add World Book",
@@ -365,6 +370,7 @@
   "settings.listen_lan": "Listen on LAN",
   "settings.listen_lan_hint": "Allow access from other devices on the network",
   "settings.language": "Language",
+  "settings.max_history": "Max History",
   "settings.restart": "Restart Server",
   "settings.restart_hint": "Port changes require server restart",
   "settings.save": "Save Settings",
@@ -404,5 +410,9 @@
   "events.disconnected": "Disconnected",
   "events.auto_scroll": "Auto Scroll",
   "events.total": "{n} events",
-  "events.empty": "No events yet"
+  "events.empty": "No events yet",
+  "events.expand_detail": "Show Details",
+  "events.collapse_detail": "Hide Details",
+  "events.sent_to_llm": "Content sent to LLM:",
+  "events.llm_response": "LLM response:"
 }

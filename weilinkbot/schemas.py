@@ -413,6 +413,7 @@ class SettingsResponse(BaseModel):
     server_port: int
     listen_lan: bool
     language: str
+    max_history: int = 20
     disable_base_prompt_on_char: bool = False
     disable_base_prompt_on_preset: bool = False
     disable_base_prompt_on_worldbook: bool = False
@@ -423,6 +424,7 @@ class SettingsUpdate(BaseModel):
     server_port: Optional[int] = Field(None, ge=1, le=65535)
     listen_lan: Optional[bool] = None
     language: Optional[str] = None
+    max_history: Optional[int] = Field(None, ge=1, le=200)
     disable_base_prompt_on_char: Optional[bool] = None
     disable_base_prompt_on_preset: Optional[bool] = None
     disable_base_prompt_on_worldbook: Optional[bool] = None

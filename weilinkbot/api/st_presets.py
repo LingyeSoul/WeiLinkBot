@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..database import get_db
 from ..i18n import t
 from ..schemas import STPresetCreate, STPresetUpdate, STPresetResponse, MessageAction
-from ..services.st_preset_service import STPresetService
+from ..services.st_preset_service import STPresetService, parse_st_entries
 from ..services.ws_service import get_ws_service
 
 
@@ -138,6 +138,32 @@ async def deactivate_st_preset(db: AsyncSession = Depends(get_db)):
     await service.deactivate_preset()
     await _broadcast_st_presets(db)
     return MessageAction(message=t("api.preset_deactivated"))
+
+
+@router.get("/{preset_id}/entries")
+async def get_st_preset_entries(preset_id: int, db: AsyncSession = Depends(get_db)):
+    """Get parsed entries for a preset."""
+    service = STPresetService(db)
+    preset = await service.get_preset(preset_id)
+    if not preset:
+        raise HTTPException(status_code=404, detail=t("api.preset_not_found"))
+    return parse_st_entries(preset.raw_json)
+
+
+@router.patch("/{preset_id}/entries/{entry_index}")
+async def toggle_st_preset_entry(
+    preset_id: int,
+    entry_index: int,
+    enabled: bool,
+    db: AsyncSession = Depends(get_db),
+):
+    """Toggle a single entry's enabled state."""
+    service = STPresetService(db)
+    entries = await service.toggle_entry(preset_id, entry_index, enabled)
+    if entries is None:
+        raise HTTPException(status_code=404, detail=t("api.preset_not_found"))
+    await _broadcast_st_presets(db)
+    return entries
 
 
 @router.get("/{preset_id}/export")

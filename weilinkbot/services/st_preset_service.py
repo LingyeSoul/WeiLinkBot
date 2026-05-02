@@ -17,7 +17,7 @@ def parse_st_preset_json(raw_json: str) -> dict:
 
     if isinstance(data, list):
         for entry in data:
-            if isinstance(entry, dict):
+            if isinstance(entry, dict) and entry.get("enabled", True):
                 name = entry.get("name", "").lower()
                 if "system" in name or entry.get("role") == "system":
                     system_prompt = entry.get("content", "")
@@ -27,6 +27,26 @@ def parse_st_preset_json(raw_json: str) -> dict:
         system_prompt = data.get("system_prompt", "")
 
     return {"system_prompt": system_prompt}
+
+
+def parse_st_entries(raw_json: str) -> list[dict]:
+    """Parse raw_json into structured entries for display."""
+    data = json.loads(raw_json)
+    entries = []
+    if isinstance(data, list):
+        for i, entry in enumerate(data):
+            if isinstance(entry, dict):
+                entries.append({
+                    "index": i,
+                    "identifier": entry.get("identifier", ""),
+                    "name": entry.get("name", f"Entry {i}"),
+                    "content": entry.get("content", ""),
+                    "enabled": entry.get("enabled", True),
+                    "role": entry.get("role", ""),
+                    "injection_position": entry.get("injection_position", 0),
+                    "injection_depth": entry.get("injection_depth", 4),
+                })
+    return entries
 
 
 class STPresetService:
@@ -110,6 +130,25 @@ class STPresetService:
             update(STPreset).where(STPreset.is_active == True).values(is_active=False)
         )
         await self._db.flush()
+
+    async def toggle_entry(self, preset_id: int, entry_index: int, enabled: bool) -> list[dict] | None:
+        """Toggle an entry's enabled state, update raw_json and re-parse system prompt."""
+        preset = await self.get_preset(preset_id)
+        if not preset:
+            return None
+        try:
+            data = json.loads(preset.raw_json)
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(data, list) or entry_index < 0 or entry_index >= len(data):
+            return None
+        data[entry_index]["enabled"] = enabled
+        updated_json = json.dumps(data, ensure_ascii=False, indent=2)
+        preset.raw_json = updated_json
+        parsed = parse_st_preset_json(updated_json)
+        preset.system_prompt = parsed["system_prompt"]
+        await self._db.flush()
+        return parse_st_entries(updated_json)
 
     async def _set_default_system_prompt(self, name: str, content: str) -> None:
         await self._db.execute(

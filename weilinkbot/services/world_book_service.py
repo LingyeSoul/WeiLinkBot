@@ -139,39 +139,56 @@ class WorldBookService:
         await self._db.flush()
 
     async def match_entries(self, text: str) -> list[WorldBookEntry]:
+        import logging
+        logger = logging.getLogger(__name__)
+
         world_book = await self.get_active_world_book()
         if not world_book:
+            logger.debug("[WorldBook] No active world book found")
             return []
+
+        logger.debug("[WorldBook] Matching against '%s' (active book: '%s', %d entries)", text[:50], world_book.name, len(world_book.entries))
+
         all_entries: list[WorldBookEntry] = []
         constant_entries: list[WorldBookEntry] = []
         for entry in world_book.entries:
             if not entry.enabled:
+                logger.debug("[WorldBook] Skipping disabled entry: %s", entry.comment or entry.key_primary[:30])
                 continue
             if entry.constant:
                 constant_entries.append(entry)
             else:
                 all_entries.append(entry)
+
         matched: list[WorldBookEntry] = []
         text_lower = text.lower()
         for entry in all_entries:
-            keywords = [k.strip() for k in entry.key_primary.split(",")]
+            keywords = [k.strip() for k in entry.key_primary.split(",") if k.strip()]
+            if not keywords:
+                logger.debug("[WorldBook] Skipping entry with no keywords: %s", entry.comment or "(no comment)")
+                continue
             if entry.case_sensitive:
                 keywords_lower = keywords
                 search_text = text
             else:
                 keywords_lower = [k.lower() for k in keywords]
                 search_text = text_lower
-            if not any(kw for kw in keywords_lower if kw in search_text):
+            hit_kw = next((kw for kw in keywords_lower if kw in search_text), None)
+            if not hit_kw:
+                logger.debug("[WorldBook] No match for entry '%s' — keywords: %s", entry.comment or entry.key_primary[:30], keywords_lower)
                 continue
             if entry.selective and entry.key_secondary:
-                sec_keywords = [k.strip() for k in entry.key_secondary.split(",")]
+                sec_keywords = [k.strip() for k in entry.key_secondary.split(",") if k.strip()]
                 if entry.case_sensitive:
                     sec_search = text
                 else:
                     sec_search = text_lower
                 if not any(sk for sk in sec_keywords if sk in sec_search):
+                    logger.debug("[WorldBook] Selective entry '%s' skipped — secondary keywords not found", entry.comment or entry.key_primary[:30])
                     continue
+            logger.info("[WorldBook] MATCHED entry '%s' via keyword '%s'", entry.comment or entry.key_primary[:30], hit_kw)
             matched.append(entry)
         matched.sort(key=lambda e: e.insertion_order)
         matched = constant_entries + matched
+        logger.info("[WorldBook] Total matched entries: %d (constant=%d, keyword=%d)", len(matched), len(constant_entries), len(matched) - len(constant_entries))
         return matched

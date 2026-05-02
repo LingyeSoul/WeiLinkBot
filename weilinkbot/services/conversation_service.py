@@ -143,6 +143,14 @@ class ConversationService:
         )
         return row.value.lower() == "true" if row else False
 
+    async def _get_global_max_history(self) -> int:
+        """Get global max_history setting from SystemSetting table."""
+        from ..models import SystemSetting
+        row = await self._db.scalar(
+            select(SystemSetting).where(SystemSetting.key == "max_history")
+        )
+        return int(row.value) if row else DEFAULT_MAX_HISTORY
+
     async def build_context(
         self,
         user_id: str,
@@ -157,7 +165,9 @@ class ConversationService:
         from .character_service import assemble_st_prompt
 
         user_config = await self._get_user_config(user_id)
-        max_history = user_config.max_history if user_config else DEFAULT_MAX_HISTORY
+        max_history = await self._get_global_max_history()
+        if user_config and user_config.max_history:
+            max_history = user_config.max_history
 
         # Check for active character card, preset, and world book
         active_char = await self._db.scalar(

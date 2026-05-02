@@ -83,9 +83,31 @@ function dashboard() {
         // Events
         events: [],
         eventFilter: 'all',
+        expandedEvents: new Set(),
         wsConnected: false,
         autoScroll: true,
         ws: null,
+
+        toggleEventDetail(id) {
+            if (this.expandedEvents.has(id)) {
+                this.expandedEvents.delete(id);
+            } else {
+                this.expandedEvents.add(id);
+            }
+        },
+        isEventExpanded(id) {
+            return this.expandedEvents.has(id);
+        },
+        isLlmEvent(evt) {
+            return ['llm.request', 'llm.response', 'message.replied'].includes(evt.event);
+        },
+        formatMessages(msgs) {
+            if (!Array.isArray(msgs)) return [];
+            return msgs.map(m => ({
+                role: m.role || 'unknown',
+                content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content, null, 2)
+            }));
+        },
 
         // ── Tabs getter (re-evaluates on language change) ────────
         get tabs() {
