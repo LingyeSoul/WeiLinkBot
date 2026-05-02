@@ -256,6 +256,15 @@ class WsService:
             except Exception:
                 logger.exception("Failed to send initial events")
 
+        # Memory stats
+        try:
+            from ..services.bot_service import BotService
+            stats = await BotService._collect_memory_stats()
+            if stats:
+                await _safe_send("memory_stats", stats)
+        except Exception:
+            logger.exception("Failed to send initial memory stats")
+
         except Exception:
             logger.exception("Failed to open DB session for initial state")
 

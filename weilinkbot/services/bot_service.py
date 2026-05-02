@@ -570,7 +570,7 @@ class BotService:
 
                 # Memory: extract and store memories (async, non-blocking)
                 if self._memory and self._memory.available:
-                    asyncio.create_task(self._memory.add(user_id, text, response_text))
+                    asyncio.create_task(self._add_memory_and_broadcast(user_id, text, response_text))
 
             except Exception as e:
                 logger.exception("Error handling message from %s: %s", user_id, e)
@@ -579,6 +579,59 @@ class BotService:
                     await self._bot.reply(msg, t("bot.error.process"))
                 except Exception:
                     pass
+
+    # ── Memory broadcast ────────────────────────────────────────
+
+    async def _add_memory_and_broadcast(self, user_id: str, text: str, response_text: str) -> None:
+        """Store memory then broadcast updated stats via WebSocket."""
+        try:
+            await self._memory.add(user_id, text, response_text)
+            stats = await self._collect_memory_stats()
+            if stats:
+                await get_ws_service().broadcast("memory_stats", stats)
+        except Exception:
+            logger.debug("Memory add/broadcast failed for user %s", user_id, exc_info=True)
+
+    @staticmethod
+    async def _collect_memory_stats() -> dict | None:
+        """Gather memory status + user counts for WebSocket broadcast."""
+        from ..api.deps import get_memory_service
+        from ..database import get_session_factory
+        from ..models import Conversation
+        from sqlalchemy import select
+
+        mem = get_memory_service()
+        if mem is None or not mem.available:
+            return None
+
+        stats: dict = {"available": True, "users": [], "vector_count": 0}
+        collection = getattr(mem, "_local_collection", None)
+        if collection is not None:
+            try:
+                stats["vector_count"] = await asyncio.to_thread(collection.count)
+            except Exception:
+                pass
+
+        try:
+            session_factory = get_session_factory()
+            async with session_factory() as db:
+                result = await db.execute(select(Conversation.user_id).distinct())
+                user_ids = [row[0] for row in result.fetchall()]
+
+            users: list[dict] = []
+            for uid in user_ids:
+                try:
+                    memories = await mem.get_all(uid)
+                    count = len(memories) if memories else 0
+                    if count > 0:
+                        users.append({"user_id": uid, "count": count})
+                except Exception:
+                    pass
+            stats["users"] = users
+        except Exception:
+            logger.debug("Failed to collect memory user stats", exc_info=True)
+
+        return stats
 
     # ── Command Router ───────────────────────────────────────────
 

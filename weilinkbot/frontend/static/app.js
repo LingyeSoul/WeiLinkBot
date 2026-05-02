@@ -898,6 +898,14 @@ function dashboard() {
                     this.events = msg.data;
                     break;
 
+                case "token_stats":
+                    this.sessionTokenStats = msg.data;
+                    break;
+
+                case "memory_stats":
+                    document.dispatchEvent(new CustomEvent("memory-stats-updated", { detail: msg.data }));
+                    break;
+
                 default:
                     console.warn("[WS] Unknown message type:", msg.type, msg);
                     break;
@@ -963,6 +971,16 @@ function memoriesPanel() {
             if (this.status.available) {
                 await this.loadUsers();
             }
+            document.addEventListener("memory-stats-updated", (e) => {
+                const data = e.detail;
+                if (data.users) {
+                    this.users = data.users;
+                    this.totalMemories = data.users.reduce((sum, u) => sum + u.count, 0);
+                }
+                if (data.vector_count != null) {
+                    this.status.vector_count = data.vector_count;
+                }
+            });
         },
 
         async loadConfig() {
