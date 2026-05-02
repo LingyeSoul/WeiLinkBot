@@ -9,6 +9,7 @@ from ..database import get_db
 from ..schemas import UserConfigResponse, UserConfigUpdate, MessageAction
 from ..services.conversation_service import ConversationService
 from ..services.ws_service import get_ws_service
+from ..i18n import t
 
 router = APIRouter()
 
@@ -49,13 +50,25 @@ async def update_user(
     data: UserConfigUpdate,
     service: ConversationService = Depends(_get_service),
 ):
-    """Update user configuration (block/unblock, custom prompt, etc.)."""
+    """Update user configuration (custom prompt, max history, etc.)."""
     config = await service.update_user_config(
         user_id,
         nickname=data.nickname,
-        is_blocked=data.is_blocked,
         custom_prompt_id=data.custom_prompt_id,
         max_history=data.max_history,
     )
     await _broadcast_users(service)
     return config
+
+
+@router.delete("/{user_id}", response_model=MessageAction)
+async def delete_user(
+    user_id: str,
+    service: ConversationService = Depends(_get_service),
+):
+    """Delete user and all associated data (config + conversation + messages)."""
+    deleted = await service.delete_user(user_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=t("api.user_not_found"))
+    await _broadcast_users(service)
+    return MessageAction(message=t("api.user_deleted"))

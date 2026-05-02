@@ -455,11 +455,6 @@ class BotService:
         async with session_factory() as db:
             conv_service = ConversationService(db)
             try:
-                if await conv_service.is_blocked(user_id):
-                    await get_event_log().push("info", "message", "message.blocked", f"Blocked user {user_id} — ignoring", {"user_id": user_id})
-                    logger.info("Blocked user %s — ignoring", user_id)
-                    return
-
                 # Auto-create UserConfig for new WeChat users
                 await conv_service.get_or_create_user_config(user_id)
 

@@ -294,11 +294,6 @@ class ConversationService:
         result = await self._db.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def is_blocked(self, user_id: str) -> bool:
-        """Check if a user is blocked."""
-        config = await self._get_user_config(user_id)
-        return config.is_blocked if config else False
-
     async def get_or_create_user_config(self, user_id: str) -> UserConfig:
         """Get or create user config."""
         config = await self._get_user_config(user_id)
@@ -317,21 +312,40 @@ class ConversationService:
         self,
         user_id: str,
         nickname: Optional[str] = None,
-        is_blocked: Optional[bool] = None,
         custom_prompt_id: Optional[int] = None,
         max_history: Optional[int] = None,
     ) -> UserConfig:
         config = await self.get_or_create_user_config(user_id)
         if nickname is not None:
             config.nickname = nickname
-        if is_blocked is not None:
-            config.is_blocked = is_blocked
         if custom_prompt_id is not None:
             config.custom_prompt_id = custom_prompt_id if custom_prompt_id > 0 else None
         if max_history is not None:
             config.max_history = max_history
         await self._db.flush()
         return config
+
+    async def delete_user(self, user_id: str) -> bool:
+        """Delete a user's config, conversation, and all messages.
+
+        Returns True if the user existed and was deleted, False if not found.
+        """
+        # Delete conversation + messages (cascade)
+        conv_stmt = select(Conversation).where(Conversation.user_id == user_id)
+        conv_result = await self._db.execute(conv_stmt)
+        conv = conv_result.scalar_one_or_none()
+        if conv:
+            await self._db.delete(conv)
+
+        # Delete user config
+        config = await self._get_user_config(user_id)
+        if config:
+            await self._db.delete(config)
+            await self._db.flush()
+            return True
+
+        await self._db.flush()
+        return conv is not None
 
     # ── Token Statistics ──────────────────────────────────────────
 

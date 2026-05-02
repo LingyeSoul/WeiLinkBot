@@ -75,7 +75,6 @@ class ConversationDetailResponse(BaseModel):
 class UserConfigResponse(BaseModel):
     user_id: str
     nickname: Optional[str] = None
-    is_blocked: bool = False
     custom_prompt_id: Optional[int] = None
     max_history: int = 20
     created_at: datetime
@@ -85,7 +84,6 @@ class UserConfigResponse(BaseModel):
 
 class UserConfigUpdate(BaseModel):
     nickname: Optional[str] = None
-    is_blocked: Optional[bool] = None
     custom_prompt_id: Optional[int] = None
     max_history: Optional[int] = Field(None, ge=1, le=100)
 
