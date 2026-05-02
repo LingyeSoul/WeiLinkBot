@@ -167,6 +167,7 @@ class ConversationService:
         from ..config import get_config
         from ..models import CharacterCard, STPreset, SystemSetting
         from .character_service import assemble_st_prompt
+        from .st_preset_service import parse_st_entries, expand_macros
 
         user_config = await self._get_user_config(user_id)
         max_history = await self._get_global_max_history()
@@ -207,12 +208,48 @@ class ConversationService:
         if active_char:
             system_parts.append(assemble_st_prompt(active_char))
 
-        # Add active ST preset system prompt
-        if active_preset:
-            if active_preset.system_prompt:
-                system_parts.append(active_preset.system_prompt)
+        # Add active ST preset entries (multi-role with macro expansion)
+        st_before_messages: list[dict[str, str]] = []   # role messages to inject before history
+        st_after_messages: list[dict[str, str]] = []    # role messages to inject after history
+        if active_preset and active_preset.raw_json:
+            char_name = active_char.name if active_char else "Assistant"
+            macro_ctx = {"user_name": user_id, "char_name": char_name}
+            try:
+                all_entries = parse_st_entries(active_preset.raw_json)
+            except Exception:
+                all_entries = []
+            for entry in all_entries:
+                if not entry.get("enabled", True):
+                    continue
+                role = entry.get("role", "system")
+                content = expand_macros(entry.get("content", ""), macro_ctx).strip()
+                if not content:
+                    continue
+                injection_pos = entry.get("injection_position", 0)
+                if role == "system":
+                    system_parts.append(content)
+                elif injection_pos == 0:
+                    st_before_messages.append({"role": role, "content": content})
+                else:
+                    st_after_messages.append({
+                        "role": role,
+                        "content": content,
+                        "_depth": entry.get("injection_depth", 4),
+                    })
 
 
+
+        # Inject skills into system prompt
+        from ..config import get_config as _get_cfg
+        _cfg = _get_cfg()
+        if _cfg.agent.enabled_skills:
+            from ..api.deps import get_skill_service as _gss
+            try:
+                _skill_prompt = _gss().build_prompt(_cfg.agent.enabled_skills)
+            except RuntimeError:
+                _skill_prompt = ""
+            if _skill_prompt:
+                system_parts.insert(0, _skill_prompt)
 
         system_content = "\n\n".join(system_parts) if system_parts else DEFAULT_SYSTEM_PROMPT
 
@@ -280,10 +317,22 @@ class ConversationService:
             {"role": "system", "content": system_content}
         ]
 
+        # Inject ST preset user/assistant entries before conversation history
+        for st_msg in st_before_messages:
+            context.append({"role": st_msg["role"], "content": st_msg["content"]})
+
         for msg in messages:
             if msg.role == "preprocess":
                 continue
             context.append({"role": msg.role, "content": msg.content})
+
+        # Inject ST preset after-history entries (depth-based from end)
+        if st_after_messages:
+            # Sort by depth descending so deeper injections come later
+            for st_msg in sorted(st_after_messages, key=lambda m: m.get("_depth", 4)):
+                depth = st_msg.get("_depth", 4)
+                insert_at = max(1, len(context) - depth)
+                context.insert(insert_at, {"role": st_msg["role"], "content": st_msg["content"]})
 
         return context
 
