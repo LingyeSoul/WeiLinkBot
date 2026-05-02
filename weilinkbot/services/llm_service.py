@@ -59,38 +59,61 @@ class LLMService:
         *,
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
-    ) -> tuple[str, int]:
+        tools: Optional[list[dict]] = None,
+    ) -> tuple[str, int, Optional[list[dict]]]:
         """Send a chat completion request.
 
         Args:
             messages: OpenAI-format message list [{"role": ..., "content": ...}]
             temperature: Override default temperature
             max_tokens: Override default max_tokens
+            tools: Optional OpenAI function-calling tool definitions
 
         Returns:
-            (response_text, total_tokens)
+            (response_text, total_tokens, tool_calls)
+            tool_calls is None when no tool call was requested by the LLM.
 
         Raises:
             RuntimeError: After all retries exhausted
         """
         if not self._config.api_key:
-            return t("llm.error.no_key"), 0
+            return t("llm.error.no_key"), 0, None
 
-        kwargs = {
+        kwargs: dict = {
             "model": self._config.model,
             "messages": messages,
             "temperature": temperature if temperature is not None else self._config.temperature,
             "max_tokens": max_tokens or self._config.max_tokens,
         }
+        if tools:
+            kwargs["tools"] = tools
 
         last_error = None
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 response = await self._client.chat.completions.create(**kwargs)
-                text = response.choices[0].message.content or ""
+                msg = response.choices[0].message
+                text = msg.content or ""
                 tokens = response.usage.total_tokens if response.usage else 0
-                logger.debug("LLM response: %d chars, %d tokens", len(text), tokens)
-                return text, tokens
+
+                # Extract tool calls if present
+                tool_calls = None
+                if msg.tool_calls:
+                    tool_calls = [
+                        {
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {
+                                "name": tc.function.name,
+                                "arguments": tc.function.arguments,
+                            },
+                        }
+                        for tc in msg.tool_calls
+                    ]
+
+                logger.debug("LLM response: %d chars, %d tokens, tool_calls=%s",
+                             len(text), tokens, bool(tool_calls))
+                return text, tokens, tool_calls
 
             except (APIConnectionError, APITimeoutError) as e:
                 last_error = e
@@ -106,10 +129,10 @@ class LLMService:
 
             except Exception as e:
                 logger.error("LLM unexpected error: %s", e)
-                return t("llm.error.request_failed", e=e), 0
+                return t("llm.error.request_failed", e=e), 0, None
 
         logger.error("LLM failed after %d retries: %s", MAX_RETRIES, last_error)
-        return t("llm.error.unavailable", retries=MAX_RETRIES), 0
+        return t("llm.error.unavailable", retries=MAX_RETRIES), 0, None
 
     @staticmethod
     async def chat_with_config(

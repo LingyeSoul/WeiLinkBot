@@ -12,6 +12,7 @@
   "tab.providers": "Providers",
   "tab.st_presets": "ST Presets",
   "tab.world_books": "World Books",
+  "tab.agent": "Agent",
   "tab.settings": "Settings",
   "tab.about": "About",
 
@@ -72,6 +73,7 @@
   "models.add": "+ Add Model",
   "models.display_name": "Display Name",
   "models.provider": "Provider",
+  "models.select_provider": "Select a provider",
   "models.model_id": "Model ID",
   "models.base_url": "Base URL",
   "models.api_key": "API Key",
@@ -173,8 +175,9 @@
   "confirm.delete_char": "Delete this character card?",
 
   "validate.name_content_required": "Name and content are required",
-  "validate.name_model_url_required": "Name, model, and base URL are required",
+  "validate.name_model_url_required": "Name and model are required",
   "validate.api_key_required": "API key is required for new models",
+  "validate.provider_required": "Please select a provider",
   "validate.name_required": "Name is required",
 
   "lang.toggle": "EN",
@@ -281,6 +284,8 @@
   "api.prompt_not_found": "Prompt not found",
   "api.preset_exists": "Preset name already exists",
   "api.preset_not_found": "Preset not found",
+  "api.provider_not_found": "Provider not found",
+  "api.provider_disabled": "Provider is disabled",
   "api.cannot_delete_active": "Cannot delete the active preset. Switch to another first.",
   "api.conv_not_found": "Conversation not found",
   "api.bot_start_initiated": "Bot start initiated",
@@ -315,8 +320,24 @@
   "memory.detail.cleared": "All memories cleared for this user.",
   "memory.error.not_available": "Memory module is not available. Please configure an embedding model first.",
   "memory.context_header": "[The following are memories about this user, for reference]",
+  "memory.category.user_preferences": "User Preferences",
+  "memory.category.personality": "Personality",
+  "memory.category.emotional": "Emotional Context",
+  "memory.category.general": "General Facts",
   "memory.config.saved": "Memory config saved.",
   "memory.config.model_required": "Embedding model is required.",
+
+  "agent.title": "Agent Tool Configuration",
+  "agent.max_rounds": "Max Tool Rounds",
+  "agent.max_rounds_hint": "Maximum consecutive tool call rounds per conversation turn",
+  "agent.enabled_tools": "Enabled Tools",
+  "agent.no_tools": "No tools available",
+  "agent.tool_desc.get_current_time": "Get current date and time with timezone support",
+  "agent.tool_desc.calculate": "Safe mathematical expression evaluation",
+  "agent.save": "Save Configuration",
+
+  "models.supports_tools": "Tool Calling",
+  "models.supports_tools_hint": "Enable native function calling",
 
   "providers.title": "Provider Management",
   "providers.add": "Add Provider",
@@ -400,6 +421,7 @@
   "toast.world_book_deleted": "World book deleted",
   "toast.world_book_imported": "World book imported",
   "toast.world_book_exported": "World book exported",
+  "toast.agent_saved": "Agent config saved",
   "toast.settings_saved": "Settings saved",
   "toast.restarting": "Server restarting...",
 

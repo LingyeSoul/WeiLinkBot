@@ -91,11 +91,12 @@ class BotService:
     """Manages WeChatBot lifecycle and message processing pipeline."""
 
     def __init__(
-        self, config: AppConfig, llm_service: LLMService, memory_service=None
+        self, config: AppConfig, llm_service: LLMService, memory_service=None, agent_service=None
     ) -> None:
         self._config = config
         self._llm = llm_service
         self._memory = memory_service
+        self._agent = agent_service
         self._state = BotState.STOPPED
         self._task: Optional[asyncio.Task] = None
         self._error: Optional[str] = None
@@ -116,6 +117,8 @@ class BotService:
         self._preprocess_voice_asr_language: Optional[str] = None
         # Main model credentials — fallback when a preprocess model has no api_key
         self._main_llm_fallback: Optional[LLMConfig] = None
+        # Whether the active model supports native function calling
+        self._supports_tools: bool = True
 
     @property
     def state(self) -> BotState:
@@ -268,6 +271,7 @@ class BotService:
                     return
                 self._preprocess_voice = preset.preprocess_voice
                 self._preprocess_image = preset.preprocess_image
+                self._supports_tools = getattr(preset, "supports_tools", True)
 
                 # Voice preprocessing model
                 if preset.preprocess_voice_model_id:
@@ -522,7 +526,11 @@ class BotService:
 
                 await get_event_log().push("info", "llm", "llm.request", f"LLM request for user {user_id}: {text[:50]}...", {"user_id": user_id, "model": self._llm.config.model})
                 logger.info("LLM request for user %s: %s...", user_id, text[:50])
-                response_text, tokens = await self._llm.chat(context)
+
+                if self._agent:
+                    response_text, tokens = await self._agent.run(context, supports_tools=self._supports_tools)
+                else:
+                    response_text, tokens, _tc = await self._llm.chat(context)
 
                 # Track session token usage
                 model_name = self._llm.config.model

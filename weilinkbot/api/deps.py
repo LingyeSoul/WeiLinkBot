@@ -14,6 +14,7 @@ from ..services.conversation_service import ConversationService
 _llm_service: LLMService | None = None
 _bot_service = None  # Avoid circular import with BotService
 _memory_service = None  # Avoid circular import with MemoryService
+_agent_service = None
 
 
 def get_llm_service() -> LLMService:
@@ -46,6 +47,16 @@ def get_memory_service():
 def set_memory_service(service) -> None:
     global _memory_service
     _memory_service = service
+
+
+def get_agent_service():
+    """Get the AgentService singleton. Returns None if not initialized."""
+    return _agent_service
+
+
+def set_agent_service(service) -> None:
+    global _agent_service
+    _agent_service = service
 
 
 async def get_conversation_service(

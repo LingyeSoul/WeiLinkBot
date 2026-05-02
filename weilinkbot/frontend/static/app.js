@@ -38,7 +38,7 @@ function dashboard() {
         // Models
         models: [],
         showModelForm: false,
-        modelForm: { id: null, name: "", provider: "openai", api_key: "", base_url: "", model: "", max_tokens: 2048, temperature: 0.7, is_active: false, capability_text: true, capability_audio: false, capability_image: false, preprocess_voice_model_id: null, preprocess_image_model_id: null, preprocess_voice: false, preprocess_image: false, voice_method: "llm", asr_language: null, provider_id: null },
+        modelForm: { id: null, name: "", provider_id: null, model: "", max_tokens: 2048, temperature: 0.7, is_active: false, capability_text: true, capability_audio: false, capability_image: false, supports_tools: true, preprocess_voice_model_id: null, preprocess_image_model_id: null, preprocess_voice: false, preprocess_image: false, voice_method: "llm", asr_language: null },
 
         // Users
         users: [],
@@ -57,6 +57,10 @@ function dashboard() {
         stPresets: [],
         showSTPresetForm: false,
         stPresetForm: { id: null, name: "", raw_json: "", system_prompt: "" },
+        showSTPresetEntriesModal: false,
+        stPresetEntriesPresetId: null,
+        stPresetEntriesPresetName: "",
+        stPresetEntries: [],
 
         // World Books
         worldBooks: [],
@@ -68,6 +72,10 @@ function dashboard() {
         // Settings
         settingsForm: { server_host: "0.0.0.0", server_port: 5292, listen_lan: true, language: "zh-CN", disable_base_prompt_on_char: false, disable_base_prompt_on_preset: false, disable_base_prompt_on_worldbook: false },
         settingsLoaded: false,
+
+        // Agent Config
+        agentConfig: { max_tool_rounds: 5, enabled_tools: [], available_tools: [] },
+        agentConfigLoaded: false,
 
         // Token Stats
         tokenStats: { models: [], total_tokens: 0, total_requests: 0 },       // all-time (from API)
@@ -123,6 +131,7 @@ function dashboard() {
                 { id: "st-presets", label: t("tab.st_presets") },
                 { id: "world-books", label: t("tab.world_books") },
                 { id: "memories", label: t("memory.title") },
+                { id: "agent", label: t("tab.agent") },
                 { id: "settings", label: t("tab.settings") },
                 { id: "about", label: t("tab.about") },
             ];
@@ -171,6 +180,7 @@ function dashboard() {
                 this.refreshSTPresets(),
                 this.refreshWorldBooks(),
                 this.refreshSettings(),
+                this.refreshAgentConfig(),
                 this.refreshTokenStats(),
                 this.refreshVersion(),
             ]);
@@ -386,24 +396,14 @@ function dashboard() {
         },
 
         resetModelForm() {
-            this.modelForm = { id: null, name: "", provider: "openai", api_key: "", base_url: "https://api.openai.com/v1", model: "gpt-4o-mini", max_tokens: 2048, temperature: 0.7, is_active: false, capability_text: true, capability_audio: false, capability_image: false, preprocess_voice_model_id: null, preprocess_image_model_id: null, preprocess_voice: false, preprocess_image: false, voice_method: "llm", asr_language: null, provider_id: null };
-        },
-
-        onModelProviderChange() {
-            const preset = PRESETS[this.modelForm.provider];
-            if (preset) {
-                this.modelForm.base_url = preset.base_url;
-                this.modelForm.model = preset.model;
-            }
+            this.modelForm = { id: null, name: "", provider_id: null, model: "gpt-4o-mini", max_tokens: 2048, temperature: 0.7, is_active: false, capability_text: true, capability_audio: false, capability_image: false, supports_tools: true, preprocess_voice_model_id: null, preprocess_image_model_id: null, preprocess_voice: false, preprocess_image: false, voice_method: "llm", asr_language: null };
         },
 
         editModel(m) {
             this.modelForm = {
                 id: m.id,
                 name: m.name,
-                provider: m.provider,
-                api_key: "",  // Never pre-fill
-                base_url: m.base_url,
+                provider_id: m.provider_id || null,
                 model: m.model,
                 max_tokens: m.max_tokens,
                 temperature: m.temperature,
@@ -411,33 +411,30 @@ function dashboard() {
                 capability_text: m.capability_text,
                 capability_audio: m.capability_audio,
                 capability_image: m.capability_image,
+                supports_tools: m.supports_tools !== false,
                 preprocess_voice_model_id: m.preprocess_voice_model_id,
                 preprocess_image_model_id: m.preprocess_image_model_id,
                 preprocess_voice: m.preprocess_voice,
                 preprocess_image: m.preprocess_image,
                 voice_method: m.voice_method || "llm",
                 asr_language: m.asr_language,
-                provider_id: m.provider_id || null,
             };
             this.showModelForm = true;
         },
 
         async saveModel() {
             const form = this.modelForm;
-            if (!form.name || !form.model || !form.base_url) {
+            if (!form.name || !form.model) {
                 this.showToast(t("validate.name_model_url_required"), "error");
                 return;
             }
-            // For new models, API key is required
-            if (!form.id && !form.api_key) {
-                this.showToast(t("validate.api_key_required"), "error");
+            if (!form.provider_id) {
+                this.showToast(t("validate.provider_required"), "error");
                 return;
             }
 
             const body = {
                 name: form.name,
-                provider: form.provider,
-                base_url: form.base_url,
                 model: form.model,
                 max_tokens: form.max_tokens,
                 temperature: form.temperature,
@@ -445,15 +442,15 @@ function dashboard() {
                 capability_text: form.capability_text,
                 capability_audio: form.capability_audio,
                 capability_image: form.capability_image,
+                supports_tools: form.supports_tools,
                 preprocess_voice_model_id: form.preprocess_voice_model_id || null,
                 preprocess_image_model_id: form.preprocess_image_model_id || null,
                 preprocess_voice: form.preprocess_voice,
                 preprocess_image: form.preprocess_image,
                 voice_method: form.voice_method || "llm",
                 asr_language: form.asr_language || null,
-                provider_id: form.provider_id || null,
+                provider_id: form.provider_id,
             };
-            if (form.api_key) body.api_key = form.api_key;
 
             if (form.id) {
                 await this.api(`/api/models/${form.id}`, { method: "PUT", body: JSON.stringify(body) });
@@ -691,6 +688,27 @@ function dashboard() {
                 URL.revokeObjectURL(url); this.showToast(t("toast.st_preset_exported"), "success");
             } catch (e) { this.showToast(e.message, "error"); }
         },
+        async viewSTPresetEntries(preset) {
+            this.stPresetEntriesPresetId = preset.id;
+            this.stPresetEntriesPresetName = preset.name;
+            this.stPresetEntries = [];
+            this.showSTPresetEntriesModal = true;
+            try { this.stPresetEntries = await this.api(`/api/st-presets/${preset.id}/entries`); }
+            catch { this.stPresetEntries = []; }
+        },
+        closeSTPresetEntriesModal() {
+            this.showSTPresetEntriesModal = false;
+            this.stPresetEntriesPresetId = null;
+            this.stPresetEntriesPresetName = "";
+            this.stPresetEntries = [];
+        },
+        async toggleSTPresetEntry(presetId, entryIndex, currentEnabled) {
+            try {
+                const data = await this.api(`/api/st-presets/${presetId}/entries/${entryIndex}?enabled=${!currentEnabled}`, { method: "PATCH" });
+                this.stPresetEntries = data;
+                await this.refreshSTPresets();
+            } catch (e) { this.showToast(e.message, "error"); }
+        },
 
         // ── World Books ──────────────────────────────────────────────
         async refreshWorldBooks() { try { this.worldBooks = await this.api("/api/world-books"); } catch { this.worldBooks = []; } },
@@ -766,6 +784,35 @@ function dashboard() {
             this.showToast(t("toast.restarting"), "info");
             try { await this.api("/api/settings/restart-server", { method: "POST" }); } catch { /* expected to fail during restart */ }
             setTimeout(() => location.reload(), 3000);
+        },
+
+        // ── Agent Config ──────────────────────────────────────────
+        async refreshAgentConfig() {
+            try {
+                const data = await this.api("/api/agent/config");
+                this.agentConfig = data;
+                this.agentConfigLoaded = true;
+            } catch { /* ignore */ }
+        },
+        async saveAgentConfig() {
+            await this.api("/api/agent/config", {
+                method: "PUT",
+                body: JSON.stringify({
+                    max_tool_rounds: this.agentConfig.max_tool_rounds,
+                    enabled_tools: this.agentConfig.enabled_tools,
+                }),
+            });
+            this.showToast(t("toast.agent_saved"), "success");
+            await this.refreshAgentConfig();
+        },
+        toggleAgentTool(toolName) {
+            const tools = this.agentConfig.enabled_tools;
+            const idx = tools.indexOf(toolName);
+            if (idx >= 0) {
+                tools.splice(idx, 1);
+            } else {
+                tools.push(toolName);
+            }
         },
 
         connectWs() {

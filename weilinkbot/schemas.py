@@ -137,6 +137,7 @@ class LLMPresetCreate(BaseModel):
     capability_text: bool = True
     capability_audio: bool = False
     capability_image: bool = False
+    supports_tools: bool = True
     preprocess_voice_model_id: Optional[int] = None
     preprocess_image_model_id: Optional[int] = None
     preprocess_voice: bool = False
@@ -156,6 +157,7 @@ class LLMPresetUpdate(BaseModel):
     capability_text: Optional[bool] = None
     capability_audio: Optional[bool] = None
     capability_image: Optional[bool] = None
+    supports_tools: Optional[bool] = None
     preprocess_voice_model_id: Optional[int] = None
     preprocess_image_model_id: Optional[int] = None
     preprocess_voice: Optional[bool] = None
@@ -177,6 +179,7 @@ class LLMPresetResponse(BaseModel):
     capability_text: bool = True
     capability_audio: bool = False
     capability_image: bool = False
+    supports_tools: bool = True
     preprocess_voice_model_id: Optional[int] = None
     preprocess_image_model_id: Optional[int] = None
     preprocess_voice: bool = False
@@ -426,6 +429,19 @@ class SettingsUpdate(BaseModel):
     disable_base_prompt_on_char: Optional[bool] = None
     disable_base_prompt_on_preset: Optional[bool] = None
     disable_base_prompt_on_worldbook: Optional[bool] = None
+
+
+# ── Agent Config ─────────────────────────────────────────────
+
+class AgentConfigResponse(BaseModel):
+    max_tool_rounds: int
+    enabled_tools: list[str]
+    available_tools: list[str]
+
+
+class AgentConfigUpdate(BaseModel):
+    max_tool_rounds: Optional[int] = Field(None, ge=1, le=20)
+    enabled_tools: Optional[list[str]] = None
 
 
 # ── Generic ─────────────────────────────────────────────────────

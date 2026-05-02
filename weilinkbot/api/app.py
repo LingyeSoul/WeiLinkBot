@@ -15,7 +15,7 @@ from ..database import init_db, get_session_factory
 from ..models import SystemPrompt, LLMPreset, Provider, encrypt_provider_api_key, resolve_provider_credentials
 from ..services.llm_service import LLMService
 from ..services.bot_service import BotService
-from .deps import set_llm_service, set_bot_service, set_memory_service
+from .deps import set_llm_service, set_bot_service, set_memory_service, set_agent_service
 
 from . import bot as bot_routes
 from . import conversations as conv_routes
@@ -151,8 +151,17 @@ async def lifespan(app: FastAPI):
     set_memory_service(memory_service)
     logger.info("Memory service initialized (available=%s)", memory_service.available)
 
+    # Init Agent service (tools)
+    from ..services.tools import init_default_tools, get_registry
+    from ..services.agent_service import AgentService
+    init_default_tools()
+    agent_service = AgentService(llm_service, get_registry(), config.agent)
+    set_agent_service(agent_service)
+    logger.info("Agent service initialized (tools=%s, max_rounds=%d)",
+                config.agent.enabled_tools, config.agent.max_tool_rounds)
+
     # Init Bot service
-    bot_service = BotService(config, llm_service, memory_service=memory_service)
+    bot_service = BotService(config, llm_service, memory_service=memory_service, agent_service=agent_service)
     set_bot_service(bot_service)
     logger.info("Bot service initialized")
 
@@ -221,6 +230,9 @@ def create_app() -> FastAPI:
 
     from . import events as event_routes
     app.include_router(event_routes.router, tags=["Events"])
+
+    from . import agent as agent_routes
+    app.include_router(agent_routes.router, prefix="/api/agent", tags=["Agent"])
 
     # Version endpoint
     @app.get("/api/version", include_in_schema=False)

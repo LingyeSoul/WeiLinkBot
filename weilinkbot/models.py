@@ -138,6 +138,9 @@ class LLMPreset(Base):
     capability_audio: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     capability_image: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
+    # Agent tool calling support
+    supports_tools: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
     # Preprocessing model configuration
     preprocess_voice_model_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("llm_presets.id", ondelete="SET NULL"), nullable=True

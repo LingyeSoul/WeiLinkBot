@@ -154,13 +154,17 @@ class ConversationService:
     async def build_context(
         self,
         user_id: str,
-        memories: list[str] | None = None,
+        memories: list[dict[str, str]] | None = None,
         max_context_chars: int = 2000,
     ) -> list[dict[str, str]]:
         """Build OpenAI-format message list for LLM call.
 
         Structure: [character_prompt + system_preset + memories, ...recent_history]
+        Memories are dicts with "text" and "category" keys.
         """
+        from collections import defaultdict
+
+        from ..config import get_config
         from ..models import CharacterCard, STPreset, SystemSetting
         from .character_service import assemble_st_prompt
 
@@ -212,21 +216,60 @@ class ConversationService:
 
         system_content = "\n\n".join(system_parts) if system_parts else DEFAULT_SYSTEM_PROMPT
 
-        # Inject memories into system prompt
+        # Inject memories into system prompt (category-aware grouping)
         if memories:
-            truncated_memories: list[str] = []
+            grouped: dict[str, list[str]] = defaultdict(list)
+            for m in memories:
+                if isinstance(m, dict):
+                    cat = m.get("category", "general")
+                    text = m.get("text", "")
+                else:
+                    cat = "general"
+                    text = str(m)
+                if text:
+                    grouped[cat].append(text)
+
+            category_labels = {
+                "user_preferences": _t("memory.category.user_preferences"),
+                "personality": _t("memory.category.personality"),
+                "emotional": _t("memory.category.emotional"),
+                "general": _t("memory.category.general"),
+            }
+
+            # Priority: emotional > user_preferences > personality > general
+            priority_order = ["emotional", "user_preferences", "personality", "general"]
+            budgets = get_config().memory.category_budgets
+            default_budget = max_context_chars // max(len(grouped), 1)
+
+            memory_parts: list[str] = []
             total_chars = 0
-            for memory in memories:
-                next_total = total_chars + len(memory)
-                if next_total > max_context_chars:
+            seen_categories: set[str] = set()
+            for cat in (*priority_order, *grouped.keys()):
+                if cat in seen_categories or cat not in grouped:
+                    continue
+                seen_categories.add(cat)
+                items = grouped[cat]
+                if not items:
+                    continue
+                cat_budget = budgets.get(cat, default_budget)
+                cat_lines: list[str] = []
+                cat_chars = 0
+                for item in items:
+                    if cat_chars + len(item) > cat_budget:
+                        break
+                    cat_lines.append(item)
+                    cat_chars += len(item)
+                if cat_lines:
+                    label = category_labels.get(cat, cat)
+                    memory_parts.append(f"[{label}]\n" + "\n".join(f"- {m}" for m in cat_lines))
+                    total_chars += cat_chars
+                if total_chars >= max_context_chars:
                     break
-                truncated_memories.append(memory)
-                total_chars = next_total
-            if truncated_memories:
-                memory_block = "\n".join(f"- {m}" for m in truncated_memories)
+
+            if memory_parts:
                 system_content += (
                     f"\n\n{_t('memory.context_header')}\n"
-                    + memory_block
+                    + "\n\n".join(memory_parts)
                 )
 
         # 4. Load recent messages

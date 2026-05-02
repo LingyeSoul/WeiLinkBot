@@ -78,6 +78,7 @@ _MIGRATIONS: list[tuple[str, str, str]] = [
     ("llm_presets", "asr_language", "VARCHAR(10)"),
     ("user_configs", "source", "VARCHAR(20) NOT NULL DEFAULT 'wechat'"),
     ("llm_presets", "api_key_encrypted", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("llm_presets", "supports_tools", "BOOLEAN NOT NULL DEFAULT 1"),
 ]
 
 

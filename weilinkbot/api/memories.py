@@ -71,6 +71,16 @@ async def memory_status():
         embedder = getattr(mem, "_local_embedder", None)
         if embedder is not None:
             response["onnx_loaded"] = getattr(embedder, "_session", None) is not None
+        # Category distribution
+        try:
+            all_mems = await mem.export_memories()
+            cat_counts: dict[str, int] = {}
+            for m in all_mems.get("memories", []):
+                cat = m.get("category", "general")
+                cat_counts[cat] = cat_counts.get(cat, 0) + 1
+            response["category_counts"] = cat_counts
+        except Exception:
+            logger.debug("Failed to compute category counts", exc_info=True)
     return response
 
 
@@ -108,6 +118,10 @@ async def get_memory_config():
             "search_ef": mem_cfg.hnsw_search_ef,
         },
         "db_path": mem_cfg.db_path,
+        "fact_extraction": mem_cfg.fact_extraction,
+        "role_term_blacklist": mem_cfg.role_term_blacklist,
+        "custom_instructions": mem_cfg.custom_instructions,
+        "category_budgets": mem_cfg.category_budgets,
         "local_onnx_options": public_onnx_model_options(),
     }
 
@@ -162,6 +176,12 @@ async def update_memory_config(data: MemoryConfigUpdate):
         kwargs["hnsw_construction_ef"] = data.hnsw_construction_ef
     if data.hnsw_search_ef is not None:
         kwargs["hnsw_search_ef"] = data.hnsw_search_ef
+    if data.fact_extraction is not None:
+        kwargs["fact_extraction"] = data.fact_extraction
+    if data.role_term_blacklist is not None:
+        kwargs["role_term_blacklist"] = data.role_term_blacklist
+    if data.custom_instructions is not None:
+        kwargs["custom_instructions"] = data.custom_instructions
 
     result = await asyncio.to_thread(mem.update_config, **kwargs)
     save_config()
@@ -316,3 +336,75 @@ async def delete_memory(memory_id: str):
     if not success:
         raise HTTPException(status_code=500, detail="Failed to delete memory")
     return {"success": True}
+
+
+@router.get("/{user_id}/by_category")
+async def get_memories_by_category(
+    user_id: str,
+    category: str = Query(..., description="Memory category to filter by"),
+):
+    """Get memories filtered by category."""
+    mem = _require_memory()
+    all_memories = await mem.get_all(user_id)
+    filtered = [m for m in all_memories if m.get("category", "general") == category]
+    return {"user_id": user_id, "category": category, "memories": filtered, "count": len(filtered)}
+
+
+@router.post("/migrate_categories")
+async def migrate_memory_categories(user_id: str | None = None):
+    """Tag legacy memories without a category field using rule-based classification.
+
+    Only works with the local ONNX backend. For remote mem0, categories are
+    extracted automatically via custom_instructions during add().
+    """
+    mem = _require_memory()
+
+    if getattr(mem, "_local_collection", None) is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Category migration is only supported for the local ONNX backend. "
+                   "Remote mem0 extracts categories automatically via custom_instructions.",
+        )
+
+    if user_id:
+        user_ids = [user_id]
+    else:
+        session_factory = get_session_factory()
+        async with session_factory() as db:
+            result = await db.execute(select(Conversation.user_id))
+            user_ids = [row[0] for row in result.all()]
+
+    migrated = 0
+    for uid in user_ids:
+        all_memories = await mem.get_all(uid)
+        for m in all_memories:
+            if m.get("category") and m.get("schema_version", 0) >= 2:
+                continue
+            text = m.get("memory", "")
+            if not text:
+                continue
+            # Apply rule-based categorization
+            facts = mem._rule_based_extract(text)
+            if facts:
+                category = facts[0].get("category", "general")
+            else:
+                category = "general"
+            memory_id = m.get("id")
+            if memory_id:
+                try:
+                    collection = getattr(mem, "_local_collection", None)
+                    if collection is not None:
+                        existing = await asyncio.to_thread(
+                            collection.get, ids=[memory_id], include=["metadatas"]
+                        )
+                        old_meta = (existing.get("metadatas") or [{}])[0] or {}
+                        old_meta["category"] = category
+                        old_meta["schema_version"] = 2
+                        await asyncio.to_thread(
+                            collection.update, ids=[memory_id], metadatas=[old_meta]
+                        )
+                        migrated += 1
+                except Exception:
+                    logger.debug("Failed to migrate memory %s", memory_id, exc_info=True)
+
+    return {"migrated": migrated, "users_processed": len(user_ids)}

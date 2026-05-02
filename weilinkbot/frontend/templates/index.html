@@ -499,28 +499,24 @@
                            class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="e.g. DeepSeek V3">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium mb-1" x-text="t('models.provider')">Provider</label>
-                    <select x-model="modelForm.provider" @change="onModelProviderChange()"
+                    <label class="block text-sm font-medium mb-1" x-text="t('models.select_provider')">Provider</label>
+                    <select x-model.number="modelForm.provider_id"
                             class="w-full border rounded-lg px-3 py-2 text-sm">
-                        <option value="openai">OpenAI</option>
-                        <option value="deepseek">DeepSeek</option>
-                        <option value="custom">Custom</option>
+                        <option :value="null" disabled x-text="t('models.select_provider')">Select a provider...</option>
+                        <template x-for="p in providers.filter(p => p.is_enabled)" :key="p.id">
+                            <option :value="p.id" x-text="p.name + ' (' + p.provider_type + ')'"></option>
+                        </template>
                     </select>
+                    <template x-if="modelForm.provider_id">
+                        <div class="mt-1 text-xs text-gray-500">
+                            <span x-text="providers.find(p => p.id === modelForm.provider_id)?.base_url || ''"></span>
+                        </div>
+                    </template>
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-1" x-text="t('models.model_id')">Model ID</label>
                     <input x-model="modelForm.model" type="text"
                            class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="gpt-4o-mini">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium mb-1" x-text="t('models.base_url')">Base URL</label>
-                    <input x-model="modelForm.base_url" type="text"
-                           class="w-full border rounded-lg px-3 py-2 text-sm">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium mb-1" x-text="t('models.api_key')">API Key</label>
-                    <input x-model="modelForm.api_key" type="password"
-                           class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="sk-...">
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-1" x-text="t('models.max_tokens')">Max Tokens</label>
@@ -549,6 +545,11 @@
                     <label class="flex items-center gap-2 text-sm">
                         <input x-model="modelForm.capability_image" type="checkbox" class="rounded">
                         <span x-text="t('models.cap_image')">Image</span>
+                    </label>
+                    <label class="flex items-center gap-2 text-sm">
+                        <input x-model="modelForm.supports_tools" type="checkbox" class="rounded">
+                        <span x-text="t('models.supports_tools')">Tools</span>
+                        <span class="text-gray-400 text-xs" x-text="t('models.supports_tools_hint')"></span>
                     </label>
                 </div>
             </div>
@@ -640,7 +641,6 @@
                         <th class="text-left px-4 py-3 font-medium" x-text="t('status.model')">Model</th>
                         <th class="text-left px-4 py-3 font-medium" x-text="t('models.capabilities')">Capabilities</th>
                         <th class="text-left px-4 py-3 font-medium" x-text="t('users.status')">Status</th>
-                        <th class="text-left px-4 py-3 font-medium" x-text="t('models.api_key')">API Key</th>
                         <th class="text-left px-4 py-3 font-medium" x-text="t('users.actions')">Actions</th>
                     </tr>
                 </thead>
@@ -648,7 +648,7 @@
                     <template x-for="m in models" :key="m.id">
                         <tr :class="{'bg-blue-50': m.is_active}">
                             <td class="px-4 py-3 font-medium" x-text="m.name"></td>
-                            <td class="px-4 py-3 text-gray-600" x-text="m.provider"></td>
+                            <td class="px-4 py-3 text-gray-600" x-text="m.provider_name || m.provider"></td>
                             <td class="px-4 py-3 font-mono text-xs" x-text="m.model"></td>
                             <td class="px-4 py-3">
                                 <div class="flex gap-1">
@@ -666,12 +666,6 @@
                                 <span class="text-xs px-2 py-1 rounded-full"
                                       :class="m.is_active ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'"
                                       x-text="m.is_active ? t('models.active') : t('models.inactive')">
-                                </span>
-                            </td>
-                            <td class="px-4 py-3">
-                                <span class="text-xs"
-                                      :class="m.api_key_set ? 'text-green-600' : 'text-red-500'"
-                                      x-text="m.api_key_set ? t('models.key_set') : t('models.key_missing')">
                                 </span>
                             </td>
                             <td class="px-4 py-3 flex gap-1">
@@ -692,7 +686,7 @@
                         </tr>
                     </template>
                     <tr x-show="models.length === 0">
-                        <td colspan="7" class="px-4 py-6 text-center text-gray-400"
+                        <td colspan="6" class="px-4 py-6 text-center text-gray-400"
                             x-text="t('models.empty')">
                             No models configured. Click "Add Model" to get started.
                         </td>
@@ -1057,6 +1051,9 @@
                                 </span>
                             </td>
                             <td class="px-4 py-3 flex gap-1">
+                                <button @click="viewSTPresetEntries(p)"
+                                        class="text-xs px-2 py-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200"
+                                        x-text="t('st_presets.view_entries')">View</button>
                                 <button @click="activateSTPreset(p.id)" x-show="!p.is_active"
                                         class="text-xs px-2 py-1 bg-green-100 text-green-600 rounded hover:bg-green-200"
                                         x-text="t('st_presets.activate')">Activate</button>
@@ -1077,6 +1074,44 @@
                     </tr>
                 </tbody>
             </table>
+        </div>
+    </div>
+
+    <!-- ST Preset Entries Modal -->
+    <div x-show="showSTPresetEntriesModal" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+         @keydown.escape.window="closeSTPresetEntriesModal()"
+         @click.self="closeSTPresetEntriesModal()">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+            <div class="flex items-center justify-between px-6 py-4 border-b">
+                <h3 class="text-base font-semibold">
+                    <span x-text="t('st_presets.entries_title')"></span>
+                    <span class="text-gray-400 font-normal ml-2" x-text="stPresetEntriesPresetName"></span>
+                </h3>
+                <button @click="closeSTPresetEntriesModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+            </div>
+            <div class="flex-1 overflow-y-auto px-6 py-4 space-y-2">
+                <template x-for="(entry, idx) in stPresetEntries" :key="idx">
+                    <div class="border rounded-lg p-3 text-sm flex items-start gap-3">
+                        <label class="flex-shrink-0 flex items-center mt-0.5 cursor-pointer">
+                            <input type="checkbox" :checked="entry.enabled"
+                                   @change="toggleSTPresetEntry(stPresetEntriesPresetId, entry.index, entry.enabled)"
+                                   class="rounded border-gray-300">
+                        </label>
+                        <div class="flex-1 min-w-0">
+                            <div class="font-medium text-gray-700 flex items-center gap-2">
+                                <span x-text="entry.name || 'Entry ' + entry.index"></span>
+                                <span x-show="entry.role" class="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded" x-text="entry.role"></span>
+                            </div>
+                            <div class="text-gray-500 mt-1 whitespace-pre-wrap break-words" x-text="entry.content || '—'"></div>
+                            <div class="flex gap-3 mt-1 text-xs text-gray-400">
+                                <span x-show="entry.injection_depth != null" x-text="t('st_presets.entry_depth') + ': ' + entry.injection_depth"></span>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+                <div x-show="stPresetEntries.length === 0" class="text-gray-400 text-center py-8" x-text="t('st_presets.no_entries')"></div>
+            </div>
         </div>
     </div>
 
@@ -1534,6 +1569,51 @@
                                     </template>
                                 </div>
                             </div>
+
+    <!-- Agent Config Tab -->
+    <div x-show="activeTab === 'agent'" class="space-y-4">
+        <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold" x-text="t('agent.title')"></h2>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm p-6 space-y-6">
+            <!-- Max Tool Rounds -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1" x-text="t('agent.max_rounds')"></label>
+                <div class="flex items-center gap-3">
+                    <input x-model.number="agentConfig.max_tool_rounds" type="number" min="1" max="20"
+                           class="w-24 border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <span class="text-gray-500 text-xs" x-text="t('agent.max_rounds_hint')"></span>
+                </div>
+            </div>
+
+            <!-- Enabled Tools -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-3" x-text="t('agent.enabled_tools')"></label>
+                <div class="space-y-2">
+                    <template x-for="tool in agentConfig.available_tools" :key="tool">
+                        <label class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer">
+                            <input type="checkbox" :checked="agentConfig.enabled_tools.includes(tool)"
+                                   @change="toggleAgentTool(tool)" class="rounded text-blue-600">
+                            <div>
+                                <span class="text-sm font-medium text-gray-800" x-text="tool"></span>
+                                <span class="text-xs text-gray-500 ml-2" x-text="t('agent.tool_desc.' + tool)"></span>
+                            </div>
+                        </label>
+                    </template>
+                    <p x-show="!agentConfig.available_tools.length" class="text-gray-400 text-sm" x-text="t('agent.no_tools')"></p>
+                </div>
+            </div>
+
+            <!-- Save Button -->
+            <div class="flex items-center gap-3">
+                <button @click="saveAgentConfig()"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                        x-text="t('agent.save')">
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- About Tab -->
     <div x-show="activeTab === 'about'" class="max-w-2xl mx-auto space-y-6">

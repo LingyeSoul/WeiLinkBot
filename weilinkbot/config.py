@@ -85,14 +85,24 @@ class MemoryConfig(BaseModel):
     hnsw_m: int = 16
     hnsw_construction_ef: int = 200
     hnsw_search_ef: int = 100
+    fact_extraction: bool = True
+    role_term_blacklist: list[str] = Field(default_factory=list)
+    category_budgets: dict[str, int] = Field(default_factory=dict)
+    custom_instructions: str = ""
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     llm: EmbeddingLLMConfig = Field(default_factory=EmbeddingLLMConfig)
+
+
+class AgentConfig(BaseModel):
+    max_tool_rounds: int = 5
+    enabled_tools: list[str] = Field(default_factory=lambda: ["get_current_time", "calculate"])
 
 
 class AppConfig(BaseModel):
     bot: BotConfig = Field(default_factory=BotConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
+    agent: AgentConfig = Field(default_factory=AgentConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
 

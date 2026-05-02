@@ -18,6 +18,9 @@ from .local_embedding_service import LOCAL_EMBEDDING_PROVIDER, LocalOnnxEmbeddin
 
 logger = logging.getLogger(__name__)
 
+MEMORY_CATEGORIES = ("user_preferences", "personality", "emotional", "general")
+DEFAULT_CATEGORY = "general"
+
 
 class MemoryService:
     """Async wrapper around mem0 for user memory management.
@@ -120,6 +123,26 @@ class MemoryService:
                     llm_provider_config["openai_base_url"] = llm_url
                 mem0_config["llm"] = llm_config
 
+            # Inject persona-aware custom instructions for fact extraction
+            custom_instr_parts: list[str] = []
+            if mem_cfg.custom_instructions:
+                custom_instr_parts.append(mem_cfg.custom_instructions)
+            if mem_cfg.role_term_blacklist:
+                blacklist_str = ", ".join(mem_cfg.role_term_blacklist)
+                custom_instr_parts.append(
+                    f"NEVER extract memories containing these character-specific roleplay terms: "
+                    f"{blacklist_str}. These are fictional persona behaviors, not user facts."
+                )
+            custom_instr_parts.append(
+                "Categorize each extracted memory with a 'category' field: "
+                "'user_preferences' (likes, dislikes, habits), "
+                "'personality' (traits, communication style), "
+                "'emotional' (mood, feelings, relationships), "
+                "'general' (facts, events, plans)."
+            )
+            if custom_instr_parts:
+                mem0_config["custom_instructions"] = "\n\n".join(custom_instr_parts)
+
             self._mem0 = Memory.from_config(mem0_config)
             self._available = True
             self._init_error = None
@@ -185,6 +208,13 @@ class MemoryService:
             mem_cfg.hnsw_construction_ef = int(str(kwargs["hnsw_construction_ef"]))
         if "hnsw_search_ef" in kwargs:
             mem_cfg.hnsw_search_ef = int(str(kwargs["hnsw_search_ef"]))
+        if "fact_extraction" in kwargs:
+            mem_cfg.fact_extraction = bool(kwargs["fact_extraction"])
+        _set_if_provided("custom_instructions", mem_cfg, "custom_instructions")
+        if "role_term_blacklist" in kwargs and kwargs["role_term_blacklist"] is not None:
+            mem_cfg.role_term_blacklist = list(kwargs["role_term_blacklist"])
+        if "category_budgets" in kwargs and kwargs["category_budgets"] is not None:
+            mem_cfg.category_budgets = dict(kwargs["category_budgets"])
 
         if mem_cfg.hnsw_search_ef < mem_cfg.top_k:
             mem_cfg.hnsw_search_ef = mem_cfg.top_k
@@ -335,8 +365,8 @@ class MemoryService:
                 "latency_ms": None,
             }
 
-    async def search(self, user_id: str, query: str) -> list[str]:
-        """Search memories for a user. Returns list of memory strings.
+    async def search(self, user_id: str, query: str) -> list[dict[str, str]]:
+        """Search memories for a user. Returns list of {"text": str, "category": str}.
 
         Returns empty list on any error or when unavailable.
         """
@@ -356,7 +386,7 @@ class MemoryService:
                 mem0.search, query, filters={"user_id": user_id}, top_k=top_k
             )
             # mem0 returns {"results": [{"memory": "...", ...}, ...]} or similar
-            memories = []
+            memories: list[dict[str, str]] = []
             if isinstance(results, dict):
                 items = results.get("results", results.get("memories", []))
             elif isinstance(results, list):
@@ -367,10 +397,15 @@ class MemoryService:
             for item in items:
                 if isinstance(item, dict):
                     text = item.get("memory", item.get("text", ""))
+                    category = item.get(
+                        "category",
+                        item.get("metadata", {}).get("category", DEFAULT_CATEGORY),
+                    )
                 else:
                     text = str(item)
+                    category = DEFAULT_CATEGORY
                 if text:
-                    memories.append(text)
+                    memories.append({"text": text, "category": category})
 
             logger.debug("Found %d memories for user %s", len(memories), user_id)
             return memories
@@ -533,7 +568,7 @@ class MemoryService:
             self._available = False
             self._init_error = str(exc)
 
-    async def _local_search(self, user_id: str, query: str) -> list[str]:
+    async def _local_search(self, user_id: str, query: str) -> list[dict[str, str]]:
         try:
             if self._local_embedder is None or self._local_collection is None:
                 return []
@@ -545,34 +580,238 @@ class MemoryService:
                 query_embeddings=[vector],
                 n_results=self._config.memory.top_k,
                 where={"user_id": user_id},
-                include=["documents", "distances"],
+                include=["documents", "distances", "metadatas"],
             )
             docs = result.get("documents") or [[]]
             distances = result.get("distances") or [[]]
+            metadatas = result.get("metadatas") or [[]]
             min_score = self._config.memory.min_score
-            memories: list[str] = []
-            for doc, distance in zip(docs[0], distances[0]):
+            memories: list[dict[str, str]] = []
+            for doc, distance, meta in zip(docs[0], distances[0], metadatas[0]):
                 if not doc:
                     continue
                 similarity = 1.0 - float(distance)
                 if similarity >= min_score:
-                    memories.append(doc)
+                    category = (meta or {}).get("category", DEFAULT_CATEGORY)
+                    memories.append({"text": doc, "category": category})
             return memories
         except Exception:
             logger.warning("Local memory search failed for user %s", user_id, exc_info=True)
             return []
 
     async def _local_add(self, user_id: str, user_msg: str, assistant_reply: str) -> None:
-        text = f"用户：{user_msg}\n助手：{assistant_reply}".strip()
-        if not text:
+        if not user_msg.strip():
             return
         try:
             if self._local_embedder is None or self._local_collection is None:
                 return
-            embedder = self._local_embedder
-            collection = self._local_collection
-            memory_id = hashlib.sha256(f"{user_id}:{text}".encode("utf-8")).hexdigest()
+
+            mem_cfg = self._config.memory
+            facts: list[dict[str, str]] = []
+
+            if mem_cfg.fact_extraction:
+                # Try LLM-based extraction first
+                llm_facts = await self._llm_extract_facts(user_msg, assistant_reply)
+                if llm_facts:
+                    facts = llm_facts
+                else:
+                    facts = self._rule_based_extract(user_msg)
+            else:
+                facts = self._rule_based_extract(user_msg)
+
+            if not facts:
+                return
+
+            await self._deduplicate_and_store(user_id, facts)
+        except Exception:
+            logger.warning("Failed to store local memory for user %s", user_id, exc_info=True)
+
+    async def _llm_extract_facts(
+        self, user_msg: str, assistant_reply: str
+    ) -> list[dict[str, str]] | None:
+        """Extract structured facts via LLM. Returns None on failure."""
+        mem_cfg = self._config.memory
+        api_key = mem_cfg.llm.api_key or self._config.llm.api_key
+        model = mem_cfg.llm.model or self._config.llm.model
+        base_url = mem_cfg.llm.base_url or self._config.llm.base_url
+        if not api_key or not model:
+            return None
+
+        categories_desc = ", ".join(MEMORY_CATEGORIES)
+        blacklist_note = ""
+        if mem_cfg.role_term_blacklist:
+            terms = ", ".join(mem_cfg.role_term_blacklist)
+            blacklist_note = (
+                f"\nNEVER extract memories containing these character-specific roleplay terms: "
+                f"{terms}. These are fictional persona behaviors, not user facts."
+            )
+
+        extraction_prompt = (
+            "You are a memory extraction system. Analyze the conversation and extract "
+            "important facts about the USER only. Ignore the assistant's roleplay behavior "
+            "(e.g., tail wagging, ear movements, cute expressions — these are persona, not facts).\n"
+            f"Categorize each fact into one of: {categories_desc}\n"
+            "- user_preferences: likes, dislikes, habits, settings\n"
+            "- personality: traits, communication style, values\n"
+            "- emotional: mood, feelings, emotional state, relationships\n"
+            "- general: facts, events, plans, context\n"
+            f"{blacklist_note}\n"
+            "Return a JSON array of objects with 'text' and 'category' fields. "
+            "If nothing worth remembering, return an empty array [].\n"
+            "Example: [{\"text\": \"用户喜欢科幻小说\", \"category\": \"user_preferences\"}]"
+        )
+
+        messages = [
+            {"role": "system", "content": extraction_prompt},
+            {
+                "role": "user",
+                "content": f"User: {user_msg}\nAssistant: {assistant_reply}",
+            },
+        ]
+
+        try:
+            import json
+            import re
+
+            from openai import AsyncOpenAI
+
+            async with AsyncOpenAI(api_key=api_key, base_url=base_url or None) as client:
+                response = await asyncio.wait_for(
+                    client.chat.completions.create(
+                        model=model,
+                        messages=messages,
+                        temperature=0.1,
+                        max_tokens=500,
+                    ),
+                    timeout=15.0,
+                )
+            text = (response.choices[0].message.content or "").strip()
+
+            # Parse JSON from response (handle markdown code blocks)
+            match = re.search(r"```(?:json)?\s*\n(.*?)```", text, re.DOTALL)
+            if match:
+                text = match.group(1).strip()
+
+            parsed = json.loads(text)
+            if not isinstance(parsed, list):
+                return None
+
+            result: list[dict[str, str]] = []
+            for item in parsed:
+                if isinstance(item, dict) and "text" in item:
+                    cat = item.get("category", DEFAULT_CATEGORY)
+                    if cat not in MEMORY_CATEGORIES:
+                        cat = DEFAULT_CATEGORY
+                    result.append({"text": str(item["text"]), "category": cat})
+            return result if result else None
+        except Exception:
+            logger.debug("LLM fact extraction failed, falling back to rule-based", exc_info=True)
+            return None
+
+    def _rule_based_extract(self, user_msg: str) -> list[dict[str, str]]:
+        """Lightweight fact extraction without LLM. Returns user message as a single fact."""
+        text = user_msg.strip()
+        if not text:
+            return []
+
+        # Apply blacklist filtering
+        blacklist = self._config.memory.role_term_blacklist
+        if blacklist:
+            for term in blacklist:
+                text = text.replace(term, "")
+            text = " ".join(text.split()).strip()
+        if not text:
+            return []
+
+        # Keyword-based category detection
+        import re
+
+        preference_pattern = re.compile(
+            r"喜欢|讨厌|偏好|不喜欢|最爱|最烦|prefer|like|dislike|favorite|hate|love",
+            re.IGNORECASE,
+        )
+        emotional_pattern = re.compile(
+            r"心情|开心|难过|伤心|生气|焦虑|压力|高兴|委屈|feeling|happy|sad|angry|anxious|stressed|upset",
+            re.IGNORECASE,
+        )
+        personality_pattern = re.compile(
+            r"性格|我是|我一直|我从来|我总是|I am|I always|I never|I'm",
+            re.IGNORECASE,
+        )
+
+        if preference_pattern.search(text):
+            category = "user_preferences"
+        elif emotional_pattern.search(text):
+            category = "emotional"
+        elif personality_pattern.search(text):
+            category = "personality"
+        else:
+            category = DEFAULT_CATEGORY
+
+        return [{"text": text, "category": category}]
+
+    async def _deduplicate_and_store(
+        self, user_id: str, facts: list[dict[str, str]]
+    ) -> None:
+        """Store facts with semantic deduplication."""
+        if self._local_embedder is None or self._local_collection is None:
+            return
+        embedder = self._local_embedder
+        collection = self._local_collection
+        now = datetime.now().isoformat()
+
+        for fact in facts:
+            text = fact["text"]
+            category = fact.get("category", DEFAULT_CATEGORY)
+
+            # Embed the new fact
             vector = (await asyncio.to_thread(embedder.embed, [text]))[0]
+
+            # Check for similar existing memories
+            existing = await asyncio.to_thread(
+                collection.query,
+                query_embeddings=[vector],
+                n_results=3,
+                where={"user_id": user_id},
+                include=["documents", "distances", "metadatas"],
+            )
+            existing_ids = (existing.get("ids") or [[]])[0]
+            existing_dists = (existing.get("distances") or [[]])[0]
+
+            skip = False
+            updated_any = False
+            for eid, dist in zip(existing_ids, existing_dists):
+                similarity = 1.0 - float(dist)
+                if similarity > 0.92:
+                    # Near-duplicate — skip
+                    skip = True
+                    break
+                if similarity > 0.80:
+                    # Similar but different — update all similar memories
+                    try:
+                        await asyncio.to_thread(
+                            collection.update,
+                            ids=[eid],
+                            documents=[text],
+                            embeddings=[vector],
+                            metadatas=[{
+                                "user_id": user_id,
+                                "memory": text,
+                                "category": category,
+                                "updated_at": now,
+                                "source": "chat",
+                                "schema_version": 2,
+                            }],
+                        )
+                        updated_any = True
+                    except Exception:
+                        logger.debug("Failed to update similar memory %s", eid, exc_info=True)
+
+            if skip or updated_any:
+                continue
+
+            # No similar memory found — insert new
+            memory_id = hashlib.sha256(f"{user_id}:{text}".encode("utf-8")).hexdigest()
             await asyncio.to_thread(
                 collection.upsert,
                 ids=[memory_id],
@@ -581,14 +820,13 @@ class MemoryService:
                 metadatas=[{
                     "user_id": user_id,
                     "memory": text,
-                    "created_at": datetime.now().isoformat(),
-                    "updated_at": datetime.now().isoformat(),
+                    "category": category,
+                    "created_at": now,
+                    "updated_at": now,
                     "source": "chat",
-                    "schema_version": 1,
+                    "schema_version": 2,
                 }],
             )
-        except Exception:
-            logger.warning("Failed to store local memory for user %s", user_id, exc_info=True)
 
     async def _local_get_all(self, user_id: str) -> list[dict[str, object]]:
         try:

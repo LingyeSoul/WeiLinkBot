@@ -11,27 +11,56 @@ from ..models import STPreset, SystemPrompt
 
 
 def parse_st_preset_json(raw_json: str) -> dict:
-    """Extract key fields from SillyTavern preset JSON."""
+    """Extract key fields from SillyTavern preset JSON.
+
+    Collects ALL enabled entries whose role is "system" (or whose name
+    contains "system") and concatenates them — SillyTavern presets commonly
+    have multiple system entries (Main Prompt, NSFW/Smut, etc.).
+    """
     data = json.loads(raw_json)
-    system_prompt = ""
+    parts: list[str] = []
 
+    # Gather the entry list from either format
+    entries: list[dict] = []
     if isinstance(data, list):
-        for entry in data:
-            if isinstance(entry, dict) and entry.get("enabled", True):
-                name = entry.get("name", "").lower()
-                if "system" in name or entry.get("role") == "system":
-                    system_prompt = entry.get("content", "")
-
-
+        entries = data
     elif isinstance(data, dict):
-        system_prompt = data.get("system_prompt", "")
+        if isinstance(data.get("prompts"), list):
+            entries = data["prompts"]
+        # Also honour a top-level system_prompt field (rare but exists)
+        top = data.get("system_prompt", "")
+        if top:
+            parts.append(top)
 
-    return {"system_prompt": system_prompt}
+    for entry in entries:
+        if not isinstance(entry, dict) or not entry.get("enabled", True):
+            continue
+        name = entry.get("name", "").lower()
+        if entry.get("role") == "system" or "system" in name:
+            content = entry.get("content", "").strip()
+            if content:
+                parts.append(content)
+
+    return {"system_prompt": "\n\n".join(parts)}
 
 
 def parse_st_entries(raw_json: str) -> list[dict]:
-    """Parse raw_json into structured entries for display."""
+    """Parse raw_json into structured entries for display.
+
+    Handles two formats:
+    - SillyTavern preset (dict with ``prompts`` list)
+    - Raw prompt manager export (top-level list)
+    """
     data = json.loads(raw_json)
+
+    # SillyTavern preset format: object with a "prompts" array
+    if isinstance(data, dict):
+        items = data.get("prompts")
+        if isinstance(items, list):
+            data = items
+        else:
+            return []
+
     entries = []
     if isinstance(data, list):
         for i, entry in enumerate(data):
@@ -140,9 +169,20 @@ class STPresetService:
             data = json.loads(preset.raw_json)
         except json.JSONDecodeError:
             return None
-        if not isinstance(data, list) or entry_index < 0 or entry_index >= len(data):
+
+        # Resolve the actual entries list from either format
+        if isinstance(data, dict):
+            items = data.get("prompts")
+            if not isinstance(items, list) or entry_index < 0 or entry_index >= len(items):
+                return None
+            items[entry_index]["enabled"] = enabled
+        elif isinstance(data, list):
+            if entry_index < 0 or entry_index >= len(data):
+                return None
+            data[entry_index]["enabled"] = enabled
+        else:
             return None
-        data[entry_index]["enabled"] = enabled
+
         updated_json = json.dumps(data, ensure_ascii=False, indent=2)
         preset.raw_json = updated_json
         parsed = parse_st_preset_json(updated_json)

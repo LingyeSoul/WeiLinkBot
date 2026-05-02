@@ -48,6 +48,7 @@ def _build_preset_response(preset: LLMPreset) -> LLMPresetResponse:
         preprocess_image=preset.preprocess_image,
         voice_method=preset.voice_method,
         asr_language=preset.asr_language,
+        supports_tools=preset.supports_tools,
         created_at=preset.created_at,
     )
 
@@ -161,6 +162,7 @@ async def update_preset(
     for field in [
         "model", "max_tokens", "temperature",
         "capability_text", "capability_audio", "capability_image",
+        "supports_tools",
         "preprocess_voice_model_id", "preprocess_image_model_id",
         "preprocess_voice", "preprocess_image",
         "voice_method", "asr_language",
