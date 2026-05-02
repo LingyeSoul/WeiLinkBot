@@ -138,6 +138,51 @@ class WorldBookService:
         )
         await self._db.flush()
 
+    async def add_entry(self, wb_id: int, data: dict) -> list[WorldBookEntry] | None:
+        world_book = await self.get_world_book(wb_id)
+        if not world_book:
+            return None
+        entry = WorldBookEntry(world_book_id=wb_id, **data)
+        self._db.add(entry)
+        await self._db.flush()
+        return list(world_book.entries)
+
+    async def update_entry(self, wb_id: int, entry_id: int, data: dict) -> list[WorldBookEntry] | None:
+        world_book = await self.get_world_book(wb_id)
+        if not world_book:
+            return None
+        entry = next((e for e in world_book.entries if e.id == entry_id), None)
+        if not entry:
+            return None
+        for key, value in data.items():
+            if hasattr(entry, key):
+                setattr(entry, key, value)
+        await self._db.flush()
+        return list(world_book.entries)
+
+    async def delete_entry(self, wb_id: int, entry_id: int) -> list[WorldBookEntry] | None:
+        world_book = await self.get_world_book(wb_id)
+        if not world_book:
+            return None
+        entry = next((e for e in world_book.entries if e.id == entry_id), None)
+        if not entry:
+            return None
+        await self._db.delete(entry)
+        await self._db.flush()
+        return list(world_book.entries)
+
+    async def reorder_entries(self, wb_id: int, order: list[int]) -> list[WorldBookEntry] | None:
+        world_book = await self.get_world_book(wb_id)
+        if not world_book:
+            return None
+        entries_by_id = {e.id: e for e in world_book.entries}
+        if sorted(order) != sorted(entries_by_id.keys()):
+            return None
+        for idx, entry_id in enumerate(order):
+            entries_by_id[entry_id].insertion_order = idx
+        await self._db.flush()
+        return list(world_book.entries)
+
     async def match_entries(self, text: str) -> list[WorldBookEntry]:
         import logging
         logger = logging.getLogger(__name__)

@@ -404,6 +404,24 @@ class WorldBookEntryUpdate(BaseModel):
     priority: Optional[int] = None
 
 
+class WorldBookEntryCreate(BaseModel):
+    key_primary: str = ""
+    key_secondary: Optional[str] = None
+    content: str = ""
+    comment: Optional[str] = None
+    enabled: bool = True
+    position: str = "before_char"
+    insertion_order: int = 100
+    case_sensitive: bool = False
+    selective: bool = False
+    constant: bool = False
+    priority: int = 10
+
+
+class WorldBookEntryReorder(BaseModel):
+    order: list[int]
+
+
 class WorldBookCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     description: str = ""

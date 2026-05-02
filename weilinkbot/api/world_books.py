@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
 from ..i18n import t
-from ..schemas import WorldBookCreate, WorldBookUpdate, WorldBookResponse, MessageAction
+from ..schemas import WorldBookCreate, WorldBookUpdate, WorldBookResponse, WorldBookEntryCreate, WorldBookEntryUpdate, WorldBookEntryReorder, WorldBookEntryResponse, MessageAction
 from ..services.world_book_service import WorldBookService
 from ..services.ws_service import get_ws_service
 
@@ -178,3 +178,67 @@ async def import_world_book(file: UploadFile = File(...), db: AsyncSession = Dep
         wb = await service.create_world_book({"name": name, "raw_json": raw_json})
     await _broadcast_world_books(db)
     return wb
+
+
+# ── Entry Management ─────────────────────────────────────────
+
+
+@router.post("/{wb_id}/entries", response_model=list[WorldBookEntryResponse])
+async def add_world_book_entry(
+    wb_id: int,
+    data: WorldBookEntryCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Add a new entry to a world book."""
+    service = WorldBookService(db)
+    entries = await service.add_entry(wb_id, data.model_dump())
+    if entries is None:
+        raise HTTPException(status_code=404, detail=t("api.wb_not_found"))
+    await _broadcast_world_books(db)
+    return entries
+
+
+@router.put("/{wb_id}/entries/{entry_id}", response_model=list[WorldBookEntryResponse])
+async def update_world_book_entry(
+    wb_id: int,
+    entry_id: int,
+    data: WorldBookEntryUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Edit a single entry's fields."""
+    service = WorldBookService(db)
+    entries = await service.update_entry(wb_id, entry_id, data.model_dump(exclude_unset=True))
+    if entries is None:
+        raise HTTPException(status_code=404, detail=t("api.wb_not_found"))
+    await _broadcast_world_books(db)
+    return entries
+
+
+@router.delete("/{wb_id}/entries/{entry_id}", response_model=list[WorldBookEntryResponse])
+async def delete_world_book_entry(
+    wb_id: int,
+    entry_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete an entry from a world book."""
+    service = WorldBookService(db)
+    entries = await service.delete_entry(wb_id, entry_id)
+    if entries is None:
+        raise HTTPException(status_code=404, detail=t("api.wb_not_found"))
+    await _broadcast_world_books(db)
+    return entries
+
+
+@router.put("/{wb_id}/entries/reorder", response_model=list[WorldBookEntryResponse])
+async def reorder_world_book_entries(
+    wb_id: int,
+    data: WorldBookEntryReorder,
+    db: AsyncSession = Depends(get_db),
+):
+    """Reorder entries in a world book by entry ID list."""
+    service = WorldBookService(db)
+    entries = await service.reorder_entries(wb_id, data.order)
+    if entries is None:
+        raise HTTPException(status_code=404, detail=t("api.invalid_reorder"))
+    await _broadcast_world_books(db)
+    return entries
