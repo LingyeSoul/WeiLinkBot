@@ -6,7 +6,7 @@
     <title>WeiLinkBot Dashboard</title>
     <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
     <script src="https://cdn.tailwindcss.com"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script defer src="/static/alpine.min.js"></script>
     <style>
         [x-cloak] { display: none !important; }
         .msg-user { background: #e0f2fe; }
@@ -94,7 +94,7 @@
     
                 <div class="bg-gray-50 rounded-lg p-4">
                     <div class="text-sm text-gray-500" x-text="t('status.uptime')">Uptime</div>
-                    <div class="text-lg font-bold mt-1" x-text="formatUptime(botStatus.uptime_seconds)"></div>
+                    <div class="text-lg font-bold mt-1" x-text="formatUptime(getDisplayUptimeSeconds())"></div>
     
 
         </div>
@@ -182,6 +182,105 @@
         <div x-show="botStatus.error" class="bg-red-50 border border-red-200 rounded-xl p-6">
             <h2 class="text-red-700 font-semibold mb-2" x-text="t('status.error')">Error</h2>
             <p class="text-red-600 text-sm" x-text="botStatus.error"></p>
+        </div>
+    </div>
+
+    <!-- Events Tab -->
+    <div x-show="activeTab === 'events'" class="space-y-4">
+        <div class="bg-white rounded-xl shadow-sm">
+            <div class="p-4 border-b flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <h2 class="text-lg font-semibold" x-text="t('events.title')">事件日志</h2>
+                    <span class="text-xs px-2 py-1 rounded-full"
+                          :class="wsConnected ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'"
+                          x-text="wsConnected ? t('events.connected') : t('events.disconnected')">
+                    </span>
+    
+                <div class="flex items-center gap-2">
+                    <div class="flex bg-gray-100 rounded-lg p-0.5">
+                        <button @click="eventFilter = 'all'"
+                                class="px-2 py-1 text-xs font-medium rounded transition-colors"
+                                :class="eventFilter === 'all' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+                                x-text="t('events.filter_all')">
+                        </button>
+                        <button @click="eventFilter = 'info'"
+                                class="px-2 py-1 text-xs font-medium rounded transition-colors"
+                                :class="eventFilter === 'info' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:text-gray-700'">
+                            Info
+                        </button>
+                        <button @click="eventFilter = 'warning'"
+                                class="px-2 py-1 text-xs font-medium rounded transition-colors"
+                                :class="eventFilter === 'warning' ? 'bg-yellow-100 text-yellow-700' : 'text-gray-500 hover:text-gray-700'">
+                            Warning
+                        </button>
+                        <button @click="eventFilter = 'error'"
+                                class="px-2 py-1 text-xs font-medium rounded transition-colors"
+                                :class="eventFilter === 'error' ? 'bg-red-100 text-red-700' : 'text-gray-500 hover:text-gray-700'">
+                            Error
+                        </button>
+        
+                    <button @click="toggleAutoScroll()"
+                            class="px-2 py-1 text-xs rounded"
+                            :class="autoScroll ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'"
+                            x-text="t('events.auto_scroll')">
+                    </button>
+                    <button @click="clearEvents()"
+                            class="px-2 py-1 text-xs bg-gray-100 text-gray-500 rounded hover:bg-gray-200"
+                            x-text="t('events.clear')">
+                    </button>
+    
+
+
+            <div id="events-container" class="max-h-[600px] overflow-y-auto p-4 space-y-2">
+                <template x-for="evt in filteredEvents" :key="evt.id">
+                    <div class="flex gap-3 p-3 rounded-lg text-sm"
+                         :class="{
+                             'bg-red-50': evt.level === 'error',
+                             'bg-yellow-50': evt.level === 'warning',
+                             'bg-gray-50': evt.level === 'info',
+                         }">
+                        <div class="text-xs text-gray-400 whitespace-nowrap min-w-[60px]">
+                            <span x-text="new Date(evt.timestamp * 1000).toLocaleTimeString()"></span>
+            
+                        <div class="flex-shrink-0">
+                            <span class="inline-block w-2 h-2 rounded-full mt-1.5"
+                                  :class="{
+                                      'bg-green-500': evt.level === 'info',
+                                      'bg-yellow-500': evt.level === 'warning',
+                                      'bg-red-500': evt.level === 'error',
+                                  }">
+                            </span>
+            
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs px-1.5 py-0.5 rounded font-mono"
+                                      :class="{
+                                          'bg-blue-100 text-blue-700': evt.category === 'message',
+                                          'bg-purple-100 text-purple-700': evt.category === 'llm',
+                                          'bg-green-100 text-green-700': evt.category === 'bot',
+                                          'bg-orange-100 text-orange-700': evt.category === 'command',
+                                          'bg-pink-100 text-pink-700': evt.category === 'preprocess',
+                                          'bg-gray-100 text-gray-700': !['message','llm','bot','command','preprocess'].includes(evt.category),
+                                      }"
+                                      x-text="evt.event">
+                                </span>
+                
+                            <div class="text-gray-700 mt-1" x-text="evt.message"></div>
+                            <div x-show="evt.detail" class="text-xs text-gray-400 mt-1 font-mono">
+                                <span x-text="evt.detail ? JSON.stringify(evt.detail) : ''"></span>
+                
+            
+        
+                </template>
+                <div x-show="events.length === 0" class="text-center text-gray-400 py-8"
+                     x-text="t('events.empty')">
+                    暂无事件
+    
+
+
+            <div class="p-3 border-t text-xs text-gray-400 flex justify-between">
+                <span x-text="t('events.total').replace('{n}', events.length)"></span>
+
         </div>
     </div>
 
@@ -1091,6 +1190,6 @@
 </div>
 
 <script src="/static/i18n.js"></script>
-<script src="/static/app.js"></script>
+<script src="/static/app.js?v=20260502-ws-uptime"></script>
 </body>
 </html>

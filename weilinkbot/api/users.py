@@ -8,8 +8,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..database import get_db
 from ..schemas import UserConfigResponse, UserConfigUpdate, MessageAction
 from ..services.conversation_service import ConversationService
+from ..services.ws_service import get_ws_service
 
 router = APIRouter()
+
+
+async def _broadcast_users(service: ConversationService):
+    """Broadcast updated users list to all WebSocket clients."""
+    users = await service.list_user_configs()
+    await get_ws_service().broadcast(
+        "users",
+        [UserConfigResponse.model_validate(u).model_dump(mode="json") for u in users],
+    )
 
 
 async def _get_service(db: AsyncSession = Depends(get_db)) -> ConversationService:
@@ -47,4 +57,5 @@ async def update_user(
         custom_prompt_id=data.custom_prompt_id,
         max_history=data.max_history,
     )
+    await _broadcast_users(service)
     return config

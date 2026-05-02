@@ -25,6 +25,7 @@ from ..services.character_service import (
     export_st_json,
     export_st_png,
 )
+from ..services.ws_service import get_ws_service
 
 
 def _content_disposition(filename: str) -> str:
@@ -37,6 +38,16 @@ def _content_disposition(filename: str) -> str:
 
 
 router = APIRouter()
+
+
+async def _broadcast_characters(db):
+    """Broadcast updated characters list to all WebSocket clients."""
+    service = CharacterService(db)
+    chars = await service.list_characters()
+    await get_ws_service().broadcast(
+        "characters",
+        [CharacterCardResponse.model_validate(c).model_dump(mode="json") for c in chars],
+    )
 
 
 @router.get("", response_model=list[CharacterCardResponse])
@@ -57,6 +68,7 @@ async def create_character(
     if existing:
         raise HTTPException(status_code=409, detail=t("api.char_exists"))
     card = await service.create_character(data.model_dump())
+    await _broadcast_characters(db)
     return card
 
 
@@ -85,6 +97,7 @@ async def update_character(
     card = await service.update_character(char_id, data.model_dump(exclude_unset=True))
     if not card:
         raise HTTPException(status_code=404, detail=t("api.char_not_found"))
+    await _broadcast_characters(db)
     return card
 
 
@@ -94,6 +107,7 @@ async def delete_character(char_id: int, db: AsyncSession = Depends(get_db)):
     service = CharacterService(db)
     if not await service.delete_character(char_id):
         raise HTTPException(status_code=404, detail=t("api.char_not_found"))
+    await _broadcast_characters(db)
     return MessageAction(message=t("api.char_deleted"))
 
 
@@ -104,6 +118,7 @@ async def activate_character(char_id: int, db: AsyncSession = Depends(get_db)):
     card = await service.activate_character(char_id)
     if not card:
         raise HTTPException(status_code=404, detail=t("api.char_not_found"))
+    await _broadcast_characters(db)
     return MessageAction(message=t("api.activated_char", name=card.name))
 
 
@@ -112,6 +127,7 @@ async def deactivate_character(db: AsyncSession = Depends(get_db)):
     """Deactivate current character card and restore default prompt."""
     service = CharacterService(db)
     await service.deactivate_character()
+    await _broadcast_characters(db)
     return MessageAction(message=t("api.char_deactivated"))
 
 
@@ -189,6 +205,7 @@ async def import_character(
     if filename.lower().endswith(".png") and card:
         await service.save_avatar(card.id, file_data, filename)
 
+    await _broadcast_characters(db)
     return card
 
 
@@ -209,6 +226,7 @@ async def upload_avatar(
         raise HTTPException(status_code=404, detail=t("api.char_not_found"))
     file_data = await _read_upload_with_limit(file)
     await service.save_avatar(char_id, file_data, file.filename or "avatar.png")
+    await _broadcast_characters(db)
     return MessageAction(message=t("api.avatar_uploaded"))
 
 

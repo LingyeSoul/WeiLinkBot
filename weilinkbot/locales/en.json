@@ -395,5 +395,14 @@
   "toast.world_book_imported": "World book imported",
   "toast.world_book_exported": "World book exported",
   "toast.settings_saved": "Settings saved",
-  "toast.restarting": "Server restarting..."
+  "toast.restarting": "Server restarting...",
+
+  "events.title": "Events",
+  "events.filter_all": "All",
+  "events.clear": "Clear",
+  "events.connected": "Connected",
+  "events.disconnected": "Disconnected",
+  "events.auto_scroll": "Auto Scroll",
+  "events.total": "{n} events",
+  "events.empty": "No events yet"
 }

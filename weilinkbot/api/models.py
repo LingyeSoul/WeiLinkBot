@@ -19,10 +19,28 @@ from ..schemas import (
     MessageAction,
 )
 from .deps import get_bot_service
+from ..services.ws_service import get_ws_service
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+async def _broadcast_models(db):
+    """Broadcast updated models list to all WebSocket clients."""
+    stmt = select(LLMPreset).order_by(LLMPreset.is_active.desc(), LLMPreset.id)
+    result = await db.execute(stmt)
+    presets = result.scalars().all()
+    await get_ws_service().broadcast(
+        "models",
+        [
+            LLMPresetResponse(
+                **{k: getattr(p, k) for k in LLMPresetResponse.model_fields if k != "api_key_set"},
+                api_key_set=bool(p.api_key),
+            ).model_dump(mode="json")
+            for p in presets
+        ],
+    )
 
 
 @router.get("", response_model=list[LLMPresetResponse])
@@ -62,6 +80,8 @@ async def create_preset(data: LLMPresetCreate, db: AsyncSession = Depends(get_db
 
     if data.is_active:
         _activate_preset_in_service(preset)
+
+    await _broadcast_models(db)
 
     return LLMPresetResponse(
         **{k: getattr(preset, k) for k in LLMPresetResponse.model_fields if k != "api_key_set"},
@@ -130,6 +150,7 @@ async def update_preset(
         _activate_preset_in_service(preset)
 
     await db.flush()
+    await _broadcast_models(db)
     return LLMPresetResponse(
         **{k: getattr(preset, k) for k in LLMPresetResponse.model_fields if k != "api_key_set"},
         api_key_set=bool(preset.api_key),
@@ -146,6 +167,7 @@ async def delete_preset(preset_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=400, detail=t("api.cannot_delete_active"))
     await db.delete(preset)
     await db.flush()
+    await _broadcast_models(db)
     return MessageAction(message=t("api.deleted_preset", name=preset.name))
 
 
@@ -163,6 +185,7 @@ async def activate_preset(preset_id: int, db: AsyncSession = Depends(get_db)):
     await db.flush()
 
     _activate_preset_in_service(preset)
+    await _broadcast_models(db)
     logger.info("Activated preset: %s (model=%s)", preset.name, preset.model)
     return MessageAction(message=t("api.switched_preset", name=preset.name, model=preset.model))
 

@@ -395,5 +395,14 @@
   "toast.world_book_imported": "世界书已导入",
   "toast.world_book_exported": "世界书已导出",
   "toast.settings_saved": "设置已保存",
-  "toast.restarting": "服务器正在重启..."
+  "toast.restarting": "服务器正在重启...",
+
+  "events.title": "事件日志",
+  "events.filter_all": "全部",
+  "events.clear": "清空",
+  "events.connected": "已连接",
+  "events.disconnected": "已断开",
+  "events.auto_scroll": "自动滚动",
+  "events.total": "共 {n} 条事件",
+  "events.empty": "暂无事件"
 }

@@ -10,10 +10,27 @@ from ..config import get_config, save_config, LLM_PRESETS
 from ..i18n import t
 from ..schemas import LLMConfigResponse, LLMConfigUpdate, MessageAction
 from .deps import get_bot_service
+from ..services.ws_service import get_ws_service
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+async def _broadcast_config():
+    """Broadcast updated config to all WebSocket clients."""
+    config = get_config()
+    await get_ws_service().broadcast(
+        "config",
+        {
+            "provider": config.llm.provider,
+            "base_url": config.llm.base_url,
+            "model": config.llm.model,
+            "max_tokens": config.llm.max_tokens,
+            "temperature": config.llm.temperature,
+            "api_key_set": bool(config.llm.api_key),
+        },
+    )
 
 
 @router.get("", response_model=LLMConfigResponse)
@@ -57,6 +74,7 @@ async def update_llm_config(data: LLMConfigUpdate):
     # Hot-reload LLM service
     llm.update_config(config.llm)
     save_config()
+    await _broadcast_config()
     logger.info("Config applied: provider=%s model=%s base_url=%s api_key_set=%s",
                 config.llm.provider, config.llm.model, config.llm.base_url,
                 bool(config.llm.api_key))

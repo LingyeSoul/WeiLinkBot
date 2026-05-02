@@ -15,8 +15,21 @@ from ..schemas import (
     SystemPromptResponse,
     MessageAction,
 )
+from ..services.ws_service import get_ws_service
 
 router = APIRouter()
+
+
+async def _broadcast_prompts(db):
+    """Broadcast updated prompts list to all WebSocket clients."""
+    result = await db.execute(
+        select(SystemPrompt).order_by(SystemPrompt.is_default.desc(), SystemPrompt.id)
+    )
+    prompts = result.scalars().all()
+    await get_ws_service().broadcast(
+        "prompts",
+        [SystemPromptResponse.model_validate(p).model_dump(mode="json") for p in prompts],
+    )
 
 
 @router.get("", response_model=list[SystemPromptResponse])
@@ -48,6 +61,7 @@ async def create_prompt(
 
     db.add(prompt)
     await db.flush()
+    await _broadcast_prompts(db)
     return prompt
 
 
@@ -92,6 +106,7 @@ async def update_prompt(
         prompt.is_default = data.is_default
 
     await db.flush()
+    await _broadcast_prompts(db)
     return prompt
 
 
@@ -104,6 +119,7 @@ async def delete_prompt(prompt_id: int, db: AsyncSession = Depends(get_db)):
 
     await db.delete(prompt)
     await db.flush()
+    await _broadcast_prompts(db)
     return MessageAction(message=t("api.deleted_prompt", name=prompt.name))
 
 
@@ -117,6 +133,7 @@ async def set_default_prompt(prompt_id: int, db: AsyncSession = Depends(get_db))
     await _unset_all_defaults(db)
     prompt.is_default = True
     await db.flush()
+    await _broadcast_prompts(db)
     return MessageAction(message=t("api.set_default", name=prompt.name))
 
 

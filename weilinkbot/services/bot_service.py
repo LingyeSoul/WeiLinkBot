@@ -20,8 +20,47 @@ from ..models import LLMPreset, get_preset_api_key
 from .llm_service import LLMService
 from .conversation_service import ConversationService
 from ..i18n import t
+from .event_log import get_event_log
+from .ws_service import get_ws_service
 
 logger = logging.getLogger(__name__)
+
+
+async def _get_bot_status_dict(bot_service) -> dict:
+    """Build status payload for WebSocket broadcast."""
+    active_model_name = None
+    session_stats = bot_service.session_token_stats
+    try:
+        from ..database import get_session_factory
+        from ..models import LLMPreset, get_preset_api_key
+        from sqlalchemy import select
+        session_factory = get_session_factory()
+        async with session_factory() as db:
+            result = await db.execute(select(LLMPreset).where(LLMPreset.is_active == True))
+            active_preset = result.scalar_one_or_none()
+            if active_preset:
+                active_model_name = active_preset.name
+            preset_rows = await db.execute(
+                select(LLMPreset.model, LLMPreset.name).where(LLMPreset.model.isnot(None))
+            )
+            name_map = {row.model: row.name for row in preset_rows.all()}
+            for m in session_stats.get("models", []):
+                m["name"] = name_map.get(m["model"], m["model"])
+    except Exception:
+        pass
+
+    return {
+        "status": bot_service.state.value,
+        "error": bot_service.error,
+        "login_url": bot_service.login_url,
+        "user_id": bot_service.credentials.user_id if bot_service.credentials else None,
+        "account_id": bot_service.credentials.account_id if bot_service.credentials else None,
+        "active_model_name": active_model_name,
+        "active_model": bot_service.llm.config.model,
+        "uptime_seconds": bot_service.uptime_seconds,
+        "session_messages": bot_service.message_count,
+        "session_token_stats": session_stats,
+    }
 
 
 class BotState(str, Enum):
@@ -132,6 +171,7 @@ class BotService:
         self._state = BotState.STARTING
         self._error = None
         self._login_url = None
+        await get_event_log().push("info", "bot", "bot.starting", "Bot is starting")
 
         self._task = asyncio.create_task(self._run())
         logger.info("Bot start task created")
@@ -157,6 +197,8 @@ class BotService:
             self._login_url = None
             self._state = BotState.RUNNING
             self._start_time = time.time()
+            await get_event_log().push("info", "bot", "bot.running", f"Bot running — user_id={self._credentials.user_id}", {"user_id": self._credentials.user_id, "account_id": self._credentials.account_id})
+            await get_ws_service().broadcast("bot_status", await _get_bot_status_dict(self))
             self._message_count = 0
             self._session_tokens.clear()
             self._session_requests.clear()
@@ -172,12 +214,16 @@ class BotService:
         except Exception as e:
             self._state = BotState.ERROR
             self._error = str(e)
+            await get_event_log().push("error", "bot", "bot.error", str(e), {"error": str(e)})
+            await get_ws_service().broadcast("bot_status", await _get_bot_status_dict(self))
             logger.exception("Bot crashed: %s", e)
 
         finally:
             if self._state != BotState.ERROR:
                 self._state = BotState.STOPPED
             self._start_time = None
+            await get_event_log().push("info", "bot", "bot.stopped", f"Bot stopped (state={self._state.value})", {"state": self._state.value})
+            await get_ws_service().broadcast("bot_status", await _get_bot_status_dict(self))
             logger.info("Bot stopped (state=%s)", self._state.value)
 
     async def stop(self) -> None:
@@ -196,6 +242,7 @@ class BotService:
 
     def _on_qr_url(self, url: str) -> None:
         self._login_url = url
+        asyncio.create_task(get_event_log().push("info", "bot", "bot.login_qr", f"QR code URL: {url}", {"url": url}))
         logger.info("Scan this QR URL in WeChat: %s", url)
 
     # ── Message Handler ──────────────────────────────────────────
@@ -323,6 +370,7 @@ class BotService:
         Normal messages (preprocessing + LLM, potentially slow) are fire-and-forget.
         """
         text = msg.text.strip()
+        await get_event_log().push("info", "message", "message.received", f"Message from {msg.user_id}: {text[:50]}...", {"user_id": msg.user_id, "msg_type": msg.type, "text_preview": text[:100]})
 
         # Fast path — commands are handled inline (no external API calls)
         if text.startswith("/"):
@@ -376,6 +424,7 @@ class BotService:
                             text = result
                             preprocess_tokens = self._session_tokens.get(model_id, 0) - tokens_before
                             preprocess_model_name = model_id
+                            await get_event_log().push("info", "preprocess", "preprocess.image", f"Image preprocessed for user {user_id}", {"user_id": user_id})
                             logger.info("Image preprocessed for user %s", user_id)
                     elif downloaded.type == "voice" and self._preprocess_voice_config:
                         model_id = self._preprocess_voice_config.model
@@ -385,8 +434,10 @@ class BotService:
                             text = result
                             preprocess_tokens = self._session_tokens.get(model_id, 0) - tokens_before
                             preprocess_model_name = model_id
+                            await get_event_log().push("info", "preprocess", "preprocess.voice", f"Voice preprocessed for user {user_id}", {"user_id": user_id})
                             logger.info("Voice preprocessed for user %s", user_id)
             except Exception:
+                await get_event_log().push("warning", "preprocess", "preprocess.failed", f"Media preprocessing failed for {user_id}", {"user_id": user_id})
                 logger.warning("Media preprocessing failed, using fallback text", exc_info=True)
 
         # Normal LLM flow
@@ -396,6 +447,7 @@ class BotService:
             conv_service = ConversationService(db)
             try:
                 if await conv_service.is_blocked(user_id):
+                    await get_event_log().push("info", "message", "message.blocked", f"Blocked user {user_id} — ignoring", {"user_id": user_id})
                     logger.info("Blocked user %s — ignoring", user_id)
                     return
 
@@ -456,6 +508,7 @@ class BotService:
 
                 context.append({"role": "user", "content": text})
 
+                await get_event_log().push("info", "llm", "llm.request", f"LLM request for user {user_id}: {text[:50]}...", {"user_id": user_id, "model": self._llm.config.model})
                 logger.info("LLM request for user %s: %s...", user_id, text[:50])
                 response_text, tokens = await self._llm.chat(context)
 
@@ -466,6 +519,7 @@ class BotService:
 
                 # Guard: never persist/send empty or whitespace-only response
                 if not response_text or not response_text.strip():
+                    await get_event_log().push("warning", "llm", "llm.empty", f"LLM returned empty response for user {user_id}", {"user_id": user_id, "model": model_name})
                     logger.warning("LLM returned empty/whitespace response for user %s, using fallback", user_id)
                     response_text = t("bot.error.empty_response")
 
@@ -474,7 +528,10 @@ class BotService:
                 )
                 await db.commit()
 
+                await get_event_log().push("info", "llm", "llm.response", f"LLM response for user {user_id} ({tokens} tokens)", {"user_id": user_id, "model": model_name, "tokens": tokens})
                 await self._bot.reply(msg, response_text)
+                await get_event_log().push("info", "message", "message.replied", f"Replied to user {user_id} ({tokens} tokens)", {"user_id": user_id, "tokens": tokens})
+                await get_ws_service().broadcast("conversations_updated", {"user_id": user_id})
                 logger.info("Replied to user %s (%d tokens)", user_id, tokens)
 
                 # Memory: extract and store memories (async, non-blocking)
@@ -511,10 +568,12 @@ class BotService:
         if handler:
             try:
                 await handler(msg, args)
+                await get_event_log().push("info", "command", "command.executed", f"Command {cmd} from {msg.user_id}", {"user_id": msg.user_id, "command": cmd, "args": args})
             except Exception as e:
                 logger.exception("Command %s error: %s", cmd, e)
                 await self._bot.reply(msg, t("bot.error.command", e=e))
         else:
+            await get_event_log().push("warning", "command", "command.unknown", f"Unknown command {cmd} from {msg.user_id}", {"user_id": msg.user_id, "command": cmd})
             await self._bot.reply(
                 msg,
                 t("bot.error.unknown_cmd", cmd=cmd) + "\n\n" + self._format_help()

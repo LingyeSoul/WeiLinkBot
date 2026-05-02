@@ -136,6 +136,11 @@ async def lifespan(app: FastAPI):
     set_bot_service(bot_service)
     logger.info("Bot service initialized")
 
+    # Init WebSocket service
+    from ..services.ws_service import get_ws_service
+    get_ws_service()
+    logger.info("WebSocket service initialized")
+
     yield
 
     # Shutdown: stop bot if running
@@ -189,6 +194,9 @@ def create_app() -> FastAPI:
 
     from . import memories as memory_routes
     app.include_router(memory_routes.router, prefix="/api/memories", tags=["Memories"])
+
+    from . import events as event_routes
+    app.include_router(event_routes.router, tags=["Events"])
 
     # Version endpoint
     @app.get("/api/version", include_in_schema=False)

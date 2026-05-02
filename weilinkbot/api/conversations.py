@@ -14,8 +14,18 @@ from ..schemas import (
     MessageAction,
 )
 from ..services.conversation_service import ConversationService
+from ..services.ws_service import get_ws_service
 
 router = APIRouter()
+
+
+async def _broadcast_conversations(service: ConversationService):
+    """Broadcast updated conversations list to all WebSocket clients."""
+    convs = await service.list_conversations()
+    await get_ws_service().broadcast(
+        "conversations",
+        [ConversationResponse.model_validate(c).model_dump(mode="json") for c in convs],
+    )
 
 
 async def _get_service(db: AsyncSession = Depends(get_db)) -> ConversationService:
@@ -71,4 +81,5 @@ async def clear_conversation(
     cleared = await service.clear_messages(user_id)
     if not cleared:
         raise HTTPException(status_code=404, detail=t("api.conv_not_found"))
+    await _broadcast_conversations(service)
     return MessageAction(message=t("api.cleared_conv", user_id=user_id))
