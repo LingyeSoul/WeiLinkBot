@@ -316,8 +316,15 @@ class StickerService:
         existing_names = {row[0] for row in result.fetchall()}
 
         packs_created = 0
+        processed_names: set[str] = set()
         for subdir in sorted(STICKERS_DIR.iterdir()):
             if not subdir.is_dir():
+                continue
+
+            pack_name = subdir.name
+
+            # Skip if already processed in this scan (handles duplicate dir names)
+            if pack_name in processed_names:
                 continue
 
             images = [
@@ -335,10 +342,10 @@ class StickerService:
                     missing.append((img, rel_path))
 
             if not missing:
+                processed_names.add(pack_name)
                 continue
 
             # Find or create pack (use directory name)
-            pack_name = subdir.name
             stmt = select(StickerPack).where(StickerPack.name == pack_name).limit(1)
             result = await self.db.execute(stmt)
             pack = result.scalars().first()
@@ -348,6 +355,8 @@ class StickerService:
                 self.db.add(pack)
                 await self.db.flush()
                 packs_created += 1
+
+            processed_names.add(pack_name)
 
             # Import missing images
             for img_path, rel_path in missing:
