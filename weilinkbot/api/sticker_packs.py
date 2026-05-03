@@ -59,7 +59,7 @@ async def create_pack(data: StickerPackCreate, db: AsyncSession = Depends(get_db
     service = StickerService(db)
     pack = await service.create_pack(data.name, data.description)
     await _broadcast_packs(db)
-    return {**pack.__dict__, "sticker_count": 0}
+    return {**pack.__dict__, "sticker_count": 0, "cover_sticker_id": None}
 
 
 @router.get("/{pack_id}", response_model=StickerPackDetailResponse)

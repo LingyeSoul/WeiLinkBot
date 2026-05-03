@@ -1609,14 +1609,14 @@
                      @click="openPackDetail(pack)">
                     <div class="flex items-center justify-between mb-2">
                         <h4 class="font-medium text-sm truncate" x-text="pack.name"></h4>
-                        <div class="flex gap-1">
-                            <button @click.stop="editPack(pack)" class="text-blue-500 hover:text-blue-700 text-xs px-1" title="Edit">&#9998;</button>
-                            <button @click.stop="deletePack(pack.id)" class="text-red-500 hover:text-red-700 text-xs px-1" title="Delete">&times;</button>
+                        <div class="flex gap-2">
+                            <button @click.stop="editPack(pack)" class="text-blue-500 hover:text-blue-700 text-xl px-3 py-1.5 rounded hover:bg-blue-50" title="Edit">&#9998;</button>
+                            <button @click.stop="deletePack(pack.id)" class="text-red-500 hover:text-red-700 text-xl px-3 py-1.5 rounded hover:bg-red-50" title="Delete">&times;</button>
                         </div>
                     </div>
                     <div class="h-20 bg-gray-50 rounded flex items-center justify-center mb-2 overflow-hidden">
-                        <img x-show="pack.cover_path" :src="'/' + pack.cover_path" class="h-full object-contain">
-                        <span x-show="!pack.cover_path" class="text-gray-300 text-2xl">+</span>
+                        <img x-show="pack.cover_sticker_id" :src="'/api/sticker-packs/stickers/' + pack.cover_sticker_id + '/file'" class="h-full object-contain">
+                        <span x-show="!pack.cover_sticker_id" class="text-gray-300 text-2xl">+</span>
                     </div>
                     <p class="text-xs text-gray-500" x-text="pack.sticker_count + ' ' + t('stickers.sticker_count')"></p>
                 </div>

@@ -591,6 +591,7 @@ class StickerPackResponse(BaseModel):
     name: str
     description: str
     cover_path: Optional[str] = None
+    cover_sticker_id: Optional[int] = None
     sticker_count: int = 0
     created_at: datetime
     updated_at: datetime
