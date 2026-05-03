@@ -45,7 +45,7 @@
   "status.no_token_usage": "暂无Token使用记录",
 
   "status.qr_title": "扫码登录",
-  "status.qr_hint": "请在微信中打开上方链接扫描二维码。",
+  "status.qr_hint": "请使用微信扫描上方二维码登录。",
   "status.error": "错误",
 
   "conv.title": "对话",

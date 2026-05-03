@@ -45,7 +45,7 @@
   "status.no_token_usage": "No token usage recorded yet",
 
   "status.qr_title": "Scan QR to Login",
-  "status.qr_hint": "Open the link above in WeChat to scan the QR code.",
+  "status.qr_hint": "Use WeChat to scan the QR code above.",
   "status.error": "Error",
 
   "conv.title": "Conversations",
