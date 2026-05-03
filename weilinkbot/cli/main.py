@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import ssl
 import sys
 import threading
 import webbrowser
@@ -28,9 +29,22 @@ app = typer.Typer(
 console = Console()
 
 
+def _loop_exception_handler(loop, context):
+    """Suppress noisy SSL shutdown errors during connection teardown."""
+    exc = context.get("exception")
+    if isinstance(exc, ssl.SSLError) and "APPLICATION_DATA_AFTER_CLOSE_NOTIFY" in str(exc):
+        return  # harmless; peer sent data after TLS close_notify
+    loop.default_exception_handler(context)
+
+
 def _run_async(coro):
     """Run an async function from sync CLI context."""
-    return asyncio.run(coro)
+    loop = asyncio.new_event_loop()
+    loop.set_exception_handler(_loop_exception_handler)
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
 
 
 # ── Bot Commands ──────────────────────────────────────────────────

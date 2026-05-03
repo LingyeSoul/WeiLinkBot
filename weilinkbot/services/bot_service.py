@@ -285,7 +285,11 @@ class BotService:
     def _on_qr_url(self, url: str) -> None:
         self._login_url = url
         asyncio.create_task(get_event_log().push("info", "bot", "bot.login_qr", f"QR code URL: {url}", {"url": url}))
+        asyncio.create_task(self._broadcast_qr_status())
         logger.info("Scan this QR URL in WeChat: %s", url)
+
+    async def _broadcast_qr_status(self) -> None:
+        await get_ws_service().broadcast("bot_status", await _get_bot_status_dict(self))
 
     # ── Message Handler ──────────────────────────────────────────
 

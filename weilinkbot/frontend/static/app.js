@@ -166,10 +166,7 @@ function dashboard() {
 
         // ── Init ─────────────────────────────────────────────────
         async init() {
-            if (this._initialized) {
-                console.warn("[App] init() called twice — skipping");
-                return;
-            }
+            if (this._initialized) return;
             this._initialized = true;
 
             console.log("[App] Init start");
