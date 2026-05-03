@@ -8,9 +8,35 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-SKILLS_DIR = Path("data/skills")
+SKILLS_DIR = Path("workspace/skills")
+LEGACY_SKILLS_DIR = Path("data/skills")
 
 _SEPARATORS = ("---\n", "---\r\n")
+
+
+def migrate_skills() -> None:
+    """Migrate skill files from data/skills/ to workspace/skills/ on startup."""
+    legacy = LEGACY_SKILLS_DIR
+    if not legacy.exists() or not any(legacy.glob("*.md")):
+        return
+
+    target = SKILLS_DIR
+    target.mkdir(parents=True, exist_ok=True)
+
+    migrated = 0
+    for f in legacy.glob("*.md"):
+        dest = target / f.name
+        if not dest.exists():
+            dest.write_bytes(f.read_bytes())
+            f.unlink()
+            migrated += 1
+
+    # Clean up empty legacy dir
+    if not any(legacy.iterdir()):
+        legacy.rmdir()
+
+    if migrated:
+        logger.info("Migrated %d skills from %s to %s", migrated, legacy, target)
 
 
 @dataclass
