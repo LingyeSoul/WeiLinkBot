@@ -261,3 +261,84 @@ async def reconnect_mcp_server(server_id: int):
     }
     conn = await mcp_service.connect_server(server.id, config)
     return {"id": server_id, "status": conn.status}
+
+
+# ── Workspace ──────────────────────────────────────────────────
+
+@router.get("/workspace/config")
+async def get_workspace_config():
+    """Get workspace configuration."""
+    cfg = get_config()
+    ws = cfg.workspace
+    return {
+        "enabled": ws.enabled,
+        "root": ws.root,
+        "blocked_extensions": list(ws.blocked_extensions),
+        "read_max_size": ws.read_max_size,
+        "write_max_size": ws.write_max_size,
+        "list_max_entries": ws.list_max_entries,
+        "grep_max_results": ws.grep_max_results,
+        "enabled_workspace_tools": list(cfg.agent.enabled_workspace_tools),
+    }
+
+
+@router.put("/workspace/config")
+async def update_workspace_config(body: dict):
+    """Update workspace configuration."""
+    cfg = get_config()
+    ws = cfg.workspace
+    for field in ("enabled", "root", "read_max_size", "write_max_size", "list_max_entries", "grep_max_results"):
+        if field in body:
+            setattr(ws, field, body[field])
+    if "blocked_extensions" in body:
+        ws.blocked_extensions = body["blocked_extensions"]
+    if "enabled_workspace_tools" in body:
+        cfg.agent.enabled_workspace_tools = body["enabled_workspace_tools"]
+    save_config()
+    return {"ok": True}
+
+
+@router.get("/workspace/files")
+async def list_workspace_files(path: str = "", pattern: str = "*"):
+    """List files in the workspace."""
+    from .deps import get_workspace_service
+    ws = get_workspace_service()
+    if not ws:
+        raise HTTPException(503, "Workspace not available")
+    try:
+        entries = ws.list_files(path, pattern)
+        return [{"name": e.name, "path": e.path, "is_dir": e.is_dir, "size": e.size} for e in entries]
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+
+@router.get("/workspace/read")
+async def read_workspace_file(path: str, offset: int = 0, limit: int | None = None):
+    """Read a file from the workspace."""
+    from .deps import get_workspace_service
+    ws = get_workspace_service()
+    if not ws:
+        raise HTTPException(503, "Workspace not available")
+    try:
+        content = ws.read_file(path, offset=offset, limit=limit)
+        return {"path": path, "content": content}
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+
+@router.post("/workspace/upload")
+async def upload_workspace_file(file: UploadFile = File(...), path: str = ""):
+    """Upload a file to the workspace."""
+    from .deps import get_workspace_service
+    ws = get_workspace_service()
+    if not ws:
+        raise HTTPException(503, "Workspace not available")
+
+    target = f"{path}/{file.filename}" if path else file.filename
+    content = await file.read()
+    text = content.decode("utf-8", errors="replace")
+    try:
+        written = ws.write_file(target, text)
+        return {"path": target, "bytes": written}
+    except Exception as e:
+        raise HTTPException(400, str(e))
