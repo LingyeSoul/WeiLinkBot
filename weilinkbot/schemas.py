@@ -557,6 +557,51 @@ class MCPServersResponse(BaseModel):
     servers: list[MCPServerResponse]
 
 
+# ── Sticker Packs ─────────────────────────────────────────────
+
+class StickerPackCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    description: str = ""
+
+
+class StickerPackUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    description: Optional[str] = None
+
+
+class StickerResponse(BaseModel):
+    id: int
+    pack_id: int
+    file_path: str
+    original_filename: str
+    text_description: str
+    sort_order: int
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class StickerUpdate(BaseModel):
+    text_description: Optional[str] = Field(None, max_length=500)
+    sort_order: Optional[int] = None
+
+
+class StickerPackResponse(BaseModel):
+    id: int
+    name: str
+    description: str
+    cover_path: Optional[str] = None
+    sticker_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class StickerPackDetailResponse(StickerPackResponse):
+    stickers: list[StickerResponse] = []
+
+
 # ── Generic ─────────────────────────────────────────────────────
 
 class MessageAction(BaseModel):
