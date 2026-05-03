@@ -281,6 +281,31 @@ function dashboard() {
             }
         },
 
+        renderQrCode(url) {
+            const canvas = document.getElementById('qr-canvas');
+            if (!canvas || !window.qrcode) return;
+            const qr = qrcode(0, 'M');
+            qr.addData(url);
+            qr.make();
+            const cellSize = 4;
+            const margin = 4;
+            const moduleCount = qr.getModuleCount();
+            const size = (moduleCount + margin * 2) * cellSize;
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, size, size);
+            ctx.fillStyle = '#000000';
+            for (let row = 0; row < moduleCount; row++) {
+                for (let col = 0; col < moduleCount; col++) {
+                    if (qr.isDark(row, col)) {
+                        ctx.fillRect((col + margin) * cellSize, (row + margin) * cellSize, cellSize, cellSize);
+                    }
+                }
+            }
+        },
+
         formatNumber(n) {
             if (!n && n !== 0) return "—";
             return n.toLocaleString();
@@ -1217,11 +1242,21 @@ function dashboard() {
                     body: JSON.stringify({
                         enabled: this.workspaceConfig.enabled,
                         root: this.workspaceConfig.root || undefined,
+                        enabled_workspace_tools: this.workspaceConfig.enabled_workspace_tools,
                     }),
                 });
-                this.workspaceConfig = data;
                 this.showToast(t("agent.workspace.configUpdated"), "success");
             } catch (e) { this.showToast(e.message, "error"); }
+        },
+        toggleWorkspaceTool(toolName) {
+            const tools = this.workspaceConfig.enabled_workspace_tools || [];
+            const idx = tools.indexOf(toolName);
+            if (idx >= 0) {
+                tools.splice(idx, 1);
+            } else {
+                tools.push(toolName);
+            }
+            this.saveWorkspaceConfig();
         },
         async refreshWorkspaceFiles() {
             try {
