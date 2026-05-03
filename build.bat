@@ -13,7 +13,6 @@ if not exist "%VENV_PYTHON%" (
     python -m venv "%VENV_DIR%"
     if errorlevel 1 goto :fail_venv
 
-    rem Install / upgrade packaging dependencies
     echo [build.bat] Upgrading pip in .venv ...
     "%VENV_PYTHON%" -m pip install --upgrade pip
     if errorlevel 1 goto :fail_pip
@@ -21,14 +20,13 @@ if not exist "%VENV_PYTHON%" (
     echo [build.bat] Installing packaging dependencies into .venv ...
     "%VENV_PYTHON%" -m pip install ".[packaging]"
     if errorlevel 1 goto :fail_packaging
-
-    rem Install project into .venv
-    echo [build.bat] Installing project into .venv ...
-    "%VENV_PYTHON%" -m pip install -e .
-    if errorlevel 1 goto :fail_project
 ) else (
-    echo [build.bat] Using existing .venv; skipping dependency installation.
+    echo [build.bat] Using existing .venv.
 )
+
+echo [build.bat] Reinstalling project into .venv ...
+"%VENV_PYTHON%" -m pip install -e .
+if errorlevel 1 goto :fail_project
 
 rem Run build.py using the venv interpreter
 echo [build.bat] Launching build.py using .venv\Scripts\python.exe ...
