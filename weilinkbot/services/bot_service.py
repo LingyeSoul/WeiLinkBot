@@ -23,6 +23,7 @@ from .conversation_service import ConversationService
 from .memory_buffer import MemoryBuffer
 from ..i18n import t
 from .event_log import get_event_log
+from .tools.sticker_context import set_sticker_context
 from .ws_service import get_ws_service
 
 logger = logging.getLogger(__name__)
@@ -579,6 +580,9 @@ class BotService:
 
                 await get_event_log().push("info", "llm", "llm.request", f"LLM request for user {user_id}: {text[:50]}...", {"user_id": user_id, "model": self._llm.config.model})
                 logger.info("LLM request for user %s: %s...", user_id, text[:50])
+
+                # Set runtime context for sticker tools
+                set_sticker_context(self._bot, msg)
 
                 if self._agent:
                     response_text, tokens = await self._agent.run(context, supports_tools=self._supports_tools)

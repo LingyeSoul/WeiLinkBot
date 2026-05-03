@@ -44,5 +44,5 @@ class SearchStickerTool(Tool):
             lines.append(
                 f"- [{r['pack_name']}] id={r['sticker_id']}: {r['text_description']} (file: {r['file_path']})"
             )
-        lines.append("Use the file_path to send the sticker image to the user.")
+        lines.append("Call send_sticker with one of the file_path values above to send it to the user.")
         return "\n".join(lines)
