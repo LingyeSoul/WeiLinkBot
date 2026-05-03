@@ -153,6 +153,7 @@
   "stickers.no_packs": "No sticker packs yet. Click above to create one.",
   "stickers.no_stickers": "No stickers in this pack yet. Click to add.",
   "stickers.add_sticker": "Add Sticker",
+  "stickers.delete_pack": "Delete Pack",
   "stickers.upload_sticker": "Upload Sticker",
   "stickers.text_description": "Description",
   "stickers.text_description_placeholder": "Enter text description for this sticker",
@@ -160,10 +161,11 @@
 
   "about.description": "AI Chatbot Platform powered by WeChat iLink Bot SDK",
   "about.author": "Author",
+  "about.website": "Official Website",
   "about.github": "GitHub Repository",
   "about.bilibili": "Bilibili",
   "about.tech_stack": "Tech Stack",
-  "about.license": "Licensed under GPL-3.0",
+  "about.license": "Licensed under AGPL-3.0",
 
   "toast.bot_starting": "Bot starting...",
   "toast.bot_stopped": "Bot stopped",

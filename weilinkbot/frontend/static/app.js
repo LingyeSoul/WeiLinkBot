@@ -1172,6 +1172,16 @@ function dashboard() {
                 this.showToast(t("toast.sticker_deleted"), "success");
             } catch {}
         },
+        async deletePackFromDetail() {
+            if (!this.selectedPack) return;
+            if (!confirm(t("confirm.delete_pack"))) return;
+            try {
+                await this.api(`/api/sticker-packs/${this.selectedPack.id}`, { method: "DELETE" });
+                this.showStickerDetail = false;
+                await this.refreshStickerPacks();
+                this.showToast(t("toast.pack_deleted"), "success");
+            } catch {}
+        },
         async scanStickerPath() {
             const path = this.scanPath.trim();
             if (!path) return;

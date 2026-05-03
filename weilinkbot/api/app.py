@@ -71,8 +71,16 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info("Database initialized")
 
-    # Create default system prompt if none exists, and default LLM preset
+    # Auto-scan sticker packs from data/stickers/packs
+    from ..services.sticker_service import StickerService, STICKERS_DIR
     session_factory = get_session_factory()
+    async with session_factory() as db:
+        service = StickerService(db)
+        scanned = await service.auto_scan_packs()
+        if scanned > 0:
+            logger.info("Sticker auto-scan: imported %d packs from %s", scanned, STICKERS_DIR)
+
+    # Create default system prompt if none exists, and default LLM preset
     async with session_factory() as db:
         from sqlalchemy import select, func
 

@@ -153,6 +153,7 @@
   "stickers.no_packs": "暂无表情包系列，点击上方按钮创建",
   "stickers.no_stickers": "该系列暂无表情，点击添加",
   "stickers.add_sticker": "添加表情",
+  "stickers.delete_pack": "删除系列",
   "stickers.upload_sticker": "上传表情",
   "stickers.text_description": "文字描述",
   "stickers.text_description_placeholder": "输入表情的文字描述",
@@ -160,10 +161,11 @@
 
   "about.description": "基于微信iLink Bot SDK的AI聊天机器人平台",
   "about.author": "作者",
+  "about.website": "官网",
   "about.github": "GitHub仓库",
   "about.bilibili": "B站",
   "about.tech_stack": "技术栈",
-  "about.license": "基于GPL-3.0许可证",
+  "about.license": "基于AGPL-3.0许可证",
 
   "toast.bot_starting": "机器人启动中...",
   "toast.bot_stopped": "机器人已停止",

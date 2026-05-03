@@ -103,6 +103,10 @@ class StickerService:
         result = await self.db.execute(stmt)
         next_order = result.scalar() + 1
 
+        # Use filename stem as default description if none provided
+        if not text_description:
+            text_description = Path(original_filename).stem
+
         sticker = Sticker(
             pack_id=pack_id,
             file_path="",
@@ -118,7 +122,8 @@ class StickerService:
         file_path = pack_dir / f"{sticker.id}{ext}"
         file_path.write_bytes(file_data)
 
-        sticker.file_path = f"data/stickers/packs/{pack_id}/{sticker.id}{ext}"
+        # Store relative path (relative to static mount /stickers -> data/stickers/packs)
+        sticker.file_path = f"{pack_id}/{sticker.id}{ext}"
 
         if not pack.cover_path:
             pack.cover_path = sticker.file_path
@@ -145,7 +150,7 @@ class StickerService:
         if not sticker:
             return False
         if sticker.file_path:
-            fp = Path(sticker.file_path)
+            fp = STICKERS_DIR / sticker.file_path
             if fp.exists():
                 fp.unlink(missing_ok=True)
         await self.db.delete(sticker)
@@ -291,3 +296,82 @@ class StickerService:
             img_data = img_path.read_bytes()
             await self.add_sticker(pack.id, img_data, img_path.name)
         return pack
+
+    async def auto_scan_packs(self) -> int:
+        """Auto-scan data/stickers/packs on startup and import orphaned images.
+
+        For each subdirectory under STICKERS_DIR, if images exist but have no
+        matching DB records, create the pack and sticker entries.
+        Returns the number of new packs created.
+        """
+        if not STICKERS_DIR.is_dir():
+            return 0
+
+        # Collect existing file_paths from DB
+        result = await self.db.execute(select(Sticker.file_path))
+        existing_paths = {row[0] for row in result.fetchall()}
+
+        # Collect existing pack names
+        result = await self.db.execute(select(StickerPack.name))
+        existing_names = {row[0] for row in result.fetchall()}
+
+        packs_created = 0
+        for subdir in sorted(STICKERS_DIR.iterdir()):
+            if not subdir.is_dir():
+                continue
+
+            images = [
+                p for p in sorted(subdir.rglob("*"))
+                if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
+            ]
+            if not images:
+                continue
+
+            # Check if any images in this dir are missing from DB
+            missing = []
+            for img in images:
+                rel_path = f"{subdir.name}/{img.name}"
+                if rel_path not in existing_paths:
+                    missing.append((img, rel_path))
+
+            if not missing:
+                continue
+
+            # Find or create pack (use directory name)
+            pack_name = subdir.name
+            stmt = select(StickerPack).where(StickerPack.name == pack_name)
+            result = await self.db.execute(stmt)
+            pack = result.scalar_one_or_none()
+
+            if not pack:
+                pack = StickerPack(name=pack_name)
+                self.db.add(pack)
+                await self.db.flush()
+                packs_created += 1
+
+            # Import missing images
+            for img_path, rel_path in missing:
+                ext = img_path.suffix.lower()
+                stmt_order = select(func.coalesce(func.max(Sticker.sort_order), 0)).where(Sticker.pack_id == pack.id)
+                result = await self.db.execute(stmt_order)
+                next_order = result.scalar() + 1
+
+                sticker = Sticker(
+                    pack_id=pack.id,
+                    file_path=rel_path,
+                    original_filename=img_path.name,
+                    text_description=img_path.stem,
+                    sort_order=next_order,
+                )
+                self.db.add(sticker)
+                existing_paths.add(rel_path)
+
+            # Update cover if needed
+            if not pack.cover_path:
+                first_rel = f"{subdir.name}/{images[0].name}"
+                pack.cover_path = first_rel
+
+        if packs_created > 0 or existing_paths:
+            await self.db.commit()
+
+        return packs_created

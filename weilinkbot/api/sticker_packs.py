@@ -195,8 +195,12 @@ async def delete_sticker(sticker_id: int, db: AsyncSession = Depends(get_db)):
 async def serve_sticker_file(sticker_id: int, db: AsyncSession = Depends(get_db)):
     from sqlalchemy import select as _select
     from ..models import Sticker as _Sticker
+    from ..services.sticker_service import STICKERS_DIR
     result = await db.execute(_select(_Sticker.file_path).where(_Sticker.id == sticker_id))
-    file_path = result.scalar_one_or_none()
-    if not file_path or not Path(file_path).exists():
+    rel_path = result.scalar_one_or_none()
+    if not rel_path:
         raise HTTPException(status_code=404, detail=t("api.sticker_not_found"))
-    return FileResponse(file_path)
+    full_path = STICKERS_DIR / rel_path
+    if not full_path.exists():
+        raise HTTPException(status_code=404, detail=t("api.sticker_not_found"))
+    return FileResponse(str(full_path))

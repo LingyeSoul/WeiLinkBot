@@ -1571,11 +1571,16 @@
             <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg">
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-lg font-semibold" x-text="selectedPack?.name"></h3>
-                    <label class="px-3 py-1.5 bg-blue-600 text-white rounded cursor-pointer hover:bg-blue-700 text-sm">
-                        <span x-text="t('stickers.add_sticker')"></span>
-                        <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="hidden"
-                               @change="addSticker($event)">
-                    </label>
+                    <div class="flex gap-2">
+                        <label class="px-3 py-1.5 bg-blue-600 text-white rounded cursor-pointer hover:bg-blue-700 text-sm">
+                            <span x-text="t('stickers.add_sticker')"></span>
+                            <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="hidden"
+                                   @change="addSticker($event)">
+                        </label>
+                        <button @click="deletePackFromDetail()" class="px-3 py-1.5 bg-red-500 text-white rounded hover:bg-red-600 text-sm">
+                            <span x-text="t('stickers.delete_pack')">Delete Pack</span>
+                        </button>
+                    </div>
                 </div>
                 <div class="grid grid-cols-4 gap-3 max-h-96 overflow-y-auto">
                     <template x-for="s in selectedPackStickers" :key="s.id">
@@ -1605,8 +1610,8 @@
                     <div class="flex items-center justify-between mb-2">
                         <h4 class="font-medium text-sm truncate" x-text="pack.name"></h4>
                         <div class="flex gap-1">
-                            <button @click.stop="editPack(pack)" class="text-gray-400 hover:text-blue-600 text-xs">E</button>
-                            <button @click.stop="deletePack(pack.id)" class="text-gray-400 hover:text-red-600 text-xs">D</button>
+                            <button @click.stop="editPack(pack)" class="text-blue-500 hover:text-blue-700 text-xs px-1" title="Edit">&#9998;</button>
+                            <button @click.stop="deletePack(pack.id)" class="text-red-500 hover:text-red-700 text-xs px-1" title="Delete">&times;</button>
                         </div>
                     </div>
                     <div class="h-20 bg-gray-50 rounded flex items-center justify-center mb-2 overflow-hidden">
@@ -2311,6 +2316,14 @@
 
         <div class="bg-white rounded-xl shadow-sm p-6 space-y-3">
             <h3 class="font-semibold text-gray-800 mb-4">Links</h3>
+            <a href="https://weilinkbot.lingyesoul.top/" target="_blank"
+               class="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors">
+                <img src="/static/logo.svg" alt="WeiLinkBot" class="w-5 h-5">
+                <div>
+                    <div class="text-sm font-medium text-gray-800" x-text="t('about.website')">Official Website</div>
+                    <div class="text-xs text-gray-500">weilinkbot.lingyesoul.top</div>
+                </div>
+            </a>
             <a href="https://github.com/LingyeSoul/WeiLinkBot" target="_blank"
                class="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors">
                 <svg class="w-5 h-5 text-gray-700" fill="currentColor" viewBox="0 0 24 24">
@@ -2347,7 +2360,7 @@
 
         <div class="text-center text-xs text-gray-400 py-4"
              x-text="t('about.license')">
-            Licensed under GPL-3.0
+            Licensed under AGPL-3.0
         </div>
     </div>
 
