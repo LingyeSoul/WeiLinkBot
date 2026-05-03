@@ -33,6 +33,7 @@ from . import providers as provider_routes
 from . import settings as settings_routes
 from . import st_presets as st_preset_routes
 from . import world_books as world_book_routes
+from . import sticker_packs as sticker_pack_routes
 
 logger = logging.getLogger(__name__)
 
@@ -271,6 +272,11 @@ def create_app() -> FastAPI:
     characters_dir.mkdir(parents=True, exist_ok=True)
     app.mount("/characters", StaticFiles(directory=str(characters_dir)), name="characters")
 
+    # Serve sticker files
+    stickers_dir = Path("data/stickers/packs")
+    stickers_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/stickers", StaticFiles(directory=str(stickers_dir)), name="stickers")
+
     # Register API routes
     app.include_router(bot_routes.router, prefix="/api/bot", tags=["Bot"])
     app.include_router(conv_routes.router, prefix="/api/conversations", tags=["Conversations"])
@@ -284,6 +290,7 @@ def create_app() -> FastAPI:
     app.include_router(settings_routes.router, prefix="/api/settings", tags=["Settings"])
     app.include_router(st_preset_routes.router, prefix="/api/st-presets", tags=["ST Presets"])
     app.include_router(world_book_routes.router, prefix="/api/world-books", tags=["World Books"])
+    app.include_router(sticker_pack_routes.router, prefix="/api/sticker-packs", tags=["Sticker Packs"])
 
     from . import memories as memory_routes
     app.include_router(memory_routes.router, prefix="/api/memories", tags=["Memories"])
