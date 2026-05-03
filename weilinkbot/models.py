@@ -54,7 +54,6 @@ class UserConfig(Base):
     custom_prompt_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("system_prompts.id"), nullable=True
     )
-    max_history: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, server_default=func.now()
     )
@@ -274,6 +273,23 @@ class Message(Base):
 
     def __repr__(self) -> str:
         return f"<Message id={self.id} role={self.role!r} conv={self.conversation_id}>"
+
+
+class MemorySummary(Base):
+    """A batch summary of recent conversation messages for a user."""
+    __tablename__ = "memory_summaries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    message_range: Mapped[str] = mapped_column(String(200), nullable=False)
+    tokens_used: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, server_default=func.now()
+    )
+
+    def __repr__(self) -> str:
+        return f"<MemorySummary id={self.id} user={self.user_id!r} range={self.message_range!r}>"
 
 
 class SystemSetting(Base):

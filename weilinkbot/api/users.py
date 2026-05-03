@@ -50,12 +50,11 @@ async def update_user(
     data: UserConfigUpdate,
     service: ConversationService = Depends(_get_service),
 ):
-    """Update user configuration (custom prompt, max history, etc.)."""
+    """Update user configuration (custom prompt, etc.)."""
     config = await service.update_user_config(
         user_id,
         nickname=data.nickname,
         custom_prompt_id=data.custom_prompt_id,
-        max_history=data.max_history,
     )
     await _broadcast_users(service)
     return config

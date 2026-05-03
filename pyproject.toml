@@ -27,6 +27,7 @@ dependencies = [
     "onnxruntime>=1.17.0",
     "tokenizers>=0.15.0",
     "mcp>=1.0.0",
+    "ddgs>=9.0.0",
 ]
 
 [project.optional-dependencies]

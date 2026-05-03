@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 import json
+import zipfile
+import io
+import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File
+
+logger = logging.getLogger(__name__)
 
 from ..config import get_config, save_config
 from ..schemas import (
@@ -82,6 +87,57 @@ async def create_skill(data: SkillCreate):
     from .deps import get_skill_service
     get_skill_service().save(data.name, data.content, data.description)
     return {"name": data.name}
+
+
+@router.post("/skills/import")
+async def import_skills(file: UploadFile = File(...)):
+    """Import skills from a .md file or .zip archive containing .md files."""
+    from .deps import get_skill_service
+
+    skill_service = get_skill_service()
+    filename = (file.filename or "").lower()
+    raw = await file.read()
+
+    if len(raw) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large (max 10MB)")
+
+    imported: list[str] = []
+
+    if filename.endswith(".md"):
+        # Single markdown file
+        name = filename.rsplit("/", 1)[-1]
+        if name.endswith(".md"):
+            name = name[:-3]
+        content = raw.decode("utf-8", errors="replace")
+        skill_service.save(name, content)
+        imported.append(name)
+
+    elif filename.endswith(".zip"):
+        # Zip archive — import all .md files inside
+        try:
+            with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+                for entry in zf.namelist():
+                    if entry.endswith("/") or not entry.lower().endswith(".md"):
+                        continue
+                    entry_name = entry.rsplit("/", 1)[-1]
+                    if not entry_name.lower().endswith(".md"):
+                        continue
+                    skill_name = entry_name[:-3]
+                    try:
+                        content = zf.read(entry).decode("utf-8", errors="replace")
+                    except Exception:
+                        continue
+                    try:
+                        skill_service.save(skill_name, content)
+                        imported.append(skill_name)
+                    except ValueError:
+                        logger.warning("Skipping invalid skill name from zip: %s", entry)
+        except zipfile.BadZipFile:
+            raise HTTPException(status_code=400, detail="Invalid zip file")
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported file format. Use .md or .zip")
+
+    return {"imported": imported, "count": len(imported)}
 
 
 @router.delete("/skills/{name}")

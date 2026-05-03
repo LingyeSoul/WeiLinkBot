@@ -6,15 +6,16 @@ const PRESETS = {
 };
 
 let _dashboardInitialized = false;
+let _dashboardReturn = null;
 
 function dashboard() {
     if (_dashboardInitialized) {
         console.warn("[App] dashboard() called twice — preventing duplicate initialization");
-        return window._dashboardInstance || {};
+        return _dashboardReturn;
     }
     _dashboardInitialized = true;
-    
-    return {
+
+    return _dashboardReturn = {
         // ── State ────────────────────────────────────────────────
         activeTab: "status",
         langLabel: "EN",
@@ -84,6 +85,7 @@ function dashboard() {
         settingsLoaded: false,
 
         // Agent Config
+        agentSubTab: 'tools',
         agentConfig: { max_tool_rounds: 5, enabled_tools: [], available_tools: [] },
         agentConfigLoaded: false,
         skills: { items: [], loaded: false },
@@ -160,8 +162,7 @@ function dashboard() {
                 return;
             }
             this._initialized = true;
-            window._dashboardInstance = this;
-            
+
             console.log("[App] Init start");
             this.langLabel = t("lang.toggle");
             window.addEventListener("lang-changed", () => {
@@ -323,13 +324,6 @@ function dashboard() {
         async stopBot() {
             await this.api("/api/bot/stop", { method: "POST" });
             this.showToast(t("toast.bot_stopped"), "info");
-            await this.refreshBotStatus();
-        },
-
-        async unbindBot() {
-            if (!confirm(t("confirm.unbind_bot"))) return;
-            await this.api("/api/bot/unbind", { method: "POST" });
-            this.showToast(t("toast.bot_unbound"), "info");
             await this.refreshBotStatus();
         },
 
@@ -515,6 +509,15 @@ function dashboard() {
             await this.api(`/api/users/${user.user_id}`, { method: "DELETE" });
             await this.refreshUsers();
             this.showToast(t("toast.user_deleted"), "success");
+        },
+
+        async saveNickname(user, nickname) {
+            await this.api(`/api/users/${user.user_id}`, {
+                method: "PUT",
+                body: JSON.stringify({ nickname: nickname.trim() || null }),
+            });
+            await this.refreshUsers();
+            this.showToast(t("toast.nickname_saved"), "success");
         },
 
         // ── Characters ─────────────────────────────────────────────
@@ -1106,6 +1109,24 @@ function dashboard() {
                 this.showToast(t("toast.saved"), "success");
             } catch (e) { this.showToast(e.message, "error"); }
         },
+        async importSkills(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            event.target.value = "";
+            const formData = new FormData();
+            formData.append("file", file);
+            try {
+                const resp = await fetch("/api/agent/skills/import", { method: "POST", body: formData });
+                if (!resp.ok) {
+                    const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+                    throw new Error(err.detail || resp.statusText);
+                }
+                const result = await resp.json();
+                await this.refreshSkills();
+                const msg = t("toast.imported_skills").replace("{count}", result.count).replace("{names}", result.imported.join(", "));
+                this.showToast(msg, "success");
+            } catch (e) { this.showToast(e.message, "error"); }
+        },
         async deleteSkill(name) {
             if (!confirm(t("agent.confirm_delete_skill"))) return;
             try {
@@ -1348,6 +1369,7 @@ function memoriesPanel() {
             llm_base_url: '',
             llm_api_key: '',
             llm_api_key_set: false,
+            llm_provider_id: 0,
             top_k: 5,
             min_score: 0,
             max_context_chars: 2000,
@@ -1356,7 +1378,14 @@ function memoriesPanel() {
             hnsw_m: 16,
             hnsw_construction_ef: 200,
             hnsw_search_ef: 100,
+            turn_threshold: 10,
+            timeout_minutes: 30,
+            time_decay_days: 30,
+            rerank_weight: 0.7,
+            exact_sim_weight: 0.3,
+            expand_factor: 2,
         },
+        providers: [],
         users: [],
         selectedUser: null,
         userMemories: [],
@@ -1370,7 +1399,7 @@ function memoriesPanel() {
 
         async init() {
             this.initShowToast();
-            await this.loadConfig();
+            await Promise.all([this.loadConfig(), this.loadProviders()]);
             await this.loadStatus();
             if (this.status.available) {
                 await this.loadUsers();
@@ -1385,6 +1414,13 @@ function memoriesPanel() {
                     this.status.vector_count = data.vector_count;
                 }
             });
+        },
+
+        async loadProviders() {
+            try {
+                const res = await fetch('/api/providers');
+                if (res.ok) this.providers = await res.json();
+            } catch { this.providers = []; }
         },
 
         async loadConfig() {
@@ -1405,6 +1441,7 @@ function memoriesPanel() {
                     this.configForm.llm_model = data.llm?.model || '';
                     this.configForm.llm_base_url = data.llm?.base_url || '';
                     this.configForm.llm_api_key = '';
+                    this.configForm.llm_provider_id = data.llm?.llm_provider_id || 0;
                     this.configForm.llm_api_key_set = data.llm?.api_key_set || false;
                     this.configForm.top_k = data.top_k || 5;
                     this.configForm.min_score = data.min_score ?? 0;
@@ -1414,6 +1451,12 @@ function memoriesPanel() {
                     this.configForm.hnsw_m = data.hnsw?.m || 16;
                     this.configForm.hnsw_construction_ef = data.hnsw?.construction_ef || 200;
                     this.configForm.hnsw_search_ef = data.hnsw?.search_ef || 100;
+                    this.configForm.turn_threshold = data.turn_threshold ?? 10;
+                    this.configForm.timeout_minutes = data.timeout_minutes ?? 30;
+                    this.configForm.time_decay_days = data.time_decay_days ?? 30;
+                    this.configForm.rerank_weight = data.rerank_weight ?? 0.7;
+                    this.configForm.exact_sim_weight = data.exact_sim_weight ?? 0.3;
+                    this.configForm.expand_factor = data.expand_factor ?? 2;
                     // Auto-show config when not configured
                     if (!this.configForm.embedding_model) {
                         this.showConfig = true;
@@ -1467,12 +1510,12 @@ function memoriesPanel() {
 
         get localEmbeddingBusyText() {
             if (this.testing) {
-                return '正在检查本地 ONNX 模型。首次使用会从 ModelScope 下载模型文件并加载 ONNX Runtime，可能需要几分钟，请不要关闭页面。';
+                return t('memory.config.onnx_testing_text');
             }
             if (this.saving) {
-                return '正在保存并初始化本地 ONNX 模型。首次使用会从 ModelScope 下载模型文件并加载 ONNX Runtime，可能需要几分钟，请耐心等待。';
+                return t('memory.config.onnx_saving_text');
             }
-            return '首次使用本地模型时会从 ModelScope 下载 ONNX 文件并加载模型，过程可能需要几分钟。';
+            return t('memory.config.onnx_idle_text');
         },
 
         async saveConfig() {
@@ -1499,9 +1542,16 @@ function memoriesPanel() {
                     hnsw_m: this.configForm.hnsw_m,
                     hnsw_construction_ef: this.configForm.hnsw_construction_ef,
                     hnsw_search_ef: this.configForm.hnsw_search_ef,
+                    turn_threshold: this.configForm.turn_threshold,
+                    timeout_minutes: this.configForm.timeout_minutes,
+                    time_decay_days: this.configForm.time_decay_days,
+                    rerank_weight: this.configForm.rerank_weight,
+                    exact_sim_weight: this.configForm.exact_sim_weight,
+                    expand_factor: this.configForm.expand_factor,
                     llm_provider: this.configForm.llm_provider,
                     llm_model: this.configForm.llm_model.trim(),
                     llm_base_url: this.configForm.llm_base_url.trim(),
+                    llm_provider_id: this.configForm.llm_provider_id || 0,
                 };
                 if (this.configForm.embedding_api_key) {
                     body.embedding_api_key = this.configForm.embedding_api_key;
@@ -1726,10 +1776,10 @@ function memoriesPanel() {
                 a.download = `weilinkbot-memories-${stamp}.json`;
                 a.click();
                 URL.revokeObjectURL(url);
-                this.showToast('记忆已导出', 'success');
+                this.showToast(t('memory.detail.exported'), 'success');
             } catch (e) {
                 console.error('Failed to export memories', e);
-                this.showToast('记忆导出失败: ' + e.message, 'error');
+                this.showToast(t('memory.detail.export_failed') + ': ' + e.message, 'error');
             }
         },
     };

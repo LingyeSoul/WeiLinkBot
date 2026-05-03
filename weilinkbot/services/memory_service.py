@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 try:
@@ -191,6 +191,8 @@ class MemoryService:
         _set_if_nonempty("llm_api_key", mem_cfg.llm, "api_key")
         _set_if_provided("llm_base_url", mem_cfg.llm, "base_url")
         _set_if_nonempty("llm_model", mem_cfg.llm, "model")
+        if "llm_provider_id" in kwargs:
+            mem_cfg.llm.llm_provider_id = int(str(kwargs["llm_provider_id"]))
         if "top_k" in kwargs:
             mem_cfg.top_k = int(str(kwargs["top_k"]))
         if "db_path" in kwargs:
@@ -215,6 +217,18 @@ class MemoryService:
             mem_cfg.role_term_blacklist = list(kwargs["role_term_blacklist"])
         if "category_budgets" in kwargs and kwargs["category_budgets"] is not None:
             mem_cfg.category_budgets = dict(kwargs["category_budgets"])
+        if "turn_threshold" in kwargs:
+            mem_cfg.turn_threshold = int(str(kwargs["turn_threshold"]))
+        if "timeout_minutes" in kwargs:
+            mem_cfg.timeout_minutes = int(str(kwargs["timeout_minutes"]))
+        if "time_decay_days" in kwargs:
+            mem_cfg.time_decay_days = int(str(kwargs["time_decay_days"]))
+        if "rerank_weight" in kwargs:
+            mem_cfg.rerank_weight = float(str(kwargs["rerank_weight"]))
+        if "exact_sim_weight" in kwargs:
+            mem_cfg.exact_sim_weight = float(str(kwargs["exact_sim_weight"]))
+        if "expand_factor" in kwargs:
+            mem_cfg.expand_factor = int(str(kwargs["expand_factor"]))
 
         if mem_cfg.hnsw_search_ef < mem_cfg.top_k:
             mem_cfg.hnsw_search_ef = mem_cfg.top_k
@@ -568,37 +582,6 @@ class MemoryService:
             self._available = False
             self._init_error = str(exc)
 
-    async def _local_search(self, user_id: str, query: str) -> list[dict[str, str]]:
-        try:
-            if self._local_embedder is None or self._local_collection is None:
-                return []
-            embedder = self._local_embedder
-            collection = self._local_collection
-            vector = (await asyncio.to_thread(embedder.embed, [query]))[0]
-            result = await asyncio.to_thread(
-                collection.query,
-                query_embeddings=[vector],
-                n_results=self._config.memory.top_k,
-                where={"user_id": user_id},
-                include=["documents", "distances", "metadatas"],
-            )
-            docs = result.get("documents") or [[]]
-            distances = result.get("distances") or [[]]
-            metadatas = result.get("metadatas") or [[]]
-            min_score = self._config.memory.min_score
-            memories: list[dict[str, str]] = []
-            for doc, distance, meta in zip(docs[0], distances[0], metadatas[0]):
-                if not doc:
-                    continue
-                similarity = 1.0 - float(distance)
-                if similarity >= min_score:
-                    category = (meta or {}).get("category", DEFAULT_CATEGORY)
-                    memories.append({"text": doc, "category": category})
-            return memories
-        except Exception:
-            logger.warning("Local memory search failed for user %s", user_id, exc_info=True)
-            return []
-
     async def _local_add(self, user_id: str, user_msg: str, assistant_reply: str) -> None:
         if not user_msg.strip():
             return
@@ -626,14 +609,34 @@ class MemoryService:
         except Exception:
             logger.warning("Failed to store local memory for user %s", user_id, exc_info=True)
 
+    async def _resolve_llm_credentials(self) -> tuple[str, str, str]:
+        """Return (api_key, base_url, model) for memory LLM extraction."""
+        mem_cfg = self._config.memory
+        provider_id = mem_cfg.llm.llm_provider_id
+        if provider_id > 0:
+            from ..database import get_session_factory
+            from ..models import Provider
+            from sqlalchemy import select
+            session_factory = get_session_factory()
+            async with session_factory() as db:
+                provider = await db.scalar(select(Provider).where(Provider.id == provider_id))
+            if provider and provider.is_enabled:
+                return (
+                    provider.api_key,
+                    provider.base_url,
+                    mem_cfg.llm.model or self._config.llm.model,
+                )
+        return (
+            mem_cfg.llm.api_key or self._config.llm.api_key,
+            mem_cfg.llm.base_url or self._config.llm.base_url,
+            mem_cfg.llm.model or self._config.llm.model,
+        )
+
     async def _llm_extract_facts(
         self, user_msg: str, assistant_reply: str
     ) -> list[dict[str, str]] | None:
         """Extract structured facts via LLM. Returns None on failure."""
-        mem_cfg = self._config.memory
-        api_key = mem_cfg.llm.api_key or self._config.llm.api_key
-        model = mem_cfg.llm.model or self._config.llm.model
-        base_url = mem_cfg.llm.base_url or self._config.llm.base_url
+        api_key, base_url, model = await self._resolve_llm_credentials()
         if not api_key or not model:
             return None
 
@@ -941,3 +944,253 @@ class MemoryService:
             await self._local_add(user_id, memory, "")
             imported += 1
         return imported
+
+    # ── Batched summarization ────────────────────────────────────
+
+    async def summarize_and_store(
+        self,
+        user_id: str,
+        messages: list[dict[str, str]],
+    ) -> str | None:
+        """Summarize accumulated messages and store facts + summary.
+
+        Returns the summary text (to be stored in SQLite by the caller),
+        or None if summarization failed.
+        """
+        if not self._available or not messages:
+            return None
+
+        result = await self._llm_summarize(messages)
+        if result is None:
+            return None
+
+        facts = result.get("facts", [])
+        summary = result.get("summary", "")
+
+        if facts:
+            if self._local_collection is not None and self._local_embedder is not None:
+                await self._deduplicate_and_store(user_id, facts)
+            elif self._mem0 is not None:
+                for fact in facts:
+                    try:
+                        await asyncio.to_thread(
+                            self._mem0.add,
+                            [{"role": "user", "content": fact["text"]}],
+                            user_id=user_id,
+                        )
+                    except Exception:
+                        logger.debug("mem0 add failed for fact: %s", fact["text"], exc_info=True)
+
+        return summary or None
+
+    async def _llm_summarize(
+        self,
+        messages: list[dict[str, str]],
+    ) -> dict | None:
+        """Call LLM to extract facts and generate a summary from messages."""
+        api_key, base_url, model = await self._resolve_llm_credentials()
+        if not api_key or not model:
+            return None
+
+        categories_desc = ", ".join(MEMORY_CATEGORIES)
+        blacklist_note = ""
+        if mem_cfg.role_term_blacklist:
+            terms = ", ".join(mem_cfg.role_term_blacklist)
+            blacklist_note = (
+                f"\nNEVER extract facts containing these character-specific roleplay terms: "
+                f"{terms}. These are fictional persona behaviors, not user facts."
+            )
+
+        system_prompt = (
+            "You are a memory extraction and summarization system.\n"
+            "Analyze the conversation and produce TWO outputs:\n"
+            "1. **facts**: important facts about the USER only (not the assistant's persona).\n"
+            "   Each fact has 'text' and 'category' fields.\n"
+            f"   Categories: {categories_desc}\n"
+            "   - user_preferences: likes, dislikes, habits\n"
+            "   - personality: traits, communication style\n"
+            "   - emotional: mood, feelings, relationships\n"
+            "   - general: facts, events, plans\n"
+            f"{blacklist_note}\n"
+            "2. **summary**: a short paragraph (2-4 sentences) summarizing what was discussed, "
+            "including the user's mood and key topics.\n\n"
+            "Return ONLY valid JSON:\n"
+            '{"facts": [{"text": "...", "category": "..."}], "summary": "..."}\n'
+            "If no facts worth remembering, return {\"facts\": [], \"summary\": \"...\"}"
+        )
+
+        conv_text = "\n".join(
+            f"{m['role'].upper()}: {m['content']}" for m in messages
+        )
+        msg_list = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": conv_text},
+        ]
+
+        try:
+            import json
+            import re
+
+            from openai import AsyncOpenAI
+
+            async with AsyncOpenAI(api_key=api_key, base_url=base_url or None) as client:
+                response = await asyncio.wait_for(
+                    client.chat.completions.create(
+                        model=model,
+                        messages=msg_list,
+                        temperature=0.1,
+                        max_tokens=800,
+                    ),
+                    timeout=30.0,
+                )
+            text = (response.choices[0].message.content or "").strip()
+
+            match = re.search(r"```(?:json)?\s*\n(.*?)```", text, re.DOTALL)
+            if match:
+                text = match.group(1).strip()
+
+            parsed = json.loads(text)
+            if not isinstance(parsed, dict):
+                return None
+
+            facts: list[dict[str, str]] = []
+            for item in parsed.get("facts", []):
+                if isinstance(item, dict) and "text" in item:
+                    cat = item.get("category", DEFAULT_CATEGORY)
+                    if cat not in MEMORY_CATEGORIES:
+                        cat = DEFAULT_CATEGORY
+                    facts.append({"text": str(item["text"]), "category": cat})
+
+            summary = str(parsed.get("summary", ""))
+            return {"facts": facts, "summary": summary}
+        except Exception:
+            logger.debug("LLM summarization failed", exc_info=True)
+            return None
+
+    # ── Retrieval enhancements ───────────────────────────────────
+
+    @staticmethod
+    def _time_decay_score(
+        base_score: float,
+        created_at_iso: str | None,
+        half_life_days: int = 30,
+    ) -> float:
+        """Apply exponential time decay to a memory score."""
+        if not created_at_iso or half_life_days <= 0:
+            return base_score
+        try:
+            created = datetime.fromisoformat(created_at_iso)
+            now = datetime.now(timezone.utc) if created.tzinfo else datetime.utcnow()
+            age_days = max((now - created).total_seconds() / 86400, 0)
+            decay = 0.5 ** (age_days / half_life_days)
+            return base_score * decay
+        except (ValueError, TypeError):
+            return base_score
+
+    def _apply_retrieval_enhancements(
+        self,
+        query_embedding: list[float],
+        results: dict,
+        candidate_embeddings: list[list[float]] | None = None,
+    ) -> tuple[list[str], list[float], list[dict]]:
+        """Apply time decay + reranking to ChromaDB query results.
+
+        Returns (docs, scores, metadatas) sorted by final score descending.
+        """
+        import numpy as np
+
+        mem_cfg = self._config.memory
+        docs = (results.get("documents") or [[]])[0]
+        distances = (results.get("distances") or [[]])[0]
+        metadatas = (results.get("metadatas") or [[]])[0]
+
+        if not docs:
+            return [], [], []
+
+        # Phase 1: time decay on base similarity scores
+        decayed: list[tuple[str, float, dict]] = []
+        for doc, dist, meta in zip(docs, distances, metadatas):
+            if not doc:
+                continue
+            similarity = 1.0 - float(dist)
+            created_at = (meta or {}).get("created_at")
+            score = self._time_decay_score(
+                similarity, created_at, mem_cfg.time_decay_days
+            )
+            decayed.append((doc, score, meta or {}))
+
+        # Phase 2: rerank with precise cosine similarity
+        if candidate_embeddings is not None and len(candidate_embeddings) > 0 and len(decayed) > 1:
+            try:
+                q = np.array(query_embedding, dtype=np.float32)
+                q_norm = np.linalg.norm(q)
+                if q_norm > 0:
+                    q = q / q_norm
+
+                reranked: list[tuple[str, float, dict]] = []
+                for (doc, decay_score, meta), vec in zip(decayed, candidate_embeddings):
+                    if vec is not None:
+                        v = np.array(vec, dtype=np.float32)
+                        v_norm = np.linalg.norm(v)
+                        if v_norm > 0:
+                            exact_sim = float(np.dot(q, v / v_norm))
+                        else:
+                            exact_sim = decay_score
+                    else:
+                        exact_sim = decay_score
+                    combined = (
+                        mem_cfg.rerank_weight * decay_score
+                        + mem_cfg.exact_sim_weight * exact_sim
+                    )
+                    reranked.append((doc, combined, meta))
+                decayed = reranked
+            except Exception:
+                logger.debug("Reranking failed, using decayed scores", exc_info=True)
+
+        decayed.sort(key=lambda x: x[1], reverse=True)
+
+        final_docs = [d[0] for d in decayed]
+        final_scores = [d[1] for d in decayed]
+        final_metas = [d[2] for d in decayed]
+        return final_docs, final_scores, final_metas
+
+    async def _local_search(self, user_id: str, query: str) -> list[dict[str, str]]:
+        try:
+            if self._local_embedder is None or self._local_collection is None:
+                return []
+            embedder = self._local_embedder
+            collection = self._local_collection
+            mem_cfg = self._config.memory
+
+            vector = (await asyncio.to_thread(embedder.embed, [query]))[0]
+
+            # Expand candidate pool for reranking, request embeddings for precise cosine
+            expanded_n = mem_cfg.top_k * mem_cfg.expand_factor
+            result = await asyncio.to_thread(
+                collection.query,
+                query_embeddings=[vector],
+                n_results=expanded_n,
+                where={"user_id": user_id},
+                include=["documents", "distances", "metadatas", "embeddings"],
+            )
+
+            raw_embeddings = (result.get("embeddings") or [[]])[0]
+
+            # Apply time decay + reranking
+            final_docs, final_scores, final_metas = await asyncio.to_thread(
+                self._apply_retrieval_enhancements, vector, result,
+                candidate_embeddings=raw_embeddings if len(raw_embeddings) > 0 else None,
+            )
+
+            min_score = mem_cfg.min_score
+            memories: list[dict[str, str]] = []
+            for doc, score, meta in zip(final_docs, final_scores, final_metas):
+                if score >= min_score:
+                    category = meta.get("category", DEFAULT_CATEGORY)
+                    memories.append({"text": doc, "category": category})
+                if len(memories) >= mem_cfg.top_k:
+                    break
+            return memories
+        except Exception:
+            logger.warning("Local memory search failed for user %s", user_id, exc_info=True)
+            return []

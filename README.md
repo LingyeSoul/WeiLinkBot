@@ -20,7 +20,7 @@
 - **SillyTavern 预设** - 导入/管理 SillyTavern prompt 预设，支持自定义系统提示词
 - **世界书** - 导入/管理 SillyTavern World Book，基于关键词动态注入上下文
 - **角色卡** - 创建和管理角色卡（描述、性格、场景、开场白、示例对话），支持头像上传
-- **记忆系统** - 基于 mem0ai + ChromaDB 的向量记忆，支持本地 ONNX / ModelScope / 远程 Embedding，HNSW 索引参数可调
+- **记忆系统** - 基于 mem0ai + ChromaDB 的向量记忆，支持本地 ONNX / ModelScope / 远程 Embedding，HNSW 索引参数可调；支持批量摘要（轮数/超时双触发）、事实+摘要双维度存储、时间衰减与重排检索
 - **Agent 工具** - LLM 驱动的 Agent 循环，支持原生 Function Calling 和 Prompt 回退，内置数学计算、时间查询等工具
 - **网页控制台** - 实时状态、会话查看、预设管理、用户控制、事件日志、统计面板
 - **WebSocket 实时推送** - 机器人状态、消息等事件通过 WebSocket 实时推送至前端
@@ -183,10 +183,17 @@ weilinkbot serve --port 3000  # 指定端口
 
 | 方法 | 路径 | 说明 |
 |--------|------|-------------|
+| `GET` | `/api/memories/status` | 记忆系统状态 |
 | `GET` | `/api/memories/config` | 获取记忆配置 |
 | `PUT` | `/api/memories/config` | 更新记忆配置 |
-| `POST` | `/api/memories/test` | 测试记忆连接 |
+| `POST` | `/api/memories/config/test` | 测试 Embedding 连接 |
 | `GET` | `/api/memories/{user_id}` | 获取用户记忆 |
+| `GET` | `/api/memories/{user_id}/search` | 语义搜索记忆 |
+| `GET` | `/api/memories/{user_id}/summaries` | 获取用户对话摘要 |
+| `DELETE` | `/api/memories/summaries/{id}` | 删除单条摘要 |
+| `DELETE` | `/api/memories/summaries/user/{user_id}` | 清空用户摘要 |
+| `GET` | `/api/memories/export` | 导出记忆 JSON |
+| `POST` | `/api/memories/import` | 导入记忆 JSON |
 | `GET` | `/api/agent/config` | 获取 Agent 配置 |
 | `PUT` | `/api/agent/config` | 更新 Agent 配置 |
 
@@ -225,6 +232,7 @@ WeiLinkBot/
 │   │   ├── llm_service.py          # 多提供商 LLM 调用
 │   │   ├── conversation_service.py # 会话管理
 │   │   ├── memory_service.py       # 记忆系统 (mem0 + ChromaDB)
+│   │   ├── memory_buffer.py        # 记忆消息缓冲（轮数/超时触发）
 │   │   ├── agent_service.py        # Agent 工具调用循环
 │   │   ├── st_preset_service.py    # SillyTavern 预设
 │   │   ├── world_book_service.py   # 世界书关键词注入
@@ -264,6 +272,10 @@ WeiLinkBot/
 | 加密 | Cryptography (AES) |
 | WebSocket | FastAPI WebSocket |
 | 打包 | Nuitka / PyInstaller |
+
+## 合规使用
+
+本项目为个人本地学习工具，单微信绑定，非平台化服务。使用者应遵守相关法律法规，不得用于违法违规用途。
 
 ## 许可证
 

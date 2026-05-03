@@ -76,7 +76,6 @@ class UserConfigResponse(BaseModel):
     user_id: str
     nickname: Optional[str] = None
     custom_prompt_id: Optional[int] = None
-    max_history: int = 20
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -85,7 +84,6 @@ class UserConfigResponse(BaseModel):
 class UserConfigUpdate(BaseModel):
     nickname: Optional[str] = None
     custom_prompt_id: Optional[int] = None
-    max_history: Optional[int] = Field(None, ge=1, le=100)
 
 
 # ── Providers ──────────────────────────────────────────────────
@@ -276,6 +274,7 @@ class MemoryConfigUpdate(BaseModel):
     llm_model: Optional[str] = None
     llm_base_url: Optional[str] = None
     llm_api_key: Optional[str] = None
+    llm_provider_id: Optional[int] = None
     top_k: Annotated[Optional[int], Field(ge=1, le=100)] = None
     min_score: Annotated[Optional[float], Field(ge=0.0, le=1.0)] = None
     max_context_chars: Annotated[Optional[int], Field(ge=100, le=100000)] = None
@@ -287,6 +286,12 @@ class MemoryConfigUpdate(BaseModel):
     fact_extraction: Optional[bool] = None
     role_term_blacklist: Optional[list[str]] = None
     custom_instructions: Optional[str] = None
+    turn_threshold: Annotated[Optional[int], Field(ge=1, le=100)] = None
+    timeout_minutes: Annotated[Optional[int], Field(ge=1, le=1440)] = None
+    time_decay_days: Annotated[Optional[int], Field(ge=1, le=365)] = None
+    rerank_weight: Annotated[Optional[float], Field(ge=0.0, le=1.0)] = None
+    exact_sim_weight: Annotated[Optional[float], Field(ge=0.0, le=1.0)] = None
+    expand_factor: Annotated[Optional[int], Field(ge=1, le=10)] = None
 
 
 class MemoryConfigTestResponse(BaseModel):
@@ -307,6 +312,7 @@ class MemoryConfigUpdateResponse(BaseModel):
     embedding_modelscope_model_id: str = ""
     llm_model: Optional[str] = None
     llm_api_key_set: bool
+    llm_provider_id: int = 0
     top_k: int
     min_score: float = 0.0
     max_context_chars: int = 2000

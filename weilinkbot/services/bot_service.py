@@ -17,9 +17,10 @@ from sqlalchemy import select, update
 
 from ..config import AppConfig, LLMConfig
 from ..database import get_session_factory
-from ..models import LLMPreset, resolve_provider_credentials
+from ..models import LLMPreset, MemorySummary, resolve_provider_credentials
 from .llm_service import LLMService
 from .conversation_service import ConversationService
+from .memory_buffer import MemoryBuffer
 from ..i18n import t
 from .event_log import get_event_log
 from .ws_service import get_ws_service
@@ -98,6 +99,11 @@ class BotService:
         self._llm = llm_service
         self._memory = memory_service
         self._agent = agent_service
+        self._memory_buffer = MemoryBuffer(
+            turn_threshold=config.memory.turn_threshold,
+            timeout_minutes=config.memory.timeout_minutes,
+        )
+        self._timeout_check_task: Optional[asyncio.Task] = None
         self._state = BotState.STOPPED
         self._task: Optional[asyncio.Task] = None
         self._error: Optional[str] = None
@@ -217,6 +223,8 @@ class BotService:
                 self._credentials.account_id,
             )
 
+            self._timeout_check_task = asyncio.create_task(self._timeout_check_loop())
+
             await self._bot.start()
 
         except Exception as e:
@@ -236,6 +244,12 @@ class BotService:
 
     async def stop(self) -> None:
         """Stop the bot gracefully."""
+        if self._timeout_check_task and not self._timeout_check_task.done():
+            self._timeout_check_task.cancel()
+            try:
+                await self._timeout_check_task
+            except asyncio.CancelledError:
+                pass
         if self._bot:
             self._bot.stop()
         if self._task and not self._task.done():
@@ -508,6 +522,20 @@ class BotService:
                         logger.warning("Memory search timed out for user %s", user_id)
                         memories = []
 
+                # Fetch recent summaries for context injection
+                recent_summaries: list[str] = []
+                try:
+                    from sqlalchemy import select as _sel, desc
+                    rows = (await db.execute(
+                        _sel(MemorySummary.content)
+                        .where(MemorySummary.user_id == user_id)
+                        .order_by(desc(MemorySummary.created_at))
+                        .limit(5)
+                    )).scalars().all()
+                    recent_summaries = list(rows)
+                except Exception:
+                    pass
+
                 # Check world book matches before building context (for prompt settings)
                 matched_world_book_entries = []
                 try:
@@ -533,6 +561,7 @@ class BotService:
                     user_id,
                     memories=memories,
                     max_context_chars=self._config.memory.max_context_chars,
+                    summaries=recent_summaries,
                 )
 
                 # World Book: inject matched entries into context
@@ -601,9 +630,18 @@ class BotService:
                 await get_ws_service().broadcast("conversations_updated", {"user_id": user_id})
                 logger.info("Replied to user %s (%d tokens)", user_id, tokens)
 
-                # Memory: extract and store memories (async, non-blocking)
+                # Memory: buffer messages for batched summarization
                 if self._memory and self._memory.available:
-                    asyncio.create_task(self._add_memory_and_broadcast(user_id, text, response_text))
+                    threshold_reached = await self._memory_buffer.add(
+                        user_id, "user", text,
+                    )
+                    await self._memory_buffer.add(
+                        user_id, "assistant", response_text,
+                    )
+                    if threshold_reached:
+                        asyncio.create_task(
+                            self._trigger_summarization(user_id)
+                        )
 
             except Exception as e:
                 logger.exception("Error handling message from %s: %s", user_id, e)
@@ -613,17 +651,47 @@ class BotService:
                 except Exception:
                     pass
 
-    # ── Memory broadcast ────────────────────────────────────────
+    # ── Memory summarization ────────────────────────────────────
 
-    async def _add_memory_and_broadcast(self, user_id: str, text: str, response_text: str) -> None:
-        """Store memory then broadcast updated stats via WebSocket."""
+    async def _timeout_check_loop(self) -> None:
+        """Background task: check buffer timeouts every 60 seconds."""
+        while True:
+            try:
+                await asyncio.sleep(60)
+                timed_out = await self._memory_buffer.check_timeout()
+                for user_id in timed_out:
+                    asyncio.create_task(self._trigger_summarization(user_id))
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                logger.debug("Timeout check loop error", exc_info=True)
+
+    async def _trigger_summarization(self, user_id: str) -> None:
+        """Flush buffer and run batched summarization for a user."""
         try:
-            await self._memory.add(user_id, text, response_text)
+            messages, _ = self._memory_buffer.flush(user_id)
+            if not messages:
+                return
+
+            summary = await self._memory.summarize_and_store(user_id, messages)
+            if summary:
+                session_factory = get_session_factory()
+                async with session_factory() as db:
+                    first_msg = messages[0].get("content", "")[:20]
+                    last_msg = messages[-1].get("content", "")[:20]
+                    db.add(MemorySummary(
+                        user_id=user_id,
+                        content=summary,
+                        message_range=f"{first_msg}...{last_msg}",
+                    ))
+                    await db.commit()
+                logger.info("Stored summary for user %s (%d messages)", user_id, len(messages))
+
             stats = await self._collect_memory_stats()
             if stats:
                 await get_ws_service().broadcast("memory_stats", stats)
         except Exception:
-            logger.debug("Memory add/broadcast failed for user %s", user_id, exc_info=True)
+            logger.debug("Summarization failed for user %s", user_id, exc_info=True)
 
     @staticmethod
     async def _collect_memory_stats() -> dict | None:

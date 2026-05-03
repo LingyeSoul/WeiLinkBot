@@ -156,10 +156,11 @@ class ConversationService:
         user_id: str,
         memories: list[dict[str, str]] | None = None,
         max_context_chars: int = 2000,
+        summaries: list[str] | None = None,
     ) -> list[dict[str, str]]:
         """Build OpenAI-format message list for LLM call.
 
-        Structure: [character_prompt + system_preset + memories, ...recent_history]
+        Structure: [character_prompt + system_preset + summaries + memories, ...recent_history]
         Memories are dicts with "text" and "category" keys.
         """
         from collections import defaultdict
@@ -171,8 +172,6 @@ class ConversationService:
 
         user_config = await self._get_user_config(user_id)
         max_history = await self._get_global_max_history()
-        if user_config and user_config.max_history:
-            max_history = user_config.max_history
 
         # Check for active character card, preset, and world book
         active_char = await self._db.scalar(
@@ -213,7 +212,8 @@ class ConversationService:
         st_after_messages: list[dict[str, str]] = []    # role messages to inject after history
         if active_preset and active_preset.raw_json:
             char_name = active_char.name if active_char else "Assistant"
-            macro_ctx = {"user_name": user_id, "char_name": char_name}
+            user_display = (user_config.nickname if user_config and user_config.nickname else user_id)
+            macro_ctx = {"user_name": user_display, "char_name": char_name}
             try:
                 all_entries = parse_st_entries(active_preset.raw_json)
             except Exception:
@@ -252,6 +252,15 @@ class ConversationService:
                 system_parts.insert(0, _skill_prompt)
 
         system_content = "\n\n".join(system_parts) if system_parts else DEFAULT_SYSTEM_PROMPT
+
+        # Inject summaries into system prompt
+        if summaries:
+            summary_text = "\n".join(f"- {s}" for s in summaries if s)
+            if summary_text:
+                system_content += (
+                    f"\n\n{_t('memory.summary_header')}\n"
+                    + summary_text
+                )
 
         # Inject memories into system prompt (category-aware grouping)
         if memories:
@@ -362,15 +371,12 @@ class ConversationService:
         user_id: str,
         nickname: Optional[str] = None,
         custom_prompt_id: Optional[int] = None,
-        max_history: Optional[int] = None,
     ) -> UserConfig:
         config = await self.get_or_create_user_config(user_id)
         if nickname is not None:
             config.nickname = nickname
         if custom_prompt_id is not None:
             config.custom_prompt_id = custom_prompt_id if custom_prompt_id > 0 else None
-        if max_history is not None:
-            config.max_history = max_history
         await self._db.flush()
         return config
 

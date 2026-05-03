@@ -20,7 +20,7 @@ AI Chatbot Platform powered by WeChat iLink Bot SDK. Multi-provider LLM support,
 - **SillyTavern Presets** — import and manage SillyTavern prompt presets with custom system prompts
 - **World Books** — import and manage SillyTavern World Books for keyword-based context injection
 - **Character Cards** — create and manage character cards (description, personality, scenario, first message, example dialogue) with avatar upload
-- **Memory System** — vector memory powered by mem0ai + ChromaDB, with local ONNX / ModelScope / remote embedding support and tunable HNSW parameters
+- **Memory System** — vector memory powered by mem0ai + ChromaDB, with local ONNX / ModelScope / remote embedding support and tunable HNSW parameters; batch summarization (turn-count + timeout dual-trigger), facts + summary dual-dimension storage, time-decay and reranking retrieval
 - **Agent Tools** — LLM-driven agent loop with native function calling and prompt-based fallback, built-in math and time tools
 - **Web Dashboard** — real-time status, conversation viewer, preset management, user controls, event log, statistics panel
 - **WebSocket Real-time Push** — bot status, messages, and events pushed to the frontend via WebSocket
@@ -183,10 +183,17 @@ API keys are managed centrally through Providers and stored with AES encryption.
 
 | Method | Path | Description |
 |--------|------|-------------|
+| `GET` | `/api/memories/status` | Memory system status |
 | `GET` | `/api/memories/config` | Get memory config |
 | `PUT` | `/api/memories/config` | Update memory config |
-| `POST` | `/api/memories/test` | Test memory connection |
+| `POST` | `/api/memories/config/test` | Test embedding connection |
 | `GET` | `/api/memories/{user_id}` | Get user memories |
+| `GET` | `/api/memories/{user_id}/search` | Semantic search memories |
+| `GET` | `/api/memories/{user_id}/summaries` | Get user conversation summaries |
+| `DELETE` | `/api/memories/summaries/{id}` | Delete a summary |
+| `DELETE` | `/api/memories/summaries/user/{user_id}` | Clear user summaries |
+| `GET` | `/api/memories/export` | Export memories as JSON |
+| `POST` | `/api/memories/import` | Import memories from JSON |
 | `GET` | `/api/agent/config` | Get agent config |
 | `PUT` | `/api/agent/config` | Update agent config |
 
@@ -225,6 +232,7 @@ WeiLinkBot/
 │   │   ├── llm_service.py          # Multi-provider LLM calls
 │   │   ├── conversation_service.py # Conversation management
 │   │   ├── memory_service.py       # Memory system (mem0 + ChromaDB)
+│   │   ├── memory_buffer.py        # Memory message buffer (turn/timeout trigger)
 │   │   ├── agent_service.py        # Agent tool calling loop
 │   │   ├── st_preset_service.py    # SillyTavern presets
 │   │   ├── world_book_service.py   # World book keyword injection
@@ -264,6 +272,10 @@ WeiLinkBot/
 | Encryption | Cryptography (AES) |
 | WebSocket | FastAPI WebSocket |
 | Packaging | Nuitka / PyInstaller |
+
+## Compliance
+
+This project is a personal local learning tool, bound to a single WeChat account, and is not a platform service. Users must comply with all applicable laws and regulations and must not use this project for any illegal or unauthorized purposes.
 
 ## License
 

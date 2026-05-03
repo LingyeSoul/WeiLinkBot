@@ -5,13 +5,14 @@ from __future__ import annotations
 import logging
 import asyncio
 from datetime import datetime
+from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select
 
 from ..config import get_config, save_config
 from ..database import get_session_factory
-from ..models import Conversation, UserConfig
+from ..models import Conversation, MemorySummary, UserConfig
 from ..schemas import MemoryConfigUpdate, MemoryConfigUpdateResponse, MemoryConfigTestResponse
 from ..services.local_embedding_service import public_onnx_model_options
 from .deps import get_memory_service
@@ -60,6 +61,12 @@ async def memory_status():
         },
         "vector_count": None,
         "onnx_loaded": None,
+        "turn_threshold": config.memory.turn_threshold,
+        "timeout_minutes": config.memory.timeout_minutes,
+        "time_decay_days": config.memory.time_decay_days,
+        "rerank_weight": config.memory.rerank_weight,
+        "exact_sim_weight": config.memory.exact_sim_weight,
+        "expand_factor": config.memory.expand_factor,
     }
     if mem is not None:
         collection = getattr(mem, "_local_collection", None)
@@ -106,6 +113,7 @@ async def get_memory_config():
             "base_url": mem_cfg.llm.base_url,
             "model": mem_cfg.llm.model,
             "api_key_set": bool(mem_cfg.llm.api_key),
+            "llm_provider_id": mem_cfg.llm.llm_provider_id,
         },
         "top_k": mem_cfg.top_k,
         "min_score": mem_cfg.min_score,
@@ -122,6 +130,12 @@ async def get_memory_config():
         "role_term_blacklist": mem_cfg.role_term_blacklist,
         "custom_instructions": mem_cfg.custom_instructions,
         "category_budgets": mem_cfg.category_budgets,
+        "turn_threshold": mem_cfg.turn_threshold,
+        "timeout_minutes": mem_cfg.timeout_minutes,
+        "time_decay_days": mem_cfg.time_decay_days,
+        "rerank_weight": mem_cfg.rerank_weight,
+        "exact_sim_weight": mem_cfg.exact_sim_weight,
+        "expand_factor": mem_cfg.expand_factor,
         "local_onnx_options": public_onnx_model_options(),
     }
 
@@ -160,6 +174,8 @@ async def update_memory_config(data: MemoryConfigUpdate):
         kwargs["llm_base_url"] = data.llm_base_url
     if data.llm_model is not None:
         kwargs["llm_model"] = data.llm_model
+    if data.llm_provider_id is not None:
+        kwargs["llm_provider_id"] = data.llm_provider_id
     if data.top_k is not None:
         kwargs["top_k"] = data.top_k
     if data.min_score is not None:
@@ -182,6 +198,18 @@ async def update_memory_config(data: MemoryConfigUpdate):
         kwargs["role_term_blacklist"] = data.role_term_blacklist
     if data.custom_instructions is not None:
         kwargs["custom_instructions"] = data.custom_instructions
+    if data.turn_threshold is not None:
+        kwargs["turn_threshold"] = data.turn_threshold
+    if data.timeout_minutes is not None:
+        kwargs["timeout_minutes"] = data.timeout_minutes
+    if data.time_decay_days is not None:
+        kwargs["time_decay_days"] = data.time_decay_days
+    if data.rerank_weight is not None:
+        kwargs["rerank_weight"] = data.rerank_weight
+    if data.exact_sim_weight is not None:
+        kwargs["exact_sim_weight"] = data.exact_sim_weight
+    if data.expand_factor is not None:
+        kwargs["expand_factor"] = data.expand_factor
 
     result = await asyncio.to_thread(mem.update_config, **kwargs)
     save_config()
@@ -199,6 +227,7 @@ async def update_memory_config(data: MemoryConfigUpdate):
         embedding_modelscope_model_id=config.memory.embedding.modelscope_model_id,
         llm_model=config.memory.llm.model or config.llm.model,
         llm_api_key_set=bool(config.memory.llm.api_key or config.llm.api_key),
+        llm_provider_id=config.memory.llm.llm_provider_id,
         top_k=config.memory.top_k,
         min_score=config.memory.min_score,
         max_context_chars=config.memory.max_context_chars,
@@ -348,6 +377,62 @@ async def get_memories_by_category(
     all_memories = await mem.get_all(user_id)
     filtered = [m for m in all_memories if m.get("category", "general") == category]
     return {"user_id": user_id, "category": category, "memories": filtered, "count": len(filtered)}
+
+
+@router.get("/{user_id}/summaries")
+async def get_user_summaries(
+    user_id: str,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+):
+    """Get conversation summaries for a user."""
+    session_factory = get_session_factory()
+    async with session_factory() as db:
+        rows = (await db.execute(
+            select(MemorySummary)
+            .where(MemorySummary.user_id == user_id)
+            .order_by(MemorySummary.created_at.desc())
+            .limit(limit)
+        )).scalars().all()
+    return {
+        "user_id": user_id,
+        "summaries": [
+            {
+                "id": r.id,
+                "content": r.content,
+                "message_range": r.message_range,
+                "tokens_used": r.tokens_used,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in rows
+        ],
+        "count": len(rows),
+    }
+
+
+@router.delete("/summaries/{summary_id}")
+async def delete_summary(summary_id: int):
+    """Delete a single conversation summary."""
+    session_factory = get_session_factory()
+    async with session_factory() as db:
+        row = await db.get(MemorySummary, summary_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="Summary not found")
+        await db.delete(row)
+        await db.commit()
+    return {"success": True}
+
+
+@router.delete("/summaries/user/{user_id}")
+async def delete_user_summaries(user_id: str):
+    """Delete all conversation summaries for a user."""
+    from sqlalchemy import delete as _delete
+    session_factory = get_session_factory()
+    async with session_factory() as db:
+        await db.execute(
+            _delete(MemorySummary).where(MemorySummary.user_id == user_id)
+        )
+        await db.commit()
+    return {"success": True}
 
 
 @router.post("/migrate_categories")
