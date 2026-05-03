@@ -330,6 +330,52 @@ class MCPServer(Base):
         return f"<MCPServer id={self.id} name={self.name!r} transport={self.transport}>"
 
 
+class StickerPack(Base):
+    """A pack/series of stickers."""
+    __tablename__ = "sticker_packs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[str] = mapped_column(String(500), nullable=False, default="")
+    cover_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, server_default=func.now(), onupdate=_utcnow
+    )
+
+    stickers: Mapped[list["Sticker"]] = relationship(
+        back_populates="pack", cascade="all, delete-orphan",
+        order_by="Sticker.sort_order"
+    )
+
+    def __repr__(self) -> str:
+        return f"<StickerPack id={self.id} name={self.name!r}>"
+
+
+class Sticker(Base):
+    """A single sticker image within a pack."""
+    __tablename__ = "stickers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    pack_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("sticker_packs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    original_filename: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    text_description: Mapped[str] = mapped_column(String(500), nullable=False, default="")
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, server_default=func.now()
+    )
+
+    pack: Mapped["StickerPack"] = relationship(back_populates="stickers")
+
+    def __repr__(self) -> str:
+        return f"<Sticker id={self.id} pack={self.pack_id} desc={self.text_description!r}>"
+
+
 def get_preset_api_key(preset: LLMPreset) -> str:
     """Return decrypted api_key from a preset."""
     from .crypto import decrypt
