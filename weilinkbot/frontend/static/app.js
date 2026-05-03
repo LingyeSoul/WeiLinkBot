@@ -49,6 +49,14 @@ function dashboard() {
         showCharForm: false,
         charForm: { id: null, name: "", description: "", personality: "", scenario: "", first_mes: "", mes_example: "", is_active: false },
 
+        // Sticker Packs
+        stickerPacks: [],
+        showPackForm: false,
+        packForm: { id: null, name: "", description: "" },
+        showStickerDetail: false,
+        selectedPack: null,
+        selectedPackStickers: [],
+
         // Providers
         providers: [],
         showProviderForm: false,
@@ -157,6 +165,7 @@ function dashboard() {
                 { id: "characters", label: t("tab.characters") },
                 { id: "st-presets", label: t("tab.st_presets") },
                 { id: "world-books", label: t("tab.world_books") },
+                { id: "stickers", label: t("tab.stickers") },
                 { id: "memories", label: t("memory.title") },
                 { id: "agent", label: t("tab.agent") },
                 { id: "settings", label: t("tab.settings") },
@@ -207,6 +216,7 @@ function dashboard() {
                 this.refreshSkills(),
                 this.refreshMcpServers(),
                 this.refreshWorkspaceConfig(),
+                this.refreshStickerPacks(),
                 this.refreshTokenStats(),
                 this.refreshVersion(),
             ]);
@@ -1060,6 +1070,108 @@ function dashboard() {
             } catch (e) { this.showToast(e.message, "error"); }
         },
 
+        // ── Sticker Packs ────────────────────────────────────────
+        async refreshStickerPacks() {
+            try { this.stickerPacks = await this.api("/api/sticker-packs"); }
+            catch { this.stickerPacks = []; }
+        },
+        openPackForm() {
+            this.packForm = { id: null, name: "", description: "" };
+            this.showPackForm = true;
+        },
+        editPack(pack) {
+            this.packForm = { id: pack.id, name: pack.name, description: pack.description };
+            this.showPackForm = true;
+        },
+        async savePack() {
+            if (!this.packForm.name.trim()) return;
+            try {
+                if (this.packForm.id) {
+                    await this.api(`/api/sticker-packs/${this.packForm.id}`, {
+                        method: "PATCH",
+                        body: JSON.stringify({ name: this.packForm.name, description: this.packForm.description }),
+                    });
+                } else {
+                    await this.api("/api/sticker-packs", {
+                        method: "POST",
+                        body: JSON.stringify({ name: this.packForm.name, description: this.packForm.description }),
+                    });
+                }
+                this.showPackForm = false;
+                await this.refreshStickerPacks();
+                this.showToast(t("toast.pack_created"), "success");
+            } catch {}
+        },
+        async deletePack(id) {
+            if (!confirm(t("confirm.delete_pack"))) return;
+            try {
+                await this.api(`/api/sticker-packs/${id}`, { method: "DELETE" });
+                await this.refreshStickerPacks();
+                this.showToast(t("toast.pack_deleted"), "success");
+            } catch {}
+        },
+        async importStickerArchive(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const formData = new FormData();
+            formData.append("file", file);
+            try {
+                const resp = await fetch("/api/sticker-packs/import", { method: "POST", body: formData });
+                if (!resp.ok) {
+                    const err = await resp.json().catch(() => ({ detail: "Import failed" }));
+                    throw new Error(err.detail);
+                }
+                await this.refreshStickerPacks();
+                this.showToast(t("toast.archive_imported"), "success");
+            } catch (e) {
+                this.showToast(e.message, "error");
+            }
+            event.target.value = "";
+        },
+        async openPackDetail(pack) {
+            try {
+                const detail = await this.api(`/api/sticker-packs/${pack.id}`);
+                this.selectedPack = detail;
+                this.selectedPackStickers = detail.stickers || [];
+                this.showStickerDetail = true;
+            } catch {}
+        },
+        async addSticker(event) {
+            const file = event.target.files[0];
+            if (!file || !this.selectedPack) return;
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("text_description", "");
+            try {
+                const resp = await fetch(`/api/sticker-packs/${this.selectedPack.id}/stickers`, { method: "POST", body: formData });
+                if (!resp.ok) throw new Error("Upload failed");
+                await this.openPackDetail(this.selectedPack);
+                await this.refreshStickerPacks();
+                this.showToast(t("toast.sticker_added"), "success");
+            } catch (e) {
+                this.showToast(e.message, "error");
+            }
+            event.target.value = "";
+        },
+        async updateStickerDesc(stickerId, desc) {
+            try {
+                await this.api(`/api/sticker-packs/stickers/${stickerId}`, {
+                    method: "PATCH",
+                    body: JSON.stringify({ text_description: desc }),
+                });
+                this.showToast(t("toast.sticker_saved"), "success");
+            } catch {}
+        },
+        async deleteSticker(stickerId) {
+            if (!confirm(t("confirm.delete_sticker"))) return;
+            try {
+                await this.api(`/api/sticker-packs/stickers/${stickerId}`, { method: "DELETE" });
+                await this.openPackDetail(this.selectedPack);
+                await this.refreshStickerPacks();
+                this.showToast(t("toast.sticker_deleted"), "success");
+            } catch {}
+        },
+
         // ── Settings ───────────────────────────────────────────────
         async refreshSettings() {
             try {
@@ -1410,6 +1522,11 @@ function dashboard() {
                 case "world_books":
                     console.log("[WS] Updating worldBooks:", msg.data.length, "items");
                     this.worldBooks = msg.data;
+                    break;
+
+                case "sticker_packs":
+                    console.log("[WS] Updating stickerPacks:", msg.data.length, "items");
+                    this.stickerPacks = msg.data;
                     break;
 
                 case "settings":
