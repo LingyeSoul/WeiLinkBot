@@ -165,14 +165,12 @@ def download_modelscope_embedding_files(
         ) from exc
 
     selected_name = Path(onnx_model_file).name
-    allow_patterns = ["*", onnx_model_file]
     ignore_patterns = [
         f"onnx/{name}" for name in _KNOWN_ONNX_FILES if name != selected_name
     ]
     try:
         return snapshot_download(
             model_id=model_id,
-            allow_patterns=allow_patterns,
             ignore_patterns=ignore_patterns,
             local_dir=local_dir,
         )
@@ -180,7 +178,6 @@ def download_modelscope_embedding_files(
         # Older ModelScope builds used HF-compatible parameter names.
         return snapshot_download(
             model_id=model_id,
-            allow_file_pattern=allow_patterns,
             ignore_file_pattern=ignore_patterns,
             local_dir=local_dir,
         )
