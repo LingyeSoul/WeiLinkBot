@@ -17,6 +17,7 @@ _memory_service = None  # Avoid circular import with MemoryService
 _agent_service = None
 _skill_service = None
 _mcp_service = None
+_workspace_service = None
 
 
 def get_llm_service() -> LLMService:
@@ -81,6 +82,16 @@ def get_mcp_service():
 def set_mcp_service(service) -> None:
     global _mcp_service
     _mcp_service = service
+
+
+def get_workspace_service():
+    """Get the WorkspaceService singleton. Returns None if not initialized."""
+    return _workspace_service
+
+
+def set_workspace_service(service) -> None:
+    global _workspace_service
+    _workspace_service = service
 
 
 async def get_conversation_service(

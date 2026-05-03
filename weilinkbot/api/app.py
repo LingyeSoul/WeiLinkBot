@@ -18,6 +18,7 @@ from ..services.bot_service import BotService
 from .deps import (
     set_llm_service, set_bot_service, set_memory_service,
     set_agent_service, set_skill_service, set_mcp_service,
+    set_workspace_service,
 )
 
 from . import bot as bot_routes
@@ -163,11 +164,33 @@ async def lifespan(app: FastAPI):
     logger.info("Agent service initialized (tools=%s, max_rounds=%d)",
                 config.agent.enabled_tools, config.agent.max_tool_rounds)
 
-    # Init Skill service
-    from ..services.skill_service import SkillService
-    skill_service = SkillService()
+    # Init Workspace service
+    if config.workspace.enabled:
+        from ..services.workspace_sandbox import WorkspaceSandbox
+        from ..services.workspace_service import WorkspaceService
+        blocked = frozenset(config.workspace.blocked_extensions)
+        sandbox = WorkspaceSandbox(
+            config.workspace.root,
+            blocked_extensions=blocked,
+            read_max_size=config.workspace.read_max_size,
+            write_max_size=config.workspace.write_max_size,
+            list_max_entries=config.workspace.list_max_entries,
+            grep_max_results=config.workspace.grep_max_results,
+        )
+        workspace_service = WorkspaceService(sandbox)
+        set_workspace_service(workspace_service)
+
+        # Register workspace tools
+        from ..services.tools import init_workspace_tools
+        init_workspace_tools(workspace_service)
+        logger.info("Workspace service initialized (root=%s)", config.workspace.root)
+
+    # Migrate skills and init Skill service (from workspace/skills/)
+    from ..services.skill_service import SkillService, SKILLS_DIR, migrate_skills
+    migrate_skills()
+    skill_service = SkillService(SKILLS_DIR)
     set_skill_service(skill_service)
-    logger.info("Skill service initialized")
+    logger.info("Skill service initialized (dir=%s)", SKILLS_DIR)
 
     # Init MCP service and connect enabled servers
     from ..services.mcp_service import MCPService
