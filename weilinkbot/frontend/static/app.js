@@ -95,6 +95,15 @@ function dashboard() {
         mcpForm: { name: "", transport: "stdio", command: "", argsStr: "", envStr: "", url: "" },
         showMcpForm: false,
 
+        // Workspace
+        workspaceConfig: { enabled: false, root: "", tools: [] },
+        workspaceFiles: [],
+        workspaceLoaded: false,
+        workspaceCurrentPath: "",
+        workspaceFileFilter: "",
+        workspaceFileContent: null,
+        workspaceFilePath: "",
+
         // Token Stats
         tokenStats: { models: [], total_tokens: 0, total_requests: 0 },       // all-time (from API)
         sessionTokenStats: { models: [], total_tokens: 0, total_requests: 0 }, // current session (from bot status)
@@ -200,6 +209,7 @@ function dashboard() {
                 this.refreshAgentConfig(),
                 this.refreshSkills(),
                 this.refreshMcpServers(),
+                this.refreshWorkspaceConfig(),
                 this.refreshTokenStats(),
                 this.refreshVersion(),
             ]);
@@ -1191,6 +1201,68 @@ function dashboard() {
                 await this.refreshAgentConfig();
                 this.showToast(t("toast.deleted"), "success");
             } catch (e) { this.showToast(e.message, "error"); }
+        },
+
+        // ── Workspace ─────────────────────────────────────────────
+        async refreshWorkspaceConfig() {
+            try {
+                const data = await this.api("/api/agent/workspace/config");
+                this.workspaceConfig = data;
+            } catch { /* ignore */ }
+        },
+        async saveWorkspaceConfig() {
+            try {
+                const data = await this.api("/api/agent/workspace/config", {
+                    method: "PUT",
+                    body: JSON.stringify({
+                        enabled: this.workspaceConfig.enabled,
+                        root: this.workspaceConfig.root || undefined,
+                    }),
+                });
+                this.workspaceConfig = data;
+                this.showToast(t("agent.workspace.configUpdated"), "success");
+            } catch (e) { this.showToast(e.message, "error"); }
+        },
+        async refreshWorkspaceFiles() {
+            try {
+                const params = new URLSearchParams();
+                if (this.workspaceCurrentPath) params.set("path", this.workspaceCurrentPath);
+                if (this.workspaceFileFilter) params.set("pattern", this.workspaceFileFilter);
+                const qs = params.toString();
+                const data = await this.api("/api/agent/workspace/files" + (qs ? "?" + qs : ""));
+                this.workspaceFiles = data.files || data;
+                this.workspaceLoaded = true;
+            } catch { this.workspaceFiles = []; this.workspaceLoaded = true; }
+        },
+        async viewWorkspaceFile(path) {
+            try {
+                const data = await this.api("/api/agent/workspace/read?path=" + encodeURIComponent(path));
+                this.workspaceFilePath = path;
+                this.workspaceFileContent = data.content ?? JSON.stringify(data, null, 2);
+            } catch (e) { this.showToast(t("agent.workspace.readError"), "error"); }
+        },
+        async uploadWorkspaceFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            event.target.value = "";
+            const formData = new FormData();
+            formData.append("file", file);
+            if (this.workspaceCurrentPath) formData.append("path", this.workspaceCurrentPath);
+            try {
+                const resp = await fetch("/api/agent/workspace/upload", { method: "POST", body: formData });
+                if (!resp.ok) {
+                    const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+                    throw new Error(err.detail || resp.statusText);
+                }
+                this.showToast(t("toast.saved"), "success");
+                await this.refreshWorkspaceFiles();
+            } catch (e) { this.showToast(e.message, "error"); }
+        },
+        formatFileSize(bytes) {
+            if (bytes == null) return "";
+            if (bytes < 1024) return bytes + " B";
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+            return (bytes / (1024 * 1024)).toFixed(1) + " MB";
         },
 
         connectWs() {

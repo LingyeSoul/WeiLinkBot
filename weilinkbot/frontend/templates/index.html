@@ -1915,6 +1915,13 @@
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
                     x-text="t('agent.subtab_mcp')">
             </button>
+            <button @click="agentSubTab = 'workspace'; refreshWorkspaceConfig(); refreshWorkspaceFiles()"
+                    class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors"
+                    :class="agentSubTab === 'workspace'
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    x-text="t('agent.subtab_workspace')">
+            </button>
         </nav>
 
         <!-- Agent Settings (sub-tab: tools) -->
@@ -2074,6 +2081,94 @@
                     </div>
                 </template>
                 <p x-show="!mcpServers.items.length && mcpServers.loaded" class="text-gray-400 text-sm" x-text="t('agent.no_mcp')"></p>
+            </div>
+        </div>
+
+        <!-- Workspace (sub-tab: workspace) -->
+        <div x-show="agentSubTab === 'workspace'" class="space-y-4">
+            <!-- Workspace Config Card -->
+            <div class="bg-white rounded-xl shadow-sm p-6 space-y-4">
+                <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wide" x-text="t('agent.workspace.title')"></h3>
+                <div class="flex items-center justify-between">
+                    <label class="text-sm font-medium text-gray-700" x-text="t('agent.workspace.enabled')"></label>
+                    <button @click="workspaceConfig.enabled = !workspaceConfig.enabled; saveWorkspaceConfig()"
+                            :class="workspaceConfig.enabled ? 'bg-green-500' : 'bg-gray-300'"
+                            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none">
+                        <span :class="workspaceConfig.enabled ? 'translate-x-6' : 'translate-x-1'"
+                              class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"></span>
+                    </button>
+                </div>
+                <div x-show="workspaceConfig.enabled" class="space-y-3 pt-2 border-t border-gray-100">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" x-text="t('agent.workspace.root')"></label>
+                        <input x-model="workspaceConfig.root" @change="saveWorkspaceConfig()"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono"
+                               placeholder="/path/to/workspace">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2" x-text="t('agent.workspace.tools')"></label>
+                        <div class="flex flex-wrap gap-2">
+                            <template x-for="tool in workspaceConfig.tools || []" :key="tool">
+                                <span class="px-2.5 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium" x-text="tool"></span>
+                            </template>
+                            <p x-show="!workspaceConfig.tools || !workspaceConfig.tools.length" class="text-gray-400 text-xs" x-text="t('agent.no_tools')"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- File Browser Card -->
+            <div x-show="workspaceConfig.enabled" class="bg-white rounded-xl shadow-sm p-6 space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wide" x-text="t('agent.workspace.fileBrowser')"></h3>
+                    <div class="flex items-center gap-2">
+                        <input x-model="workspaceFileFilter" @input.debounce.400ms="refreshWorkspaceFiles()"
+                               class="px-3 py-1.5 border border-gray-300 rounded-lg text-xs w-40"
+                               placeholder="*.py, *.md">
+                        <label class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer">
+                            <span x-text="t('agent.workspace.upload')"></span>
+                            <input type="file" class="hidden" @change="uploadWorkspaceFile($event)">
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Breadcrumb / current path -->
+                <div class="flex items-center gap-1 text-xs text-gray-500">
+                    <button @click="workspaceCurrentPath = ''; refreshWorkspaceFiles()"
+                            class="hover:text-blue-600 underline" x-text="t('agent.workspace.root')"></button>
+                    <template x-for="(seg, i) in workspaceCurrentPath.split('/').filter(Boolean)" :key="i">
+                        <span class="flex items-center gap-1">
+                            <span>/</span>
+                            <button @click="workspaceCurrentPath = workspaceCurrentPath.split('/').filter(Boolean).slice(0, i + 1).join('/'); refreshWorkspaceFiles()"
+                                    class="hover:text-blue-600 underline" x-text="seg"></button>
+                        </span>
+                    </template>
+                </div>
+
+                <!-- File list -->
+                <div class="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-64 overflow-y-auto">
+                    <template x-for="file in workspaceFiles" :key="file.path">
+                        <div class="flex items-center justify-between px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm"
+                             @click="file.is_dir ? (workspaceCurrentPath = file.path, refreshWorkspaceFiles()) : viewWorkspaceFile(file.path)">
+                            <div class="flex items-center gap-2">
+                                <span x-show="file.is_dir" class="text-yellow-500">&#128193;</span>
+                                <span x-show="!file.is_dir" class="text-gray-400">&#128196;</span>
+                                <span class="text-gray-800" x-text="file.name"></span>
+                            </div>
+                            <span x-show="!file.is_dir && file.size != null" class="text-xs text-gray-400" x-text="formatFileSize(file.size)"></span>
+                        </div>
+                    </template>
+                    <p x-show="!workspaceFiles.length && workspaceLoaded" class="text-gray-400 text-sm text-center py-4" x-text="t('agent.workspace.noFiles')"></p>
+                </div>
+
+                <!-- File content viewer -->
+                <div x-show="workspaceFileContent !== null" class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-mono text-gray-600" x-text="workspaceFilePath"></span>
+                        <button @click="workspaceFileContent = null" class="text-xs text-gray-500 hover:text-gray-700">&times;</button>
+                    </div>
+                    <pre class="text-xs text-gray-800 whitespace-pre-wrap max-h-60 overflow-y-auto font-mono" x-text="workspaceFileContent"></pre>
+                </div>
             </div>
         </div>
     </div>
