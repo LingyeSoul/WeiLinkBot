@@ -28,6 +28,8 @@ dependencies = [
     "tokenizers>=0.15.0",
     "mcp>=1.0.0",
     "ddgs>=9.0.0",
+    "py7zr>=0.20.0",
+    "rarfile>=4.1",
 ]
 
 [project.optional-dependencies]
