@@ -339,9 +339,9 @@ class StickerService:
 
             # Find or create pack (use directory name)
             pack_name = subdir.name
-            stmt = select(StickerPack).where(StickerPack.name == pack_name)
+            stmt = select(StickerPack).where(StickerPack.name == pack_name).limit(1)
             result = await self.db.execute(stmt)
-            pack = result.scalar_one_or_none()
+            pack = result.scalars().first()
 
             if not pack:
                 pack = StickerPack(name=pack_name)
