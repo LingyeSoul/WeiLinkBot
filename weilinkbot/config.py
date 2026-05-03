@@ -72,6 +72,7 @@ class EmbeddingLLMConfig(BaseModel):
     api_key: str = ""
     base_url: str = ""
     model: str = ""
+    llm_provider_id: int = 0  # 0 = not linked to a provider (manual / fallback)
 
 
 class MemoryConfig(BaseModel):
@@ -92,11 +93,45 @@ class MemoryConfig(BaseModel):
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     llm: EmbeddingLLMConfig = Field(default_factory=EmbeddingLLMConfig)
 
+    # Buffer & trigger
+    turn_threshold: int = 10
+    timeout_minutes: int = 30
+
+    # Time decay for retrieval
+    time_decay_days: int = 30
+
+    # Reranking weights
+    rerank_weight: float = 0.7
+    exact_sim_weight: float = 0.3
+    expand_factor: int = 2
+
 
 class AgentConfig(BaseModel):
     max_tool_rounds: int = 5
-    enabled_tools: list[str] = Field(default_factory=lambda: ["get_current_time", "calculate"])
+    enabled_tools: list[str] = Field(default_factory=lambda: ["get_current_time", "calculate", "web_search"])
     enabled_skills: list[str] = Field(default_factory=list)
+    enabled_workspace_tools: list[str] = Field(
+        default_factory=lambda: ["workspace_read", "workspace_list", "workspace_grep", "workspace_write"]
+    )
+
+
+class WorkspaceConfig(BaseModel):
+    enabled: bool = True
+    root: str = "workspace"
+    blocked_extensions: list[str] = Field(default_factory=lambda: [
+        ".exe", ".bat", ".cmd", ".com", ".msi", ".scr",
+        ".sh", ".bash", ".zsh",
+        ".ps1", ".psm1",
+        ".dll", ".so", ".dylib",
+        ".vbs", ".vbe", ".js", ".jse",
+        ".py", ".pyw",
+        ".jar", ".class",
+        ".elf", ".appimage",
+    ])
+    read_max_size: int = 1_048_576
+    write_max_size: int = 524_288
+    list_max_entries: int = 500
+    grep_max_results: int = 100
 
 
 class AppConfig(BaseModel):
@@ -104,6 +139,7 @@ class AppConfig(BaseModel):
     llm: LLMConfig = Field(default_factory=LLMConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     agent: AgentConfig = Field(default_factory=AgentConfig)
+    workspace: WorkspaceConfig = Field(default_factory=WorkspaceConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
 
@@ -114,6 +150,19 @@ class AppConfig(BaseModel):
 
 def _set_nested(data: dict[str, Any], key: str, value: Any) -> None:
     """Set a value in a nested dict using a dot-separated key."""
+    # Parse string values that look like Python/JSON literals (lists, dicts)
+    if isinstance(value, str) and value:
+        stripped = value.strip()
+        if stripped.startswith(("[", "{")):
+            import json
+            try:
+                value = json.loads(stripped)
+            except (json.JSONDecodeError, ValueError):
+                try:
+                    import ast
+                    value = ast.literal_eval(stripped)
+                except (ValueError, SyntaxError):
+                    pass
     parts = key.split(".")
     d = data
     for part in parts[:-1]:
