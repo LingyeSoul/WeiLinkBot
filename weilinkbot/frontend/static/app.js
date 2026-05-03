@@ -1258,6 +1258,13 @@ function dashboard() {
             }
             this.saveWorkspaceConfig();
         },
+        toggleWorkspace() {
+            const enabling = !this.workspaceConfig.enabled;
+            this.workspaceConfig.enabled = enabling;
+            const allTools = ["workspace_read", "workspace_list", "workspace_grep", "workspace_write"];
+            this.workspaceConfig.enabled_workspace_tools = enabling ? [...allTools] : [];
+            this.saveWorkspaceConfig();
+        },
         async refreshWorkspaceFiles() {
             try {
                 const params = new URLSearchParams();
