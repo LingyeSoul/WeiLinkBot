@@ -45,6 +45,7 @@ class StickerService:
             select(
                 StickerPack,
                 func.coalesce(func.count(Sticker.id), 0).label("sticker_count"),
+                func.min(Sticker.id).label("first_sticker_id"),
             )
             .outerjoin(Sticker)
             .group_by(StickerPack.id)
@@ -53,12 +54,13 @@ class StickerService:
         result = await self.db.execute(stmt)
         rows = result.all()
         packs = []
-        for pack, count in rows:
+        for pack, count, first_sticker_id in rows:
             packs.append({
                 "id": pack.id,
                 "name": pack.name,
                 "description": pack.description,
                 "cover_path": pack.cover_path,
+                "cover_sticker_id": first_sticker_id,
                 "sticker_count": count,
                 "created_at": pack.created_at,
                 "updated_at": pack.updated_at,
@@ -241,11 +243,21 @@ class StickerService:
     # ── Search (for Agent tool) ────────────────────────────────
 
     async def search_stickers(self, keyword: str, limit: int = 3) -> list[dict]:
-        """Search stickers by text_description keyword match."""
+        """Search stickers by text_description keyword match.
+
+        Splits the keyword by spaces and matches any of the individual terms (OR logic).
+        """
+        from sqlalchemy import or_
+
+        terms = [t.strip() for t in keyword.split() if t.strip()]
+        if not terms:
+            return []
+
+        conditions = [Sticker.text_description.ilike(f"%{term}%") for term in terms]
         stmt = (
             select(Sticker, StickerPack.name.label("pack_name"))
             .join(StickerPack)
-            .where(Sticker.text_description.ilike(f"%{keyword}%"))
+            .where(or_(*conditions))
             .limit(limit)
         )
         result = await self.db.execute(stmt)
