@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import shutil
 import tempfile
@@ -25,6 +26,10 @@ MAX_ARCHIVE_SIZE = 128 * 1024 * 1024  # 128 MB
 class StickerService:
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    @staticmethod
+    def _file_hash(data: bytes) -> str:
+        return hashlib.md5(data).hexdigest()
 
     # ── Pack CRUD ──────────────────────────────────────────────
 
@@ -98,6 +103,16 @@ class StickerService:
         ext = Path(original_filename).suffix.lower()
         if ext not in IMAGE_EXTENSIONS:
             return None
+
+        # Dedup: check if same file content already exists in this pack
+        file_hash = self._file_hash(file_data)
+        stmt = select(Sticker).where(Sticker.pack_id == pack_id)
+        result = await self.db.execute(stmt)
+        for existing in result.scalars().all():
+            if existing.file_path:
+                existing_file = STICKERS_DIR / existing.file_path
+                if existing_file.exists() and self._file_hash(existing_file.read_bytes()) == file_hash:
+                    return existing  # Already exists, return existing sticker
 
         stmt = select(func.coalesce(func.max(Sticker.sort_order), 0)).where(Sticker.pack_id == pack_id)
         result = await self.db.execute(stmt)
