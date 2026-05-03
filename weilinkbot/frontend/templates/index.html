@@ -1534,6 +1534,15 @@
         </div>
         <p class="text-xs text-gray-400" x-text="t('stickers.import_hint')"></p>
 
+        <!-- Scan Local Path -->
+        <div class="flex gap-2 items-center">
+            <input x-model="scanPath" type="text" class="flex-1 border rounded-lg px-3 py-2 text-sm"
+                   :placeholder="t('stickers.scan_placeholder')">
+            <button @click="scanStickerPath()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm whitespace-nowrap">
+                <span x-text="t('stickers.scan_path')">Scan</span>
+            </button>
+        </div>
+
         <!-- Pack Form Modal -->
         <div x-show="showPackForm" x-transition class="fixed inset-0 bg-black/40 flex items-center justify-center z-50" @click.self="showPackForm = false">
             <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">

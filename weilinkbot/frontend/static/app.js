@@ -56,6 +56,7 @@ function dashboard() {
         showStickerDetail: false,
         selectedPack: null,
         selectedPackStickers: [],
+        scanPath: "",
 
         // Providers
         providers: [],
@@ -1170,6 +1171,26 @@ function dashboard() {
                 await this.refreshStickerPacks();
                 this.showToast(t("toast.sticker_deleted"), "success");
             } catch {}
+        },
+        async scanStickerPath() {
+            const path = this.scanPath.trim();
+            if (!path) return;
+            try {
+                const resp = await fetch("/api/sticker-packs/scan", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ path }),
+                });
+                if (!resp.ok) {
+                    const err = await resp.json().catch(() => ({ detail: "Scan failed" }));
+                    throw new Error(err.detail);
+                }
+                const packs = await resp.json();
+                await this.refreshStickerPacks();
+                this.showToast(t("toast.scan_done") + ` (${packs.length} packs)`, "success");
+            } catch (e) {
+                this.showToast(e.message, "error");
+            }
         },
 
         // ── Settings ───────────────────────────────────────────────

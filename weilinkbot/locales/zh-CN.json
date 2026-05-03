@@ -454,6 +454,7 @@
   "agent.tool_desc.workspace_list": "列出工作区中的文件和目录，支持通配符匹配",
   "agent.tool_desc.workspace_grep": "在工作区文件中搜索文本或正则表达式",
   "agent.tool_desc.workspace_write": "向工作区写入或追加文件内容",
+  "agent.tool_desc.search_sticker": "搜索表情包库，根据关键词找到匹配的表情包",
   "agent.save": "保存配置",
   "agent.settings_title": "设置",
   "agent.skills_title": "技能",
@@ -624,5 +625,10 @@
   "events.expand_detail": "展开详情",
   "events.collapse_detail": "收起详情",
   "events.sent_to_llm": "发送给 LLM 的内容：",
-  "events.llm_response": "LLM 返回的内容："
+  "events.llm_response": "LLM 返回的内容：",
+  "stickers.scan_placeholder": "输入本地文件夹路径（如 D:/stickers/cat）",
+  "stickers.scan_path": "扫描路径",
+  "toast.scan_done": "扫描完成",
+  "api.path_required": "请输入路径",
+  "api.no_images_in_path": "该路径下未找到图片文件"
 }

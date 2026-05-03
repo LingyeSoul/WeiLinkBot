@@ -25,8 +25,8 @@ from ..services.ws_service import get_ws_service
 
 router = APIRouter()
 
-_MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB per single sticker
-_MAX_ARCHIVE_SIZE = 50 * 1024 * 1024  # 50 MB for archives
+_MAX_UPLOAD_SIZE = 128 * 1024 * 1024  # 128 MB per single sticker
+_MAX_ARCHIVE_SIZE = 128 * 1024 * 1024  # 128 MB for archives
 
 
 async def _read_upload_with_limit(file: UploadFile, limit: int) -> bytes:
@@ -114,6 +114,31 @@ async def import_archive(
     await _broadcast_packs(db)
     packs = await service.list_packs()
     return next(p for p in packs if p["id"] == pack.id)
+
+
+@router.post("/scan", response_model=list[StickerPackResponse], status_code=201)
+async def scan_directory(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+):
+    """Scan a local directory and import images as sticker packs."""
+    path = body.get("path", "").strip()
+    if not path:
+        raise HTTPException(status_code=400, detail=t("api.path_required"))
+
+    service = StickerService(db)
+    try:
+        packs = await service.scan_directory(path)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if not packs:
+        raise HTTPException(status_code=400, detail=t("api.no_images_in_path"))
+
+    await _broadcast_packs(db)
+    all_packs = await service.list_packs()
+    pack_ids = {p.id for p in packs}
+    return [p for p in all_packs if p["id"] in pack_ids]
 
 
 # -- Sticker endpoints -----------------------------------------------------

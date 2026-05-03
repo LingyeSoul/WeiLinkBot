@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 STICKERS_DIR = Path("data/stickers/packs")
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
-MAX_ARCHIVE_SIZE = 50 * 1024 * 1024  # 50 MB
+MAX_ARCHIVE_SIZE = 128 * 1024 * 1024  # 128 MB
 
 
 class StickerService:
@@ -239,3 +239,55 @@ class StickerService:
             }
             for sticker, pack_name in rows
         ]
+
+    # ── Directory Scan ────────────────────────────────────────
+
+    async def scan_directory(self, path: str) -> list[StickerPack]:
+        """Scan a local directory and import images as sticker packs.
+
+        Smart mode: if the directory contains subdirectories with images,
+        each subdirectory becomes a separate pack. Otherwise, the directory
+        itself becomes one pack.
+        """
+        root = Path(path)
+        if not root.is_dir():
+            raise ValueError(f"Path is not a directory: {path}")
+
+        # Collect subdirectories that contain images
+        subdirs_with_images: list[Path] = []
+        for child in sorted(root.iterdir()):
+            if child.is_dir():
+                has_images = any(
+                    f.is_file() and f.suffix.lower() in IMAGE_EXTENSIONS
+                    for f in child.rglob("*")
+                )
+                if has_images:
+                    subdirs_with_images.append(child)
+
+        if subdirs_with_images:
+            # Subdirectory mode: each subdirectory is a pack
+            packs = []
+            for subdir in subdirs_with_images:
+                pack = await self._import_dir_as_pack(subdir)
+                if pack:
+                    packs.append(pack)
+            return packs
+        else:
+            # Single directory mode: the directory itself is a pack
+            pack = await self._import_dir_as_pack(root)
+            return [pack] if pack else []
+
+    async def _import_dir_as_pack(self, directory: Path) -> Optional[StickerPack]:
+        """Import all images in a directory as a new sticker pack."""
+        images = [
+            p for p in sorted(directory.rglob("*"))
+            if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
+        ]
+        if not images:
+            return None
+
+        pack = await self.create_pack(directory.name)
+        for img_path in images:
+            img_data = img_path.read_bytes()
+            await self.add_sticker(pack.id, img_data, img_path.name)
+        return pack
