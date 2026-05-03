@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Any
 
-from ..config import AgentConfig
+from ..config import AppConfig
 from .llm_service import LLMService
 from .tools.base import ToolResult
 from .tools.registry import ToolRegistry
@@ -40,11 +40,11 @@ class AgentService:
         self,
         llm_service: LLMService,
         registry: ToolRegistry,
-        agent_config: AgentConfig,
+        config: AppConfig,
     ) -> None:
         self._llm = llm_service
         self._registry = registry
-        self._config = agent_config
+        self._config = config
 
     async def run(
         self,
@@ -60,11 +60,13 @@ class AgentService:
         Returns:
             (response_text, total_tokens)
         """
-        enabled = list(self._config.enabled_tools)
-        # Add enabled workspace tools (deduplicated, preserving order)
-        enabled.extend(
-            t for t in self._config.enabled_workspace_tools if t not in enabled
-        )
+        agent_cfg = self._config.agent
+        enabled = list(agent_cfg.enabled_tools)
+        # Auto-include workspace tools when workspace is enabled
+        if self._config.workspace.enabled:
+            enabled.extend(
+                t for t in agent_cfg.enabled_workspace_tools if t not in enabled
+            )
         if not enabled:
             text, tokens, _ = await self._llm.chat(context)
             return text, tokens
@@ -88,7 +90,7 @@ class AgentService:
         messages = list(context)
         total_tokens = 0
 
-        for _round in range(self._config.max_tool_rounds):
+        for _round in range(self._config.agent.max_tool_rounds):
             text, tokens, tool_calls = await self._llm.chat(messages, tools=tools)
             total_tokens += tokens
 
@@ -138,7 +140,7 @@ class AgentService:
 
         total_tokens = 0
 
-        for _round in range(self._config.max_tool_rounds):
+        for _round in range(self._config.agent.max_tool_rounds):
             text, tokens, _ = await self._llm.chat(messages)
             total_tokens += tokens
 

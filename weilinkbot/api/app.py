@@ -159,7 +159,7 @@ async def lifespan(app: FastAPI):
     from ..services.tools import init_default_tools, get_registry
     from ..services.agent_service import AgentService
     init_default_tools()
-    agent_service = AgentService(llm_service, get_registry(), config.agent)
+    agent_service = AgentService(llm_service, get_registry(), config)
     set_agent_service(agent_service)
     logger.info("Agent service initialized (tools=%s, max_rounds=%d)",
                 config.agent.enabled_tools, config.agent.max_tool_rounds)
