@@ -36,3 +36,10 @@ def init_workspace_tools(workspace_service) -> None:
     registry.register(WorkspaceListTool(workspace_service))
     registry.register(WorkspaceGrepTool(workspace_service))
     registry.register(WorkspaceWriteTool(workspace_service))
+
+
+def init_sticker_tool(session_factory) -> None:
+    """Register the search_sticker tool into the global registry."""
+    from .search_sticker_tool import SearchStickerTool
+    registry = get_registry()
+    registry.register(SearchStickerTool(session_factory))
