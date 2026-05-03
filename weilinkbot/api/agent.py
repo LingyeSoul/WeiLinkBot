@@ -295,7 +295,16 @@ async def update_workspace_config(body: dict):
     if "enabled_workspace_tools" in body:
         cfg.agent.enabled_workspace_tools = body["enabled_workspace_tools"]
     save_config()
-    return {"ok": True}
+    return {
+        "enabled": ws.enabled,
+        "root": ws.root,
+        "blocked_extensions": list(ws.blocked_extensions),
+        "read_max_size": ws.read_max_size,
+        "write_max_size": ws.write_max_size,
+        "list_max_entries": ws.list_max_entries,
+        "grep_max_results": ws.grep_max_results,
+        "enabled_workspace_tools": list(cfg.agent.enabled_workspace_tools),
+    }
 
 
 @router.get("/workspace/files")
