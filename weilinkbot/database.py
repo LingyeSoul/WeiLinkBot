@@ -134,9 +134,7 @@ async def _migrate_nullable_api_key(conn) -> None:
         return  # already nullable
 
     logger.info("Auto-migration: making llm_presets.api_key and base_url nullable via table rebuild")
-    # Get current columns list
-    cols = [row[1] for row in col_info.values()]
-    col_list = ", ".join(cols)
+    old_cols = set(col_info.keys())
 
     await conn.execute(text("ALTER TABLE llm_presets RENAME TO llm_presets_old"))
     await conn.execute(text("""
@@ -165,6 +163,12 @@ async def _migrate_nullable_api_key(conn) -> None:
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """))
+
+    # Only copy columns that exist in both old and new table
+    new_result = await conn.execute(text("PRAGMA table_info(llm_presets)"))
+    new_cols = {row[1] for row in new_result.fetchall()}
+    shared_cols = sorted(old_cols & new_cols, key=lambda c: col_info[c][0])
+    col_list = ", ".join(shared_cols)
     await conn.execute(text(
         f"INSERT INTO llm_presets ({col_list}) SELECT {col_list} FROM llm_presets_old"
     ))
