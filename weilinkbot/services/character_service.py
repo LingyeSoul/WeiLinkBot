@@ -246,9 +246,13 @@ class CharacterService:
             return False
         # Delete avatar file if exists
         if card.avatar_path:
-            avatar = Path("data") / card.avatar_path
-            if avatar.exists():
-                avatar.unlink()
+            avatar = (Path("data") / card.avatar_path).resolve()
+            data_root = Path("data").resolve()
+            if avatar.is_relative_to(data_root) and avatar.exists():
+                try:
+                    avatar.unlink()
+                except OSError as e:
+                    logger.warning("Failed to delete avatar %s: %s", avatar, e)
         await self._db.delete(card)
         await self._db.flush()
         return True

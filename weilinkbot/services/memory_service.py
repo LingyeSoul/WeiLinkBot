@@ -640,6 +640,7 @@ class MemoryService:
         if not api_key or not model:
             return None
 
+        mem_cfg = self._config.memory
         categories_desc = ", ".join(MEMORY_CATEGORIES)
         blacklist_note = ""
         if mem_cfg.role_term_blacklist:
@@ -992,6 +993,7 @@ class MemoryService:
         if not api_key or not model:
             return None
 
+        mem_cfg = self._config.memory
         categories_desc = ", ".join(MEMORY_CATEGORIES)
         blacklist_note = ""
         if mem_cfg.role_term_blacklist:

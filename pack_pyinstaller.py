@@ -9,7 +9,6 @@ Usage:
     .venv\Scripts\python.exe pack_pyinstaller.py
 """
 
-import glob
 import shutil
 import subprocess
 import sys

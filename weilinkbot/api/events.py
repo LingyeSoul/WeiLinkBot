@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+
+logger = logging.getLogger(__name__)
 
 from ..services.ws_service import get_ws_service
 
@@ -23,6 +27,6 @@ async def unified_ws(ws: WebSocket):
     except WebSocketDisconnect:
         pass
     except Exception:
-        pass
+        logger.debug("WebSocket connection closed with error", exc_info=True)
     finally:
         await ws_service.disconnect(ws)

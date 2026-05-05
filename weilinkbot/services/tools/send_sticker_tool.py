@@ -53,10 +53,7 @@ class SendStickerTool(Tool):
         # Look up sticker file_path from database
         async with self._session_factory() as db:
             service = StickerService(db)
-            from sqlalchemy import select
-            from ...models import Sticker
-            result = await db.execute(select(Sticker).where(Sticker.id == sticker_id))
-            sticker = result.scalar_one_or_none()
+            sticker = await service.get_sticker_by_id(sticker_id)
 
         if not sticker:
             raise ToolExecutionError(f"Sticker with id={sticker_id} not found.")

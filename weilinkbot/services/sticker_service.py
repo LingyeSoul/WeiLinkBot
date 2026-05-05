@@ -95,6 +95,9 @@ class StickerService:
 
     # ── Sticker CRUD ───────────────────────────────────────────
 
+    async def get_sticker_by_id(self, sticker_id: int) -> Optional[Sticker]:
+        return await self.db.get(Sticker, sticker_id)
+
     async def add_sticker(
         self, pack_id: int, file_data: bytes, original_filename: str, text_description: str = ""
     ) -> Optional[Sticker]:
@@ -124,6 +127,13 @@ class StickerService:
         if not text_description:
             text_description = Path(original_filename).stem
 
+        # Write file to disk FIRST (temp name), then create DB record
+        pack_dir = STICKERS_DIR / str(pack_id)
+        pack_dir.mkdir(parents=True, exist_ok=True)
+        import uuid
+        tmp_path = pack_dir / f".tmp_{uuid.uuid4().hex}{ext}"
+        tmp_path.write_bytes(file_data)
+
         sticker = Sticker(
             pack_id=pack_id,
             file_path="",
@@ -134,12 +144,9 @@ class StickerService:
         self.db.add(sticker)
         await self.db.flush()
 
-        pack_dir = STICKERS_DIR / str(pack_id)
-        pack_dir.mkdir(parents=True, exist_ok=True)
-        file_path = pack_dir / f"{sticker.id}{ext}"
-        file_path.write_bytes(file_data)
-
-        # Store relative path (relative to static mount /stickers -> data/stickers/packs)
+        # Rename to final path using the DB-generated ID
+        final_path = pack_dir / f"{sticker.id}{ext}"
+        tmp_path.rename(final_path)
         sticker.file_path = f"{pack_id}/{sticker.id}{ext}"
 
         if not pack.cover_path:
@@ -167,8 +174,9 @@ class StickerService:
         if not sticker:
             return False
         if sticker.file_path:
-            fp = STICKERS_DIR / sticker.file_path
-            if fp.exists():
+            fp = (STICKERS_DIR / sticker.file_path).resolve()
+            stickers_root = STICKERS_DIR.resolve()
+            if fp.is_relative_to(stickers_root) and fp.exists():
                 fp.unlink(missing_ok=True)
         await self.db.delete(sticker)
         await self.db.flush()
@@ -179,7 +187,7 @@ class StickerService:
     async def import_archive(self, file_data: bytes, filename: str) -> Optional[StickerPack]:
         """Import a ZIP/7Z/RAR archive as a new sticker pack."""
         if len(file_data) > MAX_ARCHIVE_SIZE:
-            raise ValueError("Archive too large (max 50 MB)")
+            raise ValueError("Archive too large (max 128 MB)")
 
         pack_name = Path(filename).stem
         tmpdir = tempfile.mkdtemp(prefix="sticker_import_")
@@ -209,7 +217,12 @@ class StickerService:
 
     def _extract_zip(self, file_data: bytes, tmpdir: str) -> list[Path]:
         import io
+        tmpdir_resolved = Path(tmpdir).resolve()
         with zipfile.ZipFile(io.BytesIO(file_data)) as zf:
+            for entry in zf.infolist():
+                target = (tmpdir_resolved / entry.filename).resolve()
+                if not target.is_relative_to(tmpdir_resolved):
+                    raise ValueError(f"Unsafe path in archive: {entry.filename}")
             zf.extractall(tmpdir)
         return self._collect_images(tmpdir)
 
@@ -219,7 +232,12 @@ class StickerService:
             import py7zr
         except ImportError:
             raise ValueError("py7zr not installed — cannot extract .7z files")
+        tmpdir_resolved = Path(tmpdir).resolve()
         with py7zr.SevenZipFile(io.BytesIO(file_data), mode="r") as sz:
+            for entry in sz.list():
+                target = (tmpdir_resolved / entry.filename).resolve()
+                if not target.is_relative_to(tmpdir_resolved):
+                    raise ValueError(f"Unsafe path in archive: {entry.filename}")
             sz.extractall(tmpdir)
         return self._collect_images(tmpdir)
 
@@ -229,7 +247,12 @@ class StickerService:
             import rarfile
         except ImportError:
             raise ValueError("rarfile not installed — cannot extract .rar files")
+        tmpdir_resolved = Path(tmpdir).resolve()
         with rarfile.RarFile(io.BytesIO(file_data)) as rf:
+            for entry in rf.infolist():
+                target = (tmpdir_resolved / entry.filename).resolve()
+                if not target.is_relative_to(tmpdir_resolved):
+                    raise ValueError(f"Unsafe path in archive: {entry.filename}")
             rf.extractall(tmpdir)
         return self._collect_images(tmpdir)
 
