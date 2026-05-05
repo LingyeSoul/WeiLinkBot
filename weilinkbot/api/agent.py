@@ -89,9 +89,71 @@ async def create_skill(data: SkillCreate):
     return {"name": data.name}
 
 
+def _detect_pack_name(zf: zipfile.ZipFile) -> str:
+    """Detect a pack name from zip structure.
+
+    Priority:
+    1. manifest.json "name" field
+    2. Single top-level directory name
+    3. Zip filename stem (handled by caller)
+    """
+    # 1. Check manifest.json
+    for name in zf.namelist():
+        basename = name.rsplit("/", 1)[-1].lower()
+        if basename == "manifest.json":
+            try:
+                data = json.loads(zf.read(name))
+                if isinstance(data, dict) and data.get("name"):
+                    return data["name"]
+            except Exception:
+                pass
+            break
+
+    # 2. Single top-level directory
+    top_dirs = set()
+    for name in zf.namelist():
+        if "/" in name:
+            top_dirs.add(name.split("/")[0])
+    if len(top_dirs) == 1:
+        return next(iter(top_dirs))
+
+    return ""
+
+
+def _parse_manifest(zf: zipfile.ZipFile) -> dict[str, dict[str, str]] | None:
+    """Parse manifest.json if present. Returns {filename: {name, description}}."""
+    for name in zf.namelist():
+        if name.rsplit("/", 1)[-1].lower() == "manifest.json":
+            try:
+                data = json.loads(zf.read(name))
+                if not isinstance(data, dict):
+                    return None
+                skills = data.get("skills")
+                if not isinstance(skills, list):
+                    return None
+                result = {}
+                for entry in skills:
+                    if isinstance(entry, dict) and entry.get("file"):
+                        result[entry["file"]] = {
+                            "name": entry.get("name", ""),
+                            "description": entry.get("description", ""),
+                        }
+                return result
+            except Exception:
+                return None
+    return None
+
+
 @router.post("/skills/import")
 async def import_skills(file: UploadFile = File(...)):
-    """Import skills from a .md file or .zip archive containing .md files."""
+    """Import skills from a .md file or .zip archive containing .md files.
+
+    For zip archives, intelligently parses structure:
+    - Reads manifest.json for pack metadata if present
+    - Detects nested directory as pack name
+    - Applies pack-name prefix to each skill
+    - Filters out non-markdown files
+    """
     from .deps import get_skill_service
 
     skill_service = get_skill_service()
@@ -102,6 +164,7 @@ async def import_skills(file: UploadFile = File(...)):
         raise HTTPException(status_code=413, detail="File too large (max 10MB)")
 
     imported: list[str] = []
+    pack_name = ""
 
     if filename.endswith(".md"):
         # Single markdown file
@@ -113,23 +176,58 @@ async def import_skills(file: UploadFile = File(...)):
         imported.append(name)
 
     elif filename.endswith(".zip"):
-        # Zip archive — import all .md files inside
         try:
             with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+                # Detect pack name and manifest
+                pack_name = _detect_pack_name(zf)
+                if not pack_name:
+                    # Fallback to zip filename
+                    zip_stem = (file.filename or "imported").rsplit(".", 1)[0]
+                    pack_name = zip_stem.rsplit("/", 1)[-1]
+                manifest = _parse_manifest(zf)
+
                 for entry in zf.namelist():
                     if entry.endswith("/") or not entry.lower().endswith(".md"):
                         continue
-                    entry_name = entry.rsplit("/", 1)[-1]
-                    if not entry_name.lower().endswith(".md"):
+
+                    entry_basename = entry.rsplit("/", 1)[-1]
+                    if not entry_basename.lower().endswith(".md"):
                         continue
-                    skill_name = entry_name[:-3]
+
+                    skill_file = entry_basename[:-3]  # e.g. "code-review"
+
+                    # Get display name: manifest > frontmatter > filename
+                    display_name = ""
+                    description = ""
+                    if manifest and entry_basename in manifest:
+                        display_name = manifest[entry_basename].get("name", "")
+                        description = manifest[entry_basename].get("description", "")
+                    # Also check without directory prefix for manifest match
+                    if not display_name and manifest:
+                        for mkey, mval in manifest.items():
+                            if mkey.rsplit("/", 1)[-1] == entry_basename:
+                                display_name = mval.get("name", "")
+                                description = mval.get("description", "")
+                                break
+
                     try:
                         content = zf.read(entry).decode("utf-8", errors="replace")
                     except Exception:
                         continue
+
+                    # Build prefixed name: "pack-name: skill-name"
+                    if not display_name:
+                        display_name = skill_file
+                    prefixed_display = f"{pack_name}: {display_name}"
+
+                    # Filename-safe version (no colons)
+                    safe_prefix = "".join(c for c in pack_name if c.isalnum() or c in "-_").strip()
+                    safe_skill = "".join(c for c in skill_file if c.isalnum() or c in "-_").strip()
+                    safe_name = f"{safe_prefix}-{safe_skill}" if safe_prefix else safe_skill
+
                     try:
-                        skill_service.save(skill_name, content)
-                        imported.append(skill_name)
+                        skill_service.save(safe_name, content, description=description, display_name=prefixed_display)
+                        imported.append(prefixed_display)
                     except ValueError:
                         logger.warning("Skipping invalid skill name from zip: %s", entry)
         except zipfile.BadZipFile:
@@ -137,7 +235,7 @@ async def import_skills(file: UploadFile = File(...)):
     else:
         raise HTTPException(status_code=400, detail="Unsupported file format. Use .md or .zip")
 
-    return {"imported": imported, "count": len(imported)}
+    return {"imported": imported, "count": len(imported), "pack_name": pack_name}
 
 
 @router.delete("/skills/{name}")
@@ -261,6 +359,33 @@ async def reconnect_mcp_server(server_id: int):
     }
     conn = await mcp_service.connect_server(server.id, config)
     return {"id": server_id, "status": conn.status}
+
+
+# ── Sticker ────────────────────────────────────────────────────
+
+@router.get("/sticker/config")
+async def get_sticker_config():
+    """Get sticker feature configuration."""
+    cfg = get_config()
+    return {
+        "enabled": cfg.sticker.enabled,
+        "enabled_sticker_tools": list(cfg.agent.enabled_sticker_tools),
+    }
+
+
+@router.put("/sticker/config")
+async def update_sticker_config(body: dict):
+    """Update sticker feature configuration."""
+    cfg = get_config()
+    if "enabled" in body:
+        cfg.sticker.enabled = body["enabled"]
+    if "enabled_sticker_tools" in body:
+        cfg.agent.enabled_sticker_tools = body["enabled_sticker_tools"]
+    save_config()
+    return {
+        "enabled": cfg.sticker.enabled,
+        "enabled_sticker_tools": list(cfg.agent.enabled_sticker_tools),
+    }
 
 
 # ── Workspace ──────────────────────────────────────────────────

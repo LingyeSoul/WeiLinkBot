@@ -109,12 +109,19 @@ class MemoryConfig(BaseModel):
 class AgentConfig(BaseModel):
     max_tool_rounds: int = 5
     enabled_tools: list[str] = Field(default_factory=lambda: [
-        "get_current_time", "calculate", "web_search", "search_sticker", "send_sticker",
+        "get_current_time", "calculate", "web_search",
     ])
     enabled_skills: list[str] = Field(default_factory=list)
     enabled_workspace_tools: list[str] = Field(
         default_factory=lambda: ["workspace_read", "workspace_list", "workspace_grep", "workspace_write"]
     )
+    enabled_sticker_tools: list[str] = Field(
+        default_factory=lambda: ["search_sticker", "send_sticker", "list_sticker_packs"]
+    )
+
+
+class StickerConfig(BaseModel):
+    enabled: bool = True
 
 
 class WorkspaceConfig(BaseModel):
@@ -141,6 +148,7 @@ class AppConfig(BaseModel):
     llm: LLMConfig = Field(default_factory=LLMConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     agent: AgentConfig = Field(default_factory=AgentConfig)
+    sticker: StickerConfig = Field(default_factory=StickerConfig)
     workspace: WorkspaceConfig = Field(default_factory=WorkspaceConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)

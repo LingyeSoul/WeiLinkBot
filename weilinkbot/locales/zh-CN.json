@@ -457,6 +457,8 @@
   "agent.tool_desc.workspace_grep": "在工作区文件中搜索文本或正则表达式",
   "agent.tool_desc.workspace_write": "向工作区写入或追加文件内容",
   "agent.tool_desc.search_sticker": "搜索表情包库，根据关键词找到匹配的表情包",
+  "agent.tool_desc.send_sticker": "发送表情包图片给用户，在搜索到表情包后调用",
+  "agent.tool_desc.list_sticker_packs": "列出所有表情包系列，或查看某个系列中的表情列表",
   "agent.save": "保存配置",
   "agent.settings_title": "设置",
   "agent.skills_title": "技能",

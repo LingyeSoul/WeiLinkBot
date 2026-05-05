@@ -457,6 +457,8 @@
   "agent.tool_desc.workspace_grep": "Search for text or regex patterns across workspace files",
   "agent.tool_desc.workspace_write": "Write or append content to a file in the workspace",
   "agent.tool_desc.search_sticker": "Search the sticker pack library by keyword to find matching stickers",
+  "agent.tool_desc.send_sticker": "Send a sticker image to the user, call after searching for stickers",
+  "agent.tool_desc.list_sticker_packs": "List all sticker packs, or view stickers in a specific pack",
   "agent.save": "Save Configuration",
   "agent.settings_title": "Settings",
   "agent.skills_title": "Skills",

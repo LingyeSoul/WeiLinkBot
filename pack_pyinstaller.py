@@ -9,6 +9,8 @@ Usage:
     .venv\Scripts\python.exe pack_pyinstaller.py
 """
 
+import glob
+import shutil
 import subprocess
 import sys
 import tomllib
@@ -144,6 +146,21 @@ def build() -> None:
         sys.exit(result.returncode)
 
     output_dir = DIST_DIR / APP_NAME
+    internal_dir = output_dir / CONTENTS_DIR_NAME
+
+    # Remove stale dist-info to prevent importlib.metadata from reading old
+    # version numbers when users extract a new release over an old one.
+    if internal_dir.exists():
+        for d in internal_dir.glob("weilinkbot-*.dist-info"):
+            print(f"[pack] Removing stale metadata: {d.name}")
+            shutil.rmtree(d)
+
+        # Write an explicit VERSION file so the runtime can always read the
+        # correct version without relying on dist-info metadata.
+        version_file = internal_dir / "VERSION"
+        version_file.write_text(VERSION, encoding="utf-8")
+        print(f"[pack] Wrote {version_file} = {VERSION}")
+
     output_exe = output_dir / f"{APP_NAME}.exe"
     if output_dir.exists() and output_exe.exists():
         zip_path = create_zip(output_dir)

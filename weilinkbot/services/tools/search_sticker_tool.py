@@ -42,7 +42,7 @@ class SearchStickerTool(Tool):
         lines = [f"Found {len(results)} sticker(s) for '{keyword}':"]
         for r in results:
             lines.append(
-                f"- [{r['pack_name']}] id={r['sticker_id']}: {r['text_description']} (file: {r['file_path']})"
+                f"- [{r['pack_name']}] sticker_id={r['sticker_id']}: {r['text_description']}"
             )
-        lines.append("Call send_sticker with one of the file_path values above to send it to the user.")
+        lines.append("Call send_sticker with one of the sticker_id values above to send it to the user.")
         return "\n".join(lines)

@@ -104,19 +104,33 @@ class SkillService:
             return ""
         return f"\n\n## Skills\nThe following specialized skills define additional behavior:\n\n{body}\n"
 
-    def save(self, name: str, content: str, description: str = "") -> None:
+    def save(self, name: str, content: str, description: str = "", display_name: str = "") -> None:
         """Create or update a skill .md file."""
         self._dir.mkdir(parents=True, exist_ok=True)
         safe_name = "".join(c for c in name if c.isalnum() or c in "-_").strip()
         if not safe_name:
             raise ValueError("Invalid skill name")
-        frontmatter = f"---\nname: {safe_name}\ndescription: {description}\n---\n\n"
+        frontmatter_name = display_name or safe_name
+        frontmatter = f"---\nname: {frontmatter_name}\ndescription: {description}\n---\n\n"
         path = self._dir / f"{safe_name}.md"
         path.write_text(frontmatter + content, encoding="utf-8")
         logger.info("Saved skill: %s", path)
 
     def delete(self, name: str) -> bool:
-        """Delete a skill .md file. Returns True if deleted."""
+        """Delete a skill .md file. Returns True if deleted.
+
+        Matches by frontmatter name first, then by sanitized filename fallback.
+        """
+        self._dir.mkdir(parents=True, exist_ok=True)
+        # Try matching by frontmatter name
+        for f in self._dir.glob("*.md"):
+            text = f.read_text(encoding="utf-8")
+            meta, _ = _parse_frontmatter(text)
+            if meta.get("name", f.stem) == name:
+                f.unlink()
+                logger.info("Deleted skill: %s", f)
+                return True
+        # Fallback: sanitize the given name as a filename
         safe_name = "".join(c for c in name if c.isalnum() or c in "-_").strip()
         if not safe_name:
             return False

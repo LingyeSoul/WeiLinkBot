@@ -39,9 +39,11 @@ def init_workspace_tools(workspace_service) -> None:
 
 
 def init_sticker_tool(session_factory) -> None:
-    """Register the search_sticker and send_sticker tools into the global registry."""
+    """Register sticker tools (search, send, list) into the global registry."""
     from .search_sticker_tool import SearchStickerTool
     from .send_sticker_tool import SendStickerTool
+    from .list_sticker_packs_tool import ListStickerPacksTool
     registry = get_registry()
     registry.register(SearchStickerTool(session_factory))
-    registry.register(SendStickerTool())
+    registry.register(SendStickerTool(session_factory))
+    registry.register(ListStickerPacksTool(session_factory))

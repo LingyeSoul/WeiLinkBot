@@ -67,6 +67,11 @@ class AgentService:
             enabled.extend(
                 t for t in agent_cfg.enabled_workspace_tools if t not in enabled
             )
+        # Auto-include sticker tools when stickers are enabled
+        if self._config.sticker.enabled:
+            enabled.extend(
+                t for t in agent_cfg.enabled_sticker_tools if t not in enabled
+            )
         if not enabled:
             text, tokens, _ = await self._llm.chat(context)
             return text, tokens

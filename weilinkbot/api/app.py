@@ -170,9 +170,10 @@ async def lifespan(app: FastAPI):
     init_default_tools()
 
     # Init Sticker search tool
-    from ..services.tools import init_sticker_tool
-    init_sticker_tool(get_session_factory())
-    logger.info("Sticker search tool registered")
+    if config.sticker.enabled:
+        from ..services.tools import init_sticker_tool
+        init_sticker_tool(get_session_factory())
+        logger.info("Sticker tools registered")
 
     agent_service = AgentService(llm_service, get_registry(), config)
     set_agent_service(agent_service)
