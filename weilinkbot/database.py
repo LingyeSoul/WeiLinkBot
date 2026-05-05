@@ -121,6 +121,57 @@ async def _auto_migrate(conn) -> None:
             logger.info("Auto-migration: encrypted %d LLMPreset api_keys", len(rows))
 
 
+async def _migrate_nullable_api_key(conn) -> None:
+    """Recreate llm_presets to make api_key and base_url nullable (SQLite limitation)."""
+    result = await conn.execute(text("PRAGMA table_info(llm_presets)"))
+    col_info = {row[1]: row for row in result.fetchall()}
+    if not col_info:
+        return  # table doesn't exist yet
+    # Check if migration is needed: api_key should already be nullable
+    api_key_col = col_info.get("api_key")
+    base_url_col = col_info.get("base_url")
+    if api_key_col and api_key_col[3] == 0 and base_url_col and base_url_col[3] == 0:
+        return  # already nullable
+
+    logger.info("Auto-migration: making llm_presets.api_key and base_url nullable via table rebuild")
+    # Get current columns list
+    cols = [row[1] for row in col_info.values()]
+    col_list = ", ".join(cols)
+
+    await conn.execute(text("ALTER TABLE llm_presets RENAME TO llm_presets_old"))
+    await conn.execute(text("""
+        CREATE TABLE llm_presets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name VARCHAR(100) NOT NULL UNIQUE,
+            provider VARCHAR(50) NOT NULL,
+            api_key TEXT,
+            api_key_encrypted BOOLEAN NOT NULL DEFAULT 0,
+            base_url VARCHAR(500),
+            model VARCHAR(100) NOT NULL,
+            max_tokens INTEGER NOT NULL DEFAULT 2048,
+            temperature FLOAT NOT NULL DEFAULT 0.7,
+            is_active BOOLEAN NOT NULL DEFAULT 0,
+            provider_id INTEGER REFERENCES providers(id) ON DELETE SET NULL,
+            capability_text BOOLEAN NOT NULL DEFAULT 1,
+            capability_audio BOOLEAN NOT NULL DEFAULT 0,
+            capability_image BOOLEAN NOT NULL DEFAULT 0,
+            supports_tools BOOLEAN NOT NULL DEFAULT 1,
+            preprocess_voice_model_id INTEGER REFERENCES llm_presets(id) ON DELETE SET NULL,
+            preprocess_image_model_id INTEGER REFERENCES llm_presets(id) ON DELETE SET NULL,
+            preprocess_voice BOOLEAN NOT NULL DEFAULT 0,
+            preprocess_image BOOLEAN NOT NULL DEFAULT 0,
+            voice_method VARCHAR(10) NOT NULL DEFAULT 'llm',
+            asr_language VARCHAR(10),
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """))
+    await conn.execute(text(
+        f"INSERT INTO llm_presets ({col_list}) SELECT {col_list} FROM llm_presets_old"
+    ))
+    await conn.execute(text("DROP TABLE llm_presets_old"))
+    logger.info("Auto-migration: llm_presets table rebuilt successfully")
+
+
 async def init_db():
     """Create all tables and apply auto-migrations."""
     engine = get_engine()
@@ -129,3 +180,4 @@ async def init_db():
         await conn.execute(text("PRAGMA journal_mode=WAL"))
         await conn.run_sync(Base.metadata.create_all)
         await _auto_migrate(conn)
+        await _migrate_nullable_api_key(conn)
