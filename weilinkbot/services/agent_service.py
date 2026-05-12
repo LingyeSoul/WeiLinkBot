@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import Any
@@ -94,12 +95,25 @@ class AgentService:
         tools = self._registry.get_openai_tools(enabled_tools)
         messages = list(context)
         total_tokens = 0
+        consecutive_failures = 0
+        fail_limit = self._config.agent.consecutive_fail_limit
 
         for _round in range(self._config.agent.max_tool_rounds):
             text, tokens, tool_calls = await self._llm.chat(messages, tools=tools)
             total_tokens += tokens
 
             if not tool_calls:
+                # Silent AI detection: nudge if empty after tool execution
+                if not text.strip() and _round > 0:
+                    messages.append({
+                        "role": "system",
+                        "content": (
+                            "工具执行已完成。请根据工具返回的结果，"
+                            "给用户一个最终回复。不要返回空内容。"
+                        ),
+                    })
+                    text, tokens, _ = await self._llm.chat(messages)
+                    total_tokens += tokens
                 return text, total_tokens
 
             # Append assistant message with tool_calls
@@ -115,9 +129,28 @@ class AgentService:
                 )
                 messages.append(result.to_tool_message())
 
-            logger.info("Agent round %d: %d tool calls executed", _round + 1, len(tool_calls))
+                # Circuit breaker: track consecutive failures
+                if not result.success:
+                    consecutive_failures += 1
+                else:
+                    consecutive_failures = 0
 
-        # Max rounds reached — make one final call without tools
+                if consecutive_failures >= fail_limit:
+                    messages.append({
+                        "role": "system",
+                        "content": (
+                            f"工具调用已连续失败 {consecutive_failures} 次。"
+                            "请停止重复尝试同一工具，改用其他策略（如换一个工具、"
+                            "换一种参数、或直接基于已有信息回复用户）。"
+                        ),
+                    })
+                    break
+            else:
+                logger.info("Agent round %d: %d tool calls executed", _round + 1, len(tool_calls))
+                continue
+            break  # exited inner for via break (circuit breaker triggered)
+
+        # Max rounds reached or circuit breaker — force a final text response
         text, tokens, _ = await self._llm.chat(messages)
         total_tokens += tokens
         return text, total_tokens
@@ -144,6 +177,8 @@ class AgentService:
             messages[0] = {**messages[0], "content": messages[0]["content"] + tool_injection}
 
         total_tokens = 0
+        consecutive_failures = 0
+        fail_limit = self._config.agent.consecutive_fail_limit
 
         for _round in range(self._config.agent.max_tool_rounds):
             text, tokens, _ = await self._llm.chat(messages)
@@ -151,6 +186,17 @@ class AgentService:
 
             tool_calls = ToolRegistry.parse_prompt_tool_calls(text)
             if not tool_calls:
+                # Silent AI detection: nudge if empty after tool execution
+                if not text.strip() and _round > 0:
+                    messages.append({
+                        "role": "system",
+                        "content": (
+                            "工具执行已完成。请根据工具返回的结果，"
+                            "给用户一个最终回复。不要返回空内容。"
+                        ),
+                    })
+                    text, tokens, _ = await self._llm.chat(messages)
+                    total_tokens += tokens
                 return text, total_tokens
 
             # Append assistant message (with tool_call blocks still in it)
@@ -163,7 +209,26 @@ class AgentService:
                 )
                 messages.append(result.to_tool_message())
 
-            logger.info("Agent prompt round %d: %d tool calls", _round + 1, len(tool_calls))
+                # Circuit breaker: track consecutive failures
+                if not result.success:
+                    consecutive_failures += 1
+                else:
+                    consecutive_failures = 0
+
+                if consecutive_failures >= fail_limit:
+                    messages.append({
+                        "role": "system",
+                        "content": (
+                            f"工具调用已连续失败 {consecutive_failures} 次。"
+                            "请停止重复尝试同一工具，改用其他策略（如换一个工具、"
+                            "换一种参数、或直接基于已有信息回复用户）。"
+                        ),
+                    })
+                    break
+            else:
+                logger.info("Agent prompt round %d: %d tool calls", _round + 1, len(tool_calls))
+                continue
+            break  # exited inner for via break (circuit breaker triggered)
 
         text, tokens, _ = await self._llm.chat(messages)
         total_tokens += tokens
@@ -207,15 +272,23 @@ class AgentService:
                     success=False, error="Invalid JSON arguments",
                 )
 
+        timeout = self._config.agent.tool_timeout_seconds
+        max_chars = self._config.agent.max_tool_result_chars
+
         try:
-            output = await tool.execute(**arguments)
+            output = await asyncio.wait_for(
+                tool.execute(**arguments), timeout=timeout,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Tool %s timed out after %.0fs", name, timeout)
             await get_event_log().push(
-                "info", "agent", "agent.tool_call",
-                f"Tool: {name}({json.dumps(arguments, ensure_ascii=False)}) → {output[:100]}",
-                {"tool": name, "arguments": arguments, "result": output[:200]},
+                "warning", "agent", "agent.tool_timeout",
+                f"Tool {name} timed out after {timeout}s",
+                {"tool": name, "arguments": arguments},
             )
             return ToolResult(
-                tool_call_id=call_id, tool_name=name, output=output, success=True,
+                tool_call_id=call_id, tool_name=name, output="",
+                success=False, error=f"Tool timed out after {timeout}s",
             )
         except Exception as e:
             logger.warning("Tool %s execution error: %s", name, e)
@@ -228,3 +301,19 @@ class AgentService:
                 tool_call_id=call_id, tool_name=name, output="",
                 success=False, error=str(e),
             )
+
+        # Truncate oversized results to prevent context window bloat
+        original_len = len(output)
+        if original_len > max_chars:
+            output = output[:max_chars] + (
+                f"\n\n[... output truncated, original length: {original_len} chars ...]"
+            )
+
+        await get_event_log().push(
+            "info", "agent", "agent.tool_call",
+            f"Tool: {name}({json.dumps(arguments, ensure_ascii=False)}) → {output[:100]}",
+            {"tool": name, "arguments": arguments, "result": output[:200]},
+        )
+        return ToolResult(
+            tool_call_id=call_id, tool_name=name, output=output, success=True,
+        )

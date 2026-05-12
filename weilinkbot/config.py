@@ -108,6 +108,9 @@ class MemoryConfig(BaseModel):
 
 class AgentConfig(BaseModel):
     max_tool_rounds: int = 5
+    tool_timeout_seconds: float = 60.0
+    max_tool_result_chars: int = 30_000
+    consecutive_fail_limit: int = 3
     enabled_tools: list[str] = Field(default_factory=lambda: [
         "get_current_time", "calculate", "web_search",
     ])

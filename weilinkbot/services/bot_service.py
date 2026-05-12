@@ -87,6 +87,8 @@ COMMANDS = {
     "/char <name>": "Switch to a character card",
     "/char info": "Show current character details",
     "/char off": "Disable character card",
+    "/history": "Show loaded conversation turns",
+    "/history <n>": "Set loaded conversation turns (1-200)",
 }
 
 
@@ -758,6 +760,7 @@ class BotService:
             "/prompt": self._cmd_prompt,
             "/reset": self._cmd_reset,
             "/char": lambda m, a: self._cmd_char(m, a),
+            "/history": self._cmd_history,
         }
 
         handler = handlers.get(cmd)
@@ -1024,6 +1027,44 @@ class BotService:
                 if card.first_mes:
                     reply += f"\n\n{card.first_mes}"
                 await self._bot.reply(msg, reply)
+
+    async def _cmd_history(self, msg: IncomingMessage, args: str) -> None:
+        """Handle /history command — view or set max loaded conversation turns."""
+        session_factory = get_session_factory()
+        async with session_factory() as db:
+            from ..models import SystemSetting
+
+            if not args:
+                row = await db.scalar(
+                    select(SystemSetting).where(SystemSetting.key == "max_history")
+                )
+                current = int(row.value) if row else 20
+                await self._bot.reply(
+                    msg,
+                    t("bot.history.current", value=current),
+                )
+                return
+
+            try:
+                value = int(args.strip())
+            except ValueError:
+                await self._bot.reply(msg, t("bot.history.invalid"))
+                return
+
+            if not 1 <= value <= 200:
+                await self._bot.reply(msg, t("bot.history.out_of_range"))
+                return
+
+            existing = await db.get(SystemSetting, "max_history")
+            if existing:
+                existing.value = str(value)
+            else:
+                db.add(SystemSetting(
+                    key="max_history", value=str(value), is_encrypted=False,
+                ))
+            await db.commit()
+
+            await self._bot.reply(msg, t("bot.history.set", value=value))
 
     @staticmethod
     def _format_uptime(seconds: float) -> str:
