@@ -16,13 +16,11 @@ logger = logging.getLogger(__name__)
 
 # ── constants ─────────────────────────────────────────────────────────────────
 
-_OBS_VERSION = "v0.1.2"
-_OBS_RELEASE_URL = (
-    "https://github.com/h4ckf0r0day/obscura/releases/download/"
-    f"{_OBS_VERSION}/{{asset}}"
-)
+_GITHUB_REPO = "h4ckf0r0day/obscura"
+_GITHUB_API_URL = f"https://api.github.com/repos/{_GITHUB_REPO}/releases/latest"
 
 _DATA_DIR = Path(__file__).resolve().parents[3] / "data" / "obscura"
+_VERSION_FILE = _DATA_DIR / ".version"
 
 _ASSET_MAP = {
     ("Windows", 64): "obscura-x86_64-windows.zip",
@@ -51,39 +49,80 @@ def _platform_asset() -> tuple[str, str]:
     raise RuntimeError(f"Unsupported platform: {system}")
 
 
+def _ssl_verify_chain() -> list[bool | str]:
+    """Build SSL verify chain: certifi (if available) → system default."""
+    chain: list[bool | str] = []
+    try:
+        import certifi
+        chain.append(certifi.where())
+    except ImportError:
+        pass
+    chain.append(True)
+    return chain
+
+
+def _http_get(url: str, *, timeout: float = 30) -> httpx.Response:
+    """GET with SSL fallback. Returns the first successful response."""
+    last_exc: Exception | None = None
+    for verify in _ssl_verify_chain():
+        try:
+            with httpx.Client(timeout=timeout, follow_redirects=True, verify=verify) as client:
+                resp = client.get(url)
+                resp.raise_for_status()
+                return resp
+        except Exception as exc:
+            last_exc = exc
+    raise RuntimeError(f"HTTP GET failed for {url}: {last_exc}")
+
+
+def _fetch_latest_version() -> str:
+    """Query GitHub releases API for the latest obscura version tag."""
+    resp = _http_get(_GITHUB_API_URL)
+    data = resp.json()
+    tag: str = data["tag_name"]
+    logger.info("Latest Obscura release: %s", tag)
+    return tag
+
+
+def _installed_version() -> str | None:
+    """Return the version tag of the locally installed binary, or ``None``."""
+    if _VERSION_FILE.exists():
+        return _VERSION_FILE.read_text().strip()
+    return None
+
+
 def _download_binary() -> Path:
     """Download and extract the Obscura binary into ``data/obscura/``."""
     asset, binary_name = _platform_asset()
-    url = _OBS_RELEASE_URL.format(asset=asset)
     target = _DATA_DIR / binary_name
 
-    if target.exists():
+    # Fetch latest version from GitHub
+    try:
+        latest = _fetch_latest_version()
+    except Exception as exc:
+        # Fallback: if binary already exists, accept it regardless of version
+        logger.warning("Failed to check latest Obscura version: %s", exc)
+        if target.exists():
+            return target
+        raise
+
+    installed = _installed_version()
+
+    # Binary exists and version is current → skip download
+    if target.exists() and installed == latest:
         return target
 
+    if installed and installed != latest:
+        logger.info("Obscura update available: %s → %s", installed, latest)
+
     _DATA_DIR.mkdir(parents=True, exist_ok=True)
-    logger.info("Downloading Obscura %s from %s …", _OBS_VERSION, url)
 
-    _ssl_attempts: list[bool | str] = []
-    try:
-        import certifi
-        _ssl_attempts.append(certifi.where())
-    except ImportError:
-        pass
-    _ssl_attempts.append(True)
-
-    last_exc: Exception | None = None
-    for verify in _ssl_attempts:
-        try:
-            with httpx.Client(timeout=120, follow_redirects=True, verify=verify) as client:
-                resp = client.get(url)
-                resp.raise_for_status()
-            break
-        except Exception as exc:
-            last_exc = exc
-            continue
-    else:
-        raise RuntimeError(f"Failed to download Obscura: {last_exc}")
-
+    url = (
+        f"https://github.com/{_GITHUB_REPO}/releases/download/"
+        f"{latest}/{asset}"
+    )
+    logger.info("Downloading Obscura %s from %s …", latest, url)
+    resp = _http_get(url, timeout=120)
     data = resp.content
 
     try:
@@ -118,7 +157,9 @@ def _download_binary() -> Path:
     if not target.exists():
         raise RuntimeError(f"Extraction succeeded but binary not found at {target}")
 
-    logger.info("Obscura binary saved to %s", target)
+    # Record installed version
+    _VERSION_FILE.write_text(latest)
+    logger.info("Obscura %s saved to %s", latest, target)
     return target
 
 
