@@ -95,7 +95,7 @@ function dashboard() {
 
         // Agent Config
         agentSubTab: 'tools',
-        agentConfig: { max_tool_rounds: 5, enabled_tools: [], available_tools: [] },
+        agentConfig: { max_tool_rounds: 5, max_context_tokens: 0, max_concurrent_requests: 3, consolidation_threshold: 30, consolidation_ratio: 0.3, enabled_tools: [], available_tools: [] },
         agentConfigLoaded: false,
         skills: { items: [], loaded: false },
         skillForm: { name: "", description: "", content: "" },
@@ -1237,6 +1237,10 @@ function dashboard() {
                 method: "PUT",
                 body: JSON.stringify({
                     max_tool_rounds: this.agentConfig.max_tool_rounds,
+                    max_context_tokens: this.agentConfig.max_context_tokens,
+                    max_concurrent_requests: this.agentConfig.max_concurrent_requests,
+                    consolidation_threshold: this.agentConfig.consolidation_threshold,
+                    consolidation_ratio: this.agentConfig.consolidation_ratio,
                     enabled_tools: this.agentConfig.enabled_tools,
                 }),
             });

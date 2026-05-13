@@ -29,6 +29,10 @@ async def get_agent_config():
     registry = get_registry()
     return AgentConfigResponse(
         max_tool_rounds=config.agent.max_tool_rounds,
+        max_context_tokens=config.agent.max_context_tokens,
+        max_concurrent_requests=config.agent.max_concurrent_requests,
+        consolidation_threshold=config.agent.consolidation_threshold,
+        consolidation_ratio=config.agent.consolidation_ratio,
         enabled_tools=config.agent.enabled_tools,
         available_tools=registry.list_names(),
     )
@@ -41,14 +45,35 @@ async def update_agent_config(data: AgentConfigUpdate):
 
     if data.max_tool_rounds is not None:
         config.agent.max_tool_rounds = data.max_tool_rounds
+    if data.max_context_tokens is not None:
+        config.agent.max_context_tokens = data.max_context_tokens
+    if data.max_concurrent_requests is not None:
+        config.agent.max_concurrent_requests = data.max_concurrent_requests
+    if data.consolidation_threshold is not None:
+        config.agent.consolidation_threshold = data.consolidation_threshold
+    if data.consolidation_ratio is not None:
+        config.agent.consolidation_ratio = data.consolidation_ratio
     if data.enabled_tools is not None:
         config.agent.enabled_tools = data.enabled_tools
+
+    # Update runtime concurrency limit if changed
+    try:
+        from .deps import get_bot_service
+        bot = get_bot_service()
+        if bot:
+            bot.update_concurrency_limit(config.agent.max_concurrent_requests)
+    except (RuntimeError, AttributeError):
+        pass
 
     save_config()
 
     registry = get_registry()
     return AgentConfigResponse(
         max_tool_rounds=config.agent.max_tool_rounds,
+        max_context_tokens=config.agent.max_context_tokens,
+        max_concurrent_requests=config.agent.max_concurrent_requests,
+        consolidation_threshold=config.agent.consolidation_threshold,
+        consolidation_ratio=config.agent.consolidation_ratio,
         enabled_tools=config.agent.enabled_tools,
         available_tools=registry.list_names(),
     )

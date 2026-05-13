@@ -131,6 +131,11 @@ class BotService:
         self._supports_tools: bool = True
         # Force re-login on next start (used by unbind_and_relogin)
         self._force_login: bool = False
+        # Concurrency control: global semaphore + per-user queuing
+        from .message_queue import MessageQueue
+        self._msg_queue = MessageQueue(max_concurrent=config.agent.max_concurrent_requests)
+        # Session compression: consolidator for old messages
+        self._consolidator = None  # Initialized after LLM service is ready
 
     @property
     def state(self) -> BotState:
@@ -151,6 +156,10 @@ class BotService:
     @property
     def llm(self) -> LLMService:
         return self._llm
+
+    def update_concurrency_limit(self, limit: int) -> None:
+        """Update the global LLM concurrency limit at runtime."""
+        self._msg_queue.update_concurrency(limit)
 
     @property
     def uptime_seconds(self) -> Optional[float]:
@@ -220,6 +229,9 @@ class BotService:
             self._session_tokens.clear()
             self._session_requests.clear()
             await self._load_preprocess_config()
+            # Initialize consolidator for session compression
+            from .consolidator import Consolidator
+            self._consolidator = Consolidator(self._llm, self._config)
             logger.info(
                 "Bot running — user_id=%s account_id=%s",
                 self._credentials.user_id,
@@ -432,9 +444,49 @@ class BotService:
             await self._handle_command(msg, text)
             return
 
-        # Slow path — spawn as background task so the SDK poll loop is not blocked
-        task = asyncio.create_task(self._process_message(msg))
-        task.add_done_callback(self._on_task_error)
+        # If user already has an active task, enqueue this message for later
+        if self._msg_queue.is_user_active(msg.user_id):
+            self._msg_queue.enqueue(msg.user_id, msg)
+            logger.debug("Queued message for user %s (previous task still active)", msg.user_id)
+            return
+
+        # Slow path — spawn as background task with concurrency control
+        task = asyncio.create_task(self._process_with_queue(msg))
+        self._msg_queue.set_active_task(msg.user_id, task)
+        task.add_done_callback(lambda t: self._on_queued_task_done(t, msg.user_id))
+
+    async def _process_with_queue(self, msg: IncomingMessage) -> None:
+        """Process a message with concurrency control (semaphore + per-user lock)."""
+        user_id = msg.user_id
+        try:
+            async with self._msg_queue.get_user_lock(user_id):
+                await self._msg_queue.acquire()
+                try:
+                    await self._process_message(msg)
+                finally:
+                    self._msg_queue.release()
+
+                # Drain any pending messages queued while we were processing
+                while self._msg_queue.has_pending(user_id):
+                    pending_msg = await self._msg_queue.dequeue(user_id)
+                    if pending_msg is None:
+                        break
+                    await self._msg_queue.acquire()
+                    try:
+                        await self._process_message(pending_msg)
+                    finally:
+                        self._msg_queue.release()
+        finally:
+            self._msg_queue.clear_active_task(user_id)
+
+    def _on_queued_task_done(self, task: asyncio.Task, user_id: str) -> None:
+        """Callback when a queued task completes — handles errors and cleanup."""
+        self._msg_queue.clear_active_task(user_id)
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc:
+            logger.error("Unhandled error in message processing task for %s: %s", user_id, exc, exc_info=exc)
 
     @staticmethod
     def _on_task_error(task: asyncio.Task) -> None:
@@ -569,6 +621,8 @@ class BotService:
                     memories=memories,
                     max_context_chars=self._config.memory.max_context_chars,
                     summaries=recent_summaries,
+                    max_context_tokens=self._config.agent.max_context_tokens,
+                    model=self._llm.config.model,
                 )
 
                 # World Book: inject matched entries into context
@@ -652,6 +706,13 @@ class BotService:
                         asyncio.create_task(
                             self._trigger_summarization(user_id)
                         )
+
+                # Session compression: auto-compact old messages if threshold met
+                if self._consolidator:
+                    try:
+                        await self._consolidator.auto_compact(db, user_id)
+                    except Exception as e:
+                        logger.debug("Auto-compact skipped for %s: %s", user_id, e)
 
             except Exception as e:
                 logger.exception("Error handling message from %s: %s", user_id, e)

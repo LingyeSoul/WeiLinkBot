@@ -43,3 +43,6 @@ wechatbot_credentials.json
 /~
 /docs
 /.sisyphus
+
+# Obscura headless browser binaries (auto-downloaded to data/)
+data/obscura/

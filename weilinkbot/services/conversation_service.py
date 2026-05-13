@@ -93,9 +93,16 @@ class ConversationService:
         return msg
 
     async def get_messages(
-        self, user_id: str, limit: int = 50, offset: int = 0
+        self, user_id: str, limit: int = 50, offset: int = 0,
+        exclude_consolidated: bool = True,
     ) -> list[Message]:
-        """Get messages for a user's conversation."""
+        """Get messages for a user's conversation.
+
+        Args:
+            exclude_consolidated: If True (default), skip messages that have been
+                compressed by the Consolidator. Their summaries are already
+                injected as MemorySummary entries in context.
+        """
         stmt = (
             select(Conversation)
             .where(Conversation.user_id == user_id)
@@ -108,8 +115,9 @@ class ConversationService:
             return []
 
         # Return messages in chronological order with pagination
-        # Messages are already ordered by created_at via the relationship
         all_msgs = conv.messages
+        if exclude_consolidated:
+            all_msgs = [m for m in all_msgs if not m.is_consolidated]
         return all_msgs[offset: offset + limit]
 
     async def clear_messages(self, user_id: str) -> bool:
@@ -157,11 +165,16 @@ class ConversationService:
         memories: list[dict[str, str]] | None = None,
         max_context_chars: int = 2000,
         summaries: list[str] | None = None,
+        max_context_tokens: int = 0,
+        model: str = "gpt-4o-mini",
     ) -> list[dict[str, str]]:
         """Build OpenAI-format message list for LLM call.
 
         Structure: [character_prompt + system_preset + summaries + memories, ...recent_history]
         Memories are dicts with "text" and "category" keys.
+
+        When max_context_tokens > 0, applies token-based truncation to history
+        messages to stay within the model's context window.
         """
         from collections import defaultdict
 
@@ -342,6 +355,20 @@ class ConversationService:
                 depth = st_msg.get("_depth", 4)
                 insert_at = max(1, len(context) - depth)
                 context.insert(insert_at, {"role": st_msg["role"], "content": st_msg["content"]})
+
+        # Token-aware truncation: if max_context_tokens is set, enforce budget
+        if max_context_tokens > 0:
+            from .token_counter import truncate_messages_to_budget, count_message_tokens
+            before_tokens = count_message_tokens(context, model)
+            if before_tokens > max_context_tokens:
+                context = truncate_messages_to_budget(
+                    context, max_context_tokens, model=model,
+                )
+                logger.info(
+                    "Context truncated for user %s: %d -> %d tokens (budget: %d)",
+                    user_id, before_tokens,
+                    count_message_tokens(context, model), max_context_tokens,
+                )
 
         return context
 

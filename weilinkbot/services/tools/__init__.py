@@ -1,10 +1,27 @@
 """Agent tools package — register built-in tools."""
 
+import logging
+
 from .registry import get_registry, ToolRegistry
 from .time_tool import GetCurrentTimeTool
 from .math_tool import CalculateTool
 from .web_search_tool import WebSearchTool
+from .web_fetch_tool import WebFetchTool
 from .base import Tool, ToolResult, ToolExecutionError
+
+# Browser tools are optional — gracefully absent when Obscura is unavailable.
+try:
+    from .browser_tool import BrowserFetchTool, BrowserEvalTool, is_available as _browser_available
+except Exception:
+    BrowserFetchTool = None  # type: ignore[assignment,misc]
+    BrowserEvalTool = None   # type: ignore[assignment,misc]
+    _browser_available = None
+
+try:
+    from .browser_use_tool import BrowserUseTool, is_available as _browser_use_available
+except Exception:
+    BrowserUseTool = None  # type: ignore[assignment,misc]
+    _browser_use_available = None
 
 __all__ = [
     "get_registry",
@@ -17,11 +34,39 @@ __all__ = [
 
 
 def init_default_tools() -> None:
-    """Register all built-in tools into the global registry."""
+    """Register all built-in tools into the global registry.
+
+    Browser tools are registered only when the Obscura binary is available
+    (auto-downloaded on first import).  If the download or binary is missing
+    they are silently skipped.
+    """
     registry = get_registry()
     registry.register(GetCurrentTimeTool())
     registry.register(CalculateTool())
     registry.register(WebSearchTool())
+    registry.register(WebFetchTool())
+
+    # Obscura browser tools — skip entirely if unavailable
+    _log = logging.getLogger(__name__)
+    if BrowserFetchTool is not None and _browser_available is not None:
+        try:
+            if _browser_available():
+                registry.register(BrowserFetchTool())
+                registry.register(BrowserEvalTool())
+            else:
+                _log.info("Browser tools disabled: Obscura binary not available")
+        except Exception as exc:
+            _log.warning("Browser tools disabled: %s", exc)
+
+    # browser_use — requires websockets + Obscura binary
+    if BrowserUseTool is not None and _browser_use_available is not None:
+        try:
+            if _browser_use_available():
+                registry.register(BrowserUseTool())
+            else:
+                _log.info("browser_use disabled: websockets not installed")
+        except Exception as exc:
+            _log.warning("browser_use disabled: %s", exc)
 
 
 def init_workspace_tools(workspace_service) -> None:

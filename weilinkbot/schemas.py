@@ -481,12 +481,20 @@ class SettingsUpdate(BaseModel):
 
 class AgentConfigResponse(BaseModel):
     max_tool_rounds: int
+    max_context_tokens: int = 0
+    max_concurrent_requests: int = 3
+    consolidation_threshold: int = 30
+    consolidation_ratio: float = 0.3
     enabled_tools: list[str]
     available_tools: list[str]
 
 
 class AgentConfigUpdate(BaseModel):
     max_tool_rounds: Optional[int] = Field(None, ge=1, le=20)
+    max_context_tokens: Optional[int] = Field(None, ge=0, le=200000)
+    max_concurrent_requests: Optional[int] = Field(None, ge=1, le=20)
+    consolidation_threshold: Optional[int] = Field(None, ge=5, le=200)
+    consolidation_ratio: Optional[float] = Field(None, ge=0.1, le=0.9)
     enabled_tools: Optional[list[str]] = None
 
 

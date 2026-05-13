@@ -27,7 +27,8 @@ dependencies = [
     "onnxruntime>=1.17.0",
     "tokenizers>=0.15.0",
     "mcp>=1.0.0",
-    "ddgs>=9.0.0",
+    "websockets>=13.0",
+    "tiktoken>=0.7.0",
     "py7zr>=0.20.0",
     "rarfile>=4.1",
 ]

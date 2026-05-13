@@ -32,7 +32,7 @@ class BotConfig(BaseModel):
 
 class LLMConfig(BaseModel):
     provider: str = "openai"
-    api_key: str = ""
+    api_key: str = "none"
     base_url: str = "https://api.openai.com/v1"
     model: str = "gpt-4o-mini"
     max_tokens: int = 2048
@@ -111,8 +111,13 @@ class AgentConfig(BaseModel):
     tool_timeout_seconds: float = 60.0
     max_tool_result_chars: int = 30_000
     consecutive_fail_limit: int = 3
+    max_context_tokens: int = 0  # 0 = use max_history message count; >0 = token budget
+    max_concurrent_requests: int = 3  # global concurrency limit for LLM calls
+    consolidation_threshold: int = 30  # min messages before consolidation triggers
+    consolidation_ratio: float = 0.3  # target compression ratio
     enabled_tools: list[str] = Field(default_factory=lambda: [
-        "get_current_time", "calculate", "web_search",
+        "get_current_time", "calculate", "web_search", "web_fetch",
+        "browser_fetch", "browser_eval", "browser_use",
     ])
     enabled_skills: list[str] = Field(default_factory=list)
     enabled_workspace_tools: list[str] = Field(
@@ -146,11 +151,21 @@ class WorkspaceConfig(BaseModel):
     grep_max_results: int = 100
 
 
+class BrowserConfig(BaseModel):
+    """Obscura headless browser configuration."""
+    enabled: bool = True
+    binary_path: str = ""  # empty = auto-detect (tools/bin/obscura.exe or PATH)
+    stealth: bool = False  # default anti-fingerprinting mode
+    default_timeout: int = 30
+    serve_port: int = 9222  # CDP server port for puppeteer/playwright
+
+
 class AppConfig(BaseModel):
     bot: BotConfig = Field(default_factory=BotConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     agent: AgentConfig = Field(default_factory=AgentConfig)
+    browser: BrowserConfig = Field(default_factory=BrowserConfig)
     sticker: StickerConfig = Field(default_factory=StickerConfig)
     workspace: WorkspaceConfig = Field(default_factory=WorkspaceConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
