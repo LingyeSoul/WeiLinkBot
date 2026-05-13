@@ -204,8 +204,8 @@ class _SessionManager:
         if not self._sessions and self._server_proc:
             self._server_proc.terminate()
             try:
-                self._server_proc.wait(timeout=3)
-            except subprocess.TimeoutExpired:
+                await asyncio.wait_for(self._server_proc.wait(), timeout=3)
+            except asyncio.TimeoutError:
                 self._server_proc.kill()
             self._server_proc = None
 
@@ -303,10 +303,12 @@ async def _do_click(info: dict, selector: str) -> str:
 async def _do_type(info: dict, selector: str, text: str) -> str:
     ws, sid = info["browser_ws"], info["session_id"]
     sel_js = json.dumps(selector)
-    await _eval_js(ws, sid,
-        f"(el => {{ if(el) {{ el.focus(); el.value = ''; }} }})"
+    found = await _eval_js(ws, sid,
+        f"(el => el ? (el.focus(), el.value = '', true) : null)"
         f"(document.querySelector({sel_js}))"
     )
+    if not found:
+        raise RuntimeError(f"Element not found: {selector}")
     await _cdp_session(ws, sid, "Input.insertText",
                        {"text": text}, msg_id=340)
     return f"Typed into {selector}: {text}"
