@@ -14,18 +14,20 @@
 
 ## 功能特性
 
-- **微信接入** - 基于 [wechatbot-sdk](https://github.com/corespeed-io/wechatbot)，支持扫码登录和长轮询消息收发
+- **微信接入** - 基于 [wechatbot-sdk](https://github.com/corespeed-io/wechatbot)，支持扫码登录和长轮询消息收发，QR 码前端渲染
 - **多提供商管理** - 独立管理多个 LLM 提供商（OpenAI、DeepSeek 及任意兼容协议），API Key 加密存储
 - **LLM 预设** - 保存多组模型配置并一键切换，支持文本/音频/图片能力标记与工具调用开关
 - **SillyTavern 预设** - 导入/管理 SillyTavern prompt 预设，支持自定义系统提示词
 - **世界书** - 导入/管理 SillyTavern World Book，基于关键词动态注入上下文
 - **角色卡** - 创建和管理角色卡（描述、性格、场景、开场白、示例对话），支持头像上传
+- **表情包系统** - 管理表情包收藏夹，支持上传/导入（ZIP/7Z/RAR）、目录扫描、按关键词搜索，内置 search_sticker / list_sticker_packs / send_sticker 三个 Agent 工具
 - **记忆系统** - 基于 mem0ai + ChromaDB 的向量记忆，支持本地 ONNX / ModelScope / 远程 Embedding，HNSW 索引参数可调；支持批量摘要（轮数/超时双触发）、事实+摘要双维度存储、时间衰减与重排检索
-- **Agent 工具** - LLM 驱动的 Agent 循环，支持原生 Function Calling 和 Prompt 回退，内置数学计算、时间查询、网络搜索、网页抓取等工具
-- **网络工具** - 支持 Bing 中国搜索、网页内容提取、无头浏览器渲染（Obscura），支持 JavaScript 执行和动态内容加载
-- **会话压缩** - 自动压缩旧消息为摘要，支持 Token 预算管理和消息数量限制，防止上下文窗口溢出
+- **Agent 状态机** - 基于显式状态机的 Agent 循环（INIT → INJECT → EXECUTE → COMPRESS → FINALIZE → DONE），支持原生 Function Calling 和 Prompt 回退，可调试、可扩展、可容错恢复
+- **网络工具** - Bing 中国搜索、网页内容提取、网页交互（Browser Use）、无头浏览器渲染（Obscura），支持 JavaScript 执行和动态内容加载，工具执行超时保护与结果截断
+- **工作区工具** - 沙盒化的文件操作（读/写/列表/搜索），支持可配置根目录、大小限制和扩展名过滤，每个工具可独立开关
+- **会话压缩** - 自动压缩旧消息为摘要，支持 Token 预算管理和消息数量限制，防止上下文窗口溢出；基于 tiktoken 的精确 Token 计数
 - **并发控制** - 全局信号量限制 LLM 并发请求，每用户消息队列防止竞态条件
-- **网页控制台** - 实时状态、会话查看、预设管理、用户控制、事件日志、统计面板
+- **网页控制台** - 实时状态、会话查看、预设管理、用户控制、表情包管理、工作区配置、事件日志、统计面板
 - **WebSocket 实时推送** - 机器人状态、消息等事件通过 WebSocket 实时推送至前端
 - **多语言** - 支持中文（zh-CN）和英文（en）界面切换
 - **按用户定制** - 支持独立系统提示词、消息历史长度限制、黑名单
@@ -97,10 +99,17 @@ weilinkbot serve --port 3000  # 指定端口
        │ (multi-LLM)  │ │ (Alch)   │ │ Dashboard │ │ (mem0/Chroma)│
        └──────┬──────┘ └──────────┘ └──────────┘ └──────────────┘
               │
-       ┌──────┴──────┐
-       │AgentService  │
-       │(tool calling)│
-       └─────────────┘
+       ┌──────┴──────┐  ┌──────────────┐  ┌──────────────┐
+       │ AgentLoop    │  │Consolidator   │  │StickerService │
+       │ (state mach.)│  │(ctx compress) │  │(pack manage)  │
+       └──────┬──────┘  └──────────────┘  └──────────────┘
+              │
+   ┌──────────┼──────────┬──────────┐
+   ▼          ▼          ▼          ▼
+Web Tools  Workspace  Stickers   Builtin
+(search,   (read,     (search,   (math,
+ fetch,    write,     list,      time)
+ browser)  grep)      send)
 ```
 
 ## LLM 提供商
@@ -182,6 +191,31 @@ weilinkbot serve --port 3000  # 指定端口
 | `DELETE` | `/api/characters/{id}` | 删除角色卡 |
 | `POST` | `/api/characters/{id}/activate` | 激活角色卡 |
 
+### 表情包
+
+| 方法 | 路径 | 说明 |
+|--------|------|-------------|
+| `GET` | `/api/sticker-packs` | 获取表情包列表 |
+| `POST` | `/api/sticker-packs` | 创建表情包 |
+| `GET` | `/api/sticker-packs/{id}` | 获取表情包详情 |
+| `PATCH` | `/api/sticker-packs/{id}` | 更新表情包 |
+| `DELETE` | `/api/sticker-packs/{id}` | 删除表情包 |
+| `POST` | `/api/sticker-packs/import` | 导入压缩包 |
+| `POST` | `/api/sticker-packs/scan` | 目录扫描 |
+| `POST` | `/api/sticker-packs/{id}/stickers` | 添加表情 |
+| `PATCH` | `/api/sticker-packs/stickers/{id}` | 更新表情 |
+| `DELETE` | `/api/sticker-packs/stickers/{id}` | 删除表情 |
+
+### 工作区
+
+| 方法 | 路径 | 说明 |
+|--------|------|-------------|
+| `GET` | `/api/agent/workspace/config` | 获取工作区配置 |
+| `PUT` | `/api/agent/workspace/config` | 更新工作区配置 |
+| `GET` | `/api/agent/workspace/files` | 列出工作区文件 |
+| `GET` | `/api/agent/workspace/read` | 读取工作区文件 |
+| `POST` | `/api/agent/workspace/upload` | 上传文件到工作区 |
+
 ### 记忆与 Agent
 
 | 方法 | 路径 | 说明 |
@@ -225,7 +259,8 @@ WeiLinkBot/
 │   │   ├── world_books.py  # 世界书
 │   │   ├── characters.py   # 角色卡
 │   │   ├── memories.py     # 记忆系统
-│   │   ├── agent.py        # Agent 配置
+│   │   ├── agent.py        # Agent 配置 & 工作区 API
+│   │   ├── sticker_packs.py # 表情包管理
 │   │   ├── events.py       # SSE 事件流
 │   │   ├── stats.py        # 统计
 │   │   ├── settings.py     # 系统设置
@@ -236,17 +271,41 @@ WeiLinkBot/
 │   │   ├── conversation_service.py # 会话管理
 │   │   ├── memory_service.py       # 记忆系统 (mem0 + ChromaDB)
 │   │   ├── memory_buffer.py        # 记忆消息缓冲（轮数/超时触发）
-│   │   ├── agent_service.py        # Agent 工具调用循环
+│   │   ├── agent_service.py        # Agent 高层接口
+│   │   ├── agent_loop.py           # Agent 状态机循环
+│   │   ├── consolidator.py         # 会话压缩 / 上下文整理
+│   │   ├── message_queue.py        # 每用户消息队列 & 并发控制
+│   │   ├── token_counter.py        # Token 计数（tiktoken）
+│   │   ├── sticker_service.py      # 表情包管理服务
+│   │   ├── workspace_service.py    # 工作区文件操作
+│   │   ├── workspace_sandbox.py    # 工作区沙盒（路径/大小/扩展名限制）
 │   │   ├── st_preset_service.py    # SillyTavern 预设
 │   │   ├── world_book_service.py   # 世界书关键词注入
 │   │   ├── character_service.py    # 角色卡管理
 │   │   ├── local_embedding_service.py  # 本地 Embedding (ONNX/ModelScope)
+│   │   ├── skill_service.py        # 技能系统
+│   │   ├── mcp_service.py          # MCP 服务
 │   │   ├── ws_service.py           # WebSocket 管理
 │   │   └── tools/                  # Agent 工具
 │   │       ├── base.py             # 工具基类
 │   │       ├── registry.py         # 工具注册表
+│   │       ├── sanitize.py         # 输入净化
 │   │       ├── math_tool.py        # 数学计算
-│   │       └── time_tool.py        # 时间查询
+│   │       ├── time_tool.py        # 时间查询
+│   │       ├── mcp_tool.py         # MCP 协议工具
+│   │       ├── web_search_tool.py  # Bing 搜索
+│   │       ├── web_fetch_tool.py   # 网页内容提取
+│   │       ├── browser_tool.py     # 网页交互
+│   │       ├── browser_use_tool.py # Browser Use 集成
+│   │       ├── _obscura.py         # 无头浏览器渲染
+│   │       ├── _url_validate.py    # URL 安全校验
+│   │       ├── search_sticker_tool.py    # 搜索表情包
+│   │       ├── list_sticker_packs_tool.py # 列出表情包收藏夹
+│   │       ├── send_sticker_tool.py      # 发送表情包
+│   │       ├── workspace_read_tool.py    # 读取工作区文件
+│   │       ├── workspace_write_tool.py   # 写入工作区文件
+│   │       ├── workspace_list_tool.py    # 列出工作区文件
+│   │       └── workspace_grep_tool.py    # 搜索工作区文件内容
 │   ├── frontend/           # 控制台前端（Alpine.js + Tailwind）
 │   ├── locales/            # 多语言文件（zh-CN, en）
 │   ├── cli/                # 命令行命令（Typer）
@@ -270,6 +329,9 @@ WeiLinkBot/
 | LLM 调用 | OpenAI SDK |
 | 记忆系统 | mem0ai + ChromaDB |
 | 本地 Embedding | ONNX Runtime + ModelScope + Tokenizers |
+| Token 计数 | tiktoken |
+| 无头浏览器 | Obscura (Playwright 内核) |
+| 表情包解压 | py7zr / rarfile / zipfile |
 | 前端 | Alpine.js + Tailwind CSS + Jinja2 |
 | CLI | Typer + Rich |
 | 加密 | Cryptography (AES) |
