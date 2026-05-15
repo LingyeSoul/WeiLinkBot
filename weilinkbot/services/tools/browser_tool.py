@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import Any
+
+from bs4 import BeautifulSoup, NavigableString, Tag
 
 from .base import Tool, ToolExecutionError
 from ._obscura import ensure_ready, is_available  # noqa: F401 — re-export for __init__.py
@@ -12,6 +15,155 @@ from ._url_validate import validate_url
 from .sanitize import sanitize_external_text
 
 logger = logging.getLogger(__name__)
+
+# Tags that never carry reader-facing content (shared with web_fetch_tool)
+_STRIP_TAGS = frozenset({
+    "script", "style", "noscript", "svg", "iframe", "object", "embed",
+    "applet", "template", "dialog", "math", "canvas", "map", "audio", "video",
+})
+_MULTI_BLANK = re.compile(r"\n{3,}")
+
+
+def _html_to_markdown(html: str) -> str:
+    """Convert rendered HTML to structured markdown using BeautifulSoup."""
+    soup = BeautifulSoup(html, "html.parser")
+    lines: list[str] = []
+    _node_to_md(soup.body or soup, lines, depth=0)
+    text = "\n".join(lines)
+    text = _MULTI_BLANK.sub("\n\n", text)
+    return "\n".join(line.rstrip() for line in text.split("\n")).strip()
+
+
+def _node_to_md(node: Tag | NavigableString, lines: list[str], *, depth: int) -> None:
+    if depth > 30 or sum(len(l) for l in lines) > 200_000:
+        return
+    if isinstance(node, NavigableString):
+        t = str(node)
+        if t.strip():
+            lines.append(t.strip())
+        return
+    if not isinstance(node, Tag):
+        return
+    tag = node.name
+    if tag in _STRIP_TAGS:
+        return
+
+    if tag in ("h1", "h2", "h3", "h4", "h5", "h6"):
+        level = int(tag[1])
+        text = node.get_text(strip=True)
+        if text:
+            lines.append("")
+            lines.append(f"{'#' * level} {text}")
+            lines.append("")
+        return
+    if tag == "br":
+        lines.append("")
+        return
+    if tag == "hr":
+        lines.append("\n---\n")
+        return
+    if tag == "p":
+        text = _inline_text(node)
+        if text:
+            lines.append("")
+            lines.append(text)
+        return
+    if tag == "blockquote":
+        inner: list[str] = []
+        for child in node.children:
+            _node_to_md(child, inner, depth=depth + 1)
+        quoted = "\n".join(inner).strip()
+        if quoted:
+            lines.append("")
+            for q_line in quoted.split("\n"):
+                lines.append(f"> {q_line}")
+        return
+    if tag in ("ul", "ol"):
+        lines.append("")
+        for i, li in enumerate(node.find_all("li", recursive=False)):
+            bullet = f"{i + 1}." if tag == "ol" else "-"
+            text = _inline_text(li)
+            if text:
+                lines.append(f"  {bullet} {text}")
+        return
+    if tag == "table":
+        lines.append("")
+        for row in node.find_all("tr"):
+            cells = [_inline_text(c) for c in row.find_all(["th", "td"])]
+            if any(cells):
+                lines.append(" | ".join(cells))
+        lines.append("")
+        return
+    if tag in ("pre", "code"):
+        text = node.get_text()
+        if text.strip():
+            lines.append("")
+            lines.append("```")
+            lines.append(text.strip())
+            lines.append("```")
+            lines.append("")
+        return
+    if tag == "a":
+        text = _inline_text(node)
+        href = node.get("href", "")
+        if text:
+            if href and href.startswith(("http://", "https://")) and len(text) < 80:
+                lines.append(f"[{text}]({href})")
+            else:
+                lines.append(text)
+        return
+    if tag == "img":
+        alt = node.get("alt", "").strip()
+        if alt:
+            lines.append(f"[Image: {alt}]")
+        return
+
+    # Generic container — recurse
+    inline_parts: list[str] = []
+    _BLOCK = frozenset({
+        "p", "div", "section", "article", "main", "aside", "nav",
+        "header", "footer", "h1", "h2", "h3", "h4", "h5", "h6",
+        "blockquote", "pre", "ul", "ol", "table", "form", "fieldset",
+        "hr", "br", "figure", "figcaption", "details", "summary", "address",
+    })
+    for child in node.children:
+        if isinstance(child, Tag) and child.name in _BLOCK:
+            _flush(inline_parts, lines)
+            _node_to_md(child, lines, depth=depth + 1)
+        elif isinstance(child, NavigableString):
+            inline_parts.append(str(child))
+        else:
+            inline_parts.append(_inline_text(child))  # type: ignore[arg-type]
+    _flush(inline_parts, lines)
+
+
+def _inline_text(node: Tag | NavigableString) -> str:
+    if isinstance(node, NavigableString):
+        return str(node)
+    if not isinstance(node, Tag):
+        return ""
+    if node.name in _STRIP_TAGS:
+        return ""
+    if node.name == "a":
+        href = node.get("href", "")
+        text = node.get_text()
+        if href and href.startswith(("http://", "https://")) and len(text.strip()) < 80:
+            return f"[{text.strip()}]({href})"
+        return text
+    if node.name == "img":
+        alt = node.get("alt", "").strip()
+        return f"[Image: {alt}]" if alt else ""
+    return node.get_text()
+
+
+def _flush(parts: list[str], lines: list[str]) -> None:
+    if not parts:
+        return
+    merged = "".join(parts).strip()
+    if merged:
+        lines.append("")
+        lines.append(merged)
+    parts.clear()
 
 
 def _apply_config_defaults(*, timeout: int, stealth: bool) -> tuple[int, bool]:
@@ -58,7 +210,7 @@ class BrowserFetchTool(Tool):
                 "description": (
                     "Output format. "
                     "'text' (default) = readable plain text, "
-                    "'markdown' = structured markdown via CDP, "
+                    "'markdown' = structured markdown (rendered HTML converted locally), "
                     "'html' = raw rendered HTML, "
                     "'links' = extracted links only."
                 ),
@@ -111,7 +263,9 @@ class BrowserFetchTool(Tool):
 
         bin_path = ensure_ready()
 
-        cmd = [bin_path, "fetch", url, "--dump", dump, "--wait-until", wait_until,
+        # Obscura CLI only supports html/text/links — request html for markdown
+        cli_dump = "html" if dump == "markdown" else dump
+        cmd = [bin_path, "fetch", url, "--dump", cli_dump, "--wait-until", wait_until,
                "--timeout", str(timeout), "--quiet"]
         if stealth:
             cmd.append("--stealth")
@@ -144,7 +298,14 @@ class BrowserFetchTool(Tool):
         if not output:
             return f"Page fetched but produced no content.\nURL: {url}"
 
-        if dump in ("text", "links", "markdown"):
+        if dump == "markdown":
+            output = _html_to_markdown(output)
+            output = sanitize_external_text(
+                output,
+                max_single=max_length + 500,
+                context="browser-fetched page content",
+            )
+        elif dump in ("text", "links"):
             output = sanitize_external_text(
                 output,
                 max_single=max_length + 500,

@@ -31,6 +31,7 @@ dependencies = [
     "tiktoken>=0.7.0",
     "py7zr>=0.20.0",
     "rarfile>=4.1",
+    "beautifulsoup4>=4.12",
 ]
 
 [project.optional-dependencies]
