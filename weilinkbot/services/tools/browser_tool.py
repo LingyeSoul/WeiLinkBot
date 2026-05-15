@@ -137,6 +137,9 @@ def _node_to_md(node: Tag | NavigableString, lines: list[str], *, depth: int) ->
     _flush(inline_parts, lines)
 
 
+_MAX_INLINE_LEN = 10000
+
+
 def _inline_text(node: Tag | NavigableString) -> str:
     if isinstance(node, NavigableString):
         return str(node)
@@ -149,11 +152,11 @@ def _inline_text(node: Tag | NavigableString) -> str:
         text = node.get_text()
         if href and href.startswith(("http://", "https://")) and len(text.strip()) < 80:
             return f"[{text.strip()}]({href})"
-        return text
+        return text[:_MAX_INLINE_LEN]
     if node.name == "img":
         alt = node.get("alt", "").strip()
         return f"[Image: {alt}]" if alt else ""
-    return node.get_text()
+    return node.get_text()[:_MAX_INLINE_LEN]
 
 
 def _flush(parts: list[str], lines: list[str]) -> None:

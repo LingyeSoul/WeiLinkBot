@@ -158,6 +158,21 @@ class _SessionManager:
         )
         self._server_url = f"127.0.0.1:{port}"
 
+        import atexit, signal
+        def _cleanup():
+            proc = self._server_proc
+            if proc and proc.returncode is None:
+                try:
+                    proc.terminate()
+                except OSError:
+                    pass
+        atexit.register(_cleanup)
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            try:
+                signal.signal(sig, lambda s, f: (_cleanup(), signal.default_int_handler(s, f)))
+            except (OSError, ValueError):
+                pass
+
         import httpx
         deadline = asyncio.get_event_loop().time() + 15
         async with httpx.AsyncClient() as client:
@@ -233,7 +248,15 @@ async def _do_navigate(info: dict, url: str) -> str:
         info["browser_ws"], info["session_id"],
         "Page.navigate", {"url": url}, msg_id=300,
     )
-    await asyncio.sleep(1)
+    # Wait for page to finish loading (poll readyState, max 10s)
+    deadline = asyncio.get_event_loop().time() + 10
+    while asyncio.get_event_loop().time() < deadline:
+        state = await _eval_js(
+            info["browser_ws"], info["session_id"], "document.readyState",
+        )
+        if state == "complete":
+            break
+        await asyncio.sleep(0.5)
     title = await _eval_js(info["browser_ws"], info["session_id"], "document.title")
     return f"Navigated to: {url}\nTitle: {title or '(untitled)'}"
 

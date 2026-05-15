@@ -32,7 +32,7 @@ class BotConfig(BaseModel):
 
 class LLMConfig(BaseModel):
     provider: str = "openai"
-    api_key: str = "none"
+    api_key: str = ""
     base_url: str = "https://api.openai.com/v1"
     model: str = "gpt-4o-mini"
     max_tokens: int = 2048
@@ -140,6 +140,7 @@ class WorkspaceConfig(BaseModel):
     blocked_extensions: list[str] = Field(default_factory=lambda: [
         ".exe", ".bat", ".cmd", ".com", ".msi", ".scr",
         ".dll", ".so", ".dylib",
+        ".sh", ".bash", ".zsh", ".ps1", ".psm1",
         ".vbs", ".vbe",
         ".jar", ".class",
         ".elf", ".appimage",

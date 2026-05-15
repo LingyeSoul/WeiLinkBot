@@ -23,6 +23,7 @@ class MessageQueue:
     """
 
     def __init__(self, max_concurrent: int = 3) -> None:
+        self._max_concurrent = max_concurrent
         self._semaphore = asyncio.Semaphore(max_concurrent)
         self._user_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._user_queues: dict[str, asyncio.Queue] = defaultdict(asyncio.Queue)
@@ -83,15 +84,18 @@ class MessageQueue:
     def update_concurrency(self, max_concurrent: int) -> None:
         """Update the global concurrency limit at runtime.
 
-        The new limit applies to *new* acquire calls. Tasks already waiting on
-        the old semaphore continue using it until they complete, so the effective
-        limit transitions naturally as in-flight work finishes.
+        When *increasing*, releases extra permits onto the existing semaphore so
+        waiting tasks are woken immediately.  When *decreasing*, updates the
+        tracked limit — in-flight tasks complete naturally and new ``acquire``
+        calls will block once the semaphore is drained to the new level.
         """
-        old = self._semaphore._value
+        old = self._max_concurrent
         if max_concurrent == old:
             return
-        self._semaphore = asyncio.Semaphore(max_concurrent)
+        self._max_concurrent = max_concurrent
+        if max_concurrent > old:
+            for _ in range(max_concurrent - old):
+                self._semaphore.release()
         logger.info(
-            "Updated global concurrency limit %d → %d (new requests only; "
-            "in-flight requests will complete on the old semaphore)", old, max_concurrent,
+            "Updated global concurrency limit %d → %d", old, max_concurrent,
         )

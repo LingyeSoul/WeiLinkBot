@@ -474,6 +474,11 @@ class BotService:
                     await self._msg_queue.acquire()
                     try:
                         await self._process_message(pending_msg)
+                    except Exception as drain_err:
+                        logger.error(
+                            "Error processing queued message for %s: %s",
+                            user_id, drain_err, exc_info=drain_err,
+                        )
                     finally:
                         self._msg_queue.release()
         finally:
@@ -487,14 +492,6 @@ class BotService:
         exc = task.exception()
         if exc:
             logger.error("Unhandled error in message processing task for %s: %s", user_id, exc, exc_info=exc)
-
-    @staticmethod
-    def _on_task_error(task: asyncio.Task) -> None:
-        if task.cancelled():
-            return
-        exc = task.exception()
-        if exc:
-            logger.error("Unhandled error in message processing task: %s", exc, exc_info=exc)
 
     async def _process_message(self, msg: IncomingMessage) -> None:
         """Slow message pipeline: preprocessing + LLM + reply. Runs as a background task."""

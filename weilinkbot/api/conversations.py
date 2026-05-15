@@ -61,7 +61,7 @@ async def get_conversation(
     if conv is None:
         raise HTTPException(status_code=404, detail=t("api.conv_not_found"))
 
-    messages = await service.get_messages(user_id, limit=limit, offset=offset)
+    messages = await service.get_messages(user_id, limit=limit, offset=offset, exclude_consolidated=False)
     return ConversationDetailResponse(
         id=conv.id,
         user_id=conv.user_id,

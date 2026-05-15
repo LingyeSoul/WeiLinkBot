@@ -1,8 +1,14 @@
 """workspace_edit tool — edit files in the workspace by replacing text."""
 
 from __future__ import annotations
+
+import re
 from typing import Any
+
 from .base import Tool
+
+# Matches read_file output line prefix: "  1 | content" or "123 | content"
+_LINE_PREFIX = re.compile(r"^\s*\d+ \| ")
 
 
 class WorkspaceEditTool(Tool):
@@ -51,10 +57,8 @@ class WorkspaceEditTool(Tool):
         # Strip line numbers from read_file output: "  1 | content"
         lines = []
         for line in content.split("\n"):
-            if " | " in line:
-                lines.append(line.split(" | ", 1)[1])
-            else:
-                lines.append(line)
+            m = _LINE_PREFIX.match(line)
+            lines.append(line[m.end():] if m else line)
         file_content = "\n".join(lines)
 
         count = file_content.count(old_text)

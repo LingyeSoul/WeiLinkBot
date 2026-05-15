@@ -34,9 +34,18 @@ def _is_transient(exc: BaseException) -> bool:
 
 async def _probe_http_url(url: str, timeout: float = 3.0) -> bool:
     """Quick TCP probe to check if an HTTP MCP server is reachable."""
+    from .tools._url_validate import validate_url
+    from .tools.base import ToolExecutionError
+    try:
+        validate_url(url)
+    except ToolExecutionError:
+        return False
+
     import urllib.parse
     parsed = urllib.parse.urlparse(url)
-    host = parsed.hostname or "127.0.0.1"
+    host = parsed.hostname
+    if not host:
+        return False
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
     try:
         reader, writer = await asyncio.wait_for(
