@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 # Tools that return external/untrusted web content
 _EXTERNAL_CONTENT_TOOLS = frozenset({
-    "web_search", "web_fetch", "browser_fetch", "browser_eval", "browser_use",
+    "browser_fetch", "browser_eval", "browser_use",
 })
 
 _ANTI_INJECTION_INSTRUCTION = (

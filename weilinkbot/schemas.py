@@ -487,6 +487,7 @@ class AgentConfigResponse(BaseModel):
     consolidation_ratio: float = 0.3
     enabled_tools: list[str]
     available_tools: list[str]
+    tool_prompt_injection: bool = True
 
 
 class AgentConfigUpdate(BaseModel):
@@ -496,6 +497,7 @@ class AgentConfigUpdate(BaseModel):
     consolidation_threshold: Optional[int] = Field(None, ge=5, le=200)
     consolidation_ratio: Optional[float] = Field(None, ge=0.1, le=0.9)
     enabled_tools: Optional[list[str]] = None
+    tool_prompt_injection: Optional[bool] = None
 
 
 # ── Skills ─────────────────────────────────────────────────────

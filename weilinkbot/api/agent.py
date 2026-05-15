@@ -35,6 +35,7 @@ async def get_agent_config():
         consolidation_ratio=config.agent.consolidation_ratio,
         enabled_tools=config.agent.enabled_tools,
         available_tools=registry.list_names(),
+        tool_prompt_injection=config.agent.tool_prompt_injection,
     )
 
 
@@ -55,6 +56,8 @@ async def update_agent_config(data: AgentConfigUpdate):
         config.agent.consolidation_ratio = data.consolidation_ratio
     if data.enabled_tools is not None:
         config.agent.enabled_tools = data.enabled_tools
+    if data.tool_prompt_injection is not None:
+        config.agent.tool_prompt_injection = data.tool_prompt_injection
 
     # Update runtime concurrency limit if changed
     try:
@@ -76,6 +79,7 @@ async def update_agent_config(data: AgentConfigUpdate):
         consolidation_ratio=config.agent.consolidation_ratio,
         enabled_tools=config.agent.enabled_tools,
         available_tools=registry.list_names(),
+        tool_prompt_injection=config.agent.tool_prompt_injection,
     )
 
 

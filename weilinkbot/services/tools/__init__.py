@@ -5,8 +5,6 @@ import logging
 from .registry import get_registry, ToolRegistry
 from .time_tool import GetCurrentTimeTool
 from .math_tool import CalculateTool
-from .web_search_tool import WebSearchTool
-from .web_fetch_tool import WebFetchTool
 from .base import Tool, ToolResult, ToolExecutionError
 
 # Browser tools are optional — gracefully absent when Obscura is unavailable.
@@ -43,8 +41,6 @@ def init_default_tools() -> None:
     registry = get_registry()
     registry.register(GetCurrentTimeTool())
     registry.register(CalculateTool())
-    registry.register(WebSearchTool())
-    registry.register(WebFetchTool())
 
     # Obscura browser tools — skip entirely if unavailable
     _log = logging.getLogger(__name__)

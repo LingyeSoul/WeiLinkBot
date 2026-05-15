@@ -471,9 +471,8 @@ WeiLinkBot/
 │   │       ├── math_tool.py        # 数学计算
 │   │       ├── time_tool.py        # 时间查询
 │   │       ├── mcp_tool.py         # MCP 协议工具
-│   │       ├── web_search_tool.py  # Bing 搜索
-│   │       ├── web_fetch_tool.py   # 网页内容提取
-│   │       ├── browser_tool.py     # 网页交互
+│   │       ├── tool_prompt.py      # 工具提示注入
+│   │       ├── browser_tool.py     # 无头浏览器网页抓取
 │   │       ├── browser_use_tool.py # Browser Use 集成
 │   │       ├── _obscura.py         # 无头浏览器渲染
 │   │       ├── _url_validate.py    # URL 安全校验

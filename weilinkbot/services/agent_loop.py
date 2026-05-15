@@ -172,12 +172,26 @@ class AgentLoop:
         return AgentState.INJECT
 
     async def _handle_inject(self, ctx: AgentContext) -> AgentState:
-        """INJECT: Add safety prompt if external-content tools are active."""
+        """INJECT: Add safety prompt and tool-aware guidance."""
         from .agent_service import _EXTERNAL_CONTENT_TOOLS, _inject_safety_prompt_static
 
+        # Anti-injection safety prompt for external content tools
         if _EXTERNAL_CONTENT_TOOLS & set(ctx.tools):
             ctx.messages = _inject_safety_prompt_static(ctx.messages)
             ctx.anti_injection_active = True
+
+        # Tool-aware prompt injection (guides LLM to proactively use tools)
+        if ctx.config.agent.tool_prompt_injection and ctx.tools:
+            from .tools.tool_prompt import build_tool_prompt
+            tool_prompt = build_tool_prompt(ctx.tools)
+            if tool_prompt:
+                if ctx.messages and ctx.messages[0].get("role") == "system":
+                    ctx.messages[0] = {
+                        **ctx.messages[0],
+                        "content": ctx.messages[0]["content"] + "\n\n" + tool_prompt,
+                    }
+                else:
+                    ctx.messages.insert(0, {"role": "system", "content": tool_prompt})
 
         return AgentState.EXECUTE
 

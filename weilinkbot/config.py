@@ -116,7 +116,7 @@ class AgentConfig(BaseModel):
     consolidation_threshold: int = 30  # min messages before consolidation triggers
     consolidation_ratio: float = 0.3  # target compression ratio
     enabled_tools: list[str] = Field(default_factory=lambda: [
-        "get_current_time", "calculate", "web_search", "web_fetch",
+        "get_current_time", "calculate",
         "browser_fetch", "browser_eval", "browser_use",
     ])
     enabled_skills: list[str] = Field(default_factory=list)
@@ -127,6 +127,7 @@ class AgentConfig(BaseModel):
     enabled_sticker_tools: list[str] = Field(
         default_factory=lambda: ["search_sticker", "send_sticker", "list_sticker_packs"]
     )
+    tool_prompt_injection: bool = True  # inject tool-aware system prompt to guide tool usage
 
 
 class StickerConfig(BaseModel):

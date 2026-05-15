@@ -2081,6 +2081,16 @@
                 </div>
             </div>
 
+            <!-- Tool Prompt Injection Toggle -->
+            <label class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer">
+                <input type="checkbox" x-model="agentConfig.tool_prompt_injection"
+                       class="rounded text-blue-600">
+                <div>
+                    <span class="text-sm font-medium text-gray-800" x-text="t('agent.tool_prompt_injection')"></span>
+                    <p class="text-xs text-gray-500" x-text="t('agent.tool_prompt_injection_hint')"></p>
+                </div>
+            </label>
+
             <!-- Enabled Tools -->
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-3" x-text="t('agent.enabled_tools')"></label>

@@ -16,7 +16,7 @@ from .sanitize import sanitize_external_text
 
 logger = logging.getLogger(__name__)
 
-# Tags that never carry reader-facing content (shared with web_fetch_tool)
+# Tags that never carry reader-facing content
 _STRIP_TAGS = frozenset({
     "script", "style", "noscript", "svg", "iframe", "object", "embed",
     "applet", "template", "dialog", "math", "canvas", "map", "audio", "video",
@@ -185,17 +185,16 @@ def _apply_config_defaults(*, timeout: int, stealth: bool) -> tuple[int, bool]:
 class BrowserFetchTool(Tool):
     """Fetch a web page using a real headless browser (Obscura).
 
-    Unlike ``web_fetch`` (plain HTTP), this tool executes JavaScript,
-    renders dynamic content, and bypasses most anti-bot protections.
+    Executes JavaScript, renders dynamic content, and bypasses most anti-bot protections.
     """
 
     name = "browser_fetch"
     description = (
         "Fetch and render a web page using a real headless browser with JavaScript support. "
-        "Unlike web_fetch (plain HTTP), this executes JavaScript, renders dynamic/SPA content, "
+        "Executes JavaScript, renders dynamic/SPA content, "
         "and can bypass anti-bot protections. "
         "Returns the page content as clean readable text or markdown. "
-        "Use this for JavaScript-heavy sites, SPAs, or when web_fetch returns empty/broken content."
+        "Use this for searching the web, reading URLs, or fetching JavaScript-heavy sites and SPAs."
     )
     parameters: dict[str, Any] = {
         "type": "object",
