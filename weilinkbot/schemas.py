@@ -504,6 +504,9 @@ class SkillInfo(BaseModel):
     name: str
     description: str
     enabled: bool
+    source: str = "workspace"  # "workspace" or "builtin"
+    available: bool = True
+    always: bool = False
 
 
 class SkillCreate(BaseModel):
@@ -529,22 +532,28 @@ class SkillsUpdate(BaseModel):
 
 class MCPServerCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=64)
-    transport: str = Field(..., pattern=r"^(stdio|sse)$")
+    transport: str = Field(..., pattern=r"^(stdio|sse|streamableHttp)$")
     command: str | None = None
     args: list[str] = Field(default_factory=list)
     env: dict[str, str] = Field(default_factory=dict)
     url: str | None = None
+    headers: dict[str, str] = Field(default_factory=dict)
     enabled: bool = True
+    tool_timeout: int = Field(default=30, ge=1, le=300)
+    enabled_tools: list[str] = Field(default_factory=lambda: ["*"])
 
 
 class MCPServerUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=64)
-    transport: str | None = Field(None, pattern=r"^(stdio|sse)$")
+    transport: str | None = Field(None, pattern=r"^(stdio|sse|streamableHttp)$")
     command: str | None = None
     args: list[str] | None = None
     env: dict[str, str] | None = None
     url: str | None = None
+    headers: dict[str, str] | None = None
     enabled: bool | None = None
+    tool_timeout: int | None = Field(None, ge=1, le=300)
+    enabled_tools: list[str] | None = None
 
 
 class MCPServerResponse(BaseModel):
@@ -555,8 +564,11 @@ class MCPServerResponse(BaseModel):
     args: list[str]
     env: dict[str, str]
     url: str | None
+    headers: dict[str, str] = Field(default_factory=dict)
     enabled: bool
     status: str = "disconnected"
+    tool_timeout: int = 30
+    enabled_tools: list[str] = Field(default_factory=lambda: ["*"])
 
     model_config = {"from_attributes": True}
 

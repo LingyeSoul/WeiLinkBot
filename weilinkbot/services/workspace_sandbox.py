@@ -18,9 +18,8 @@ logger = logging.getLogger(__name__)
 
 BLOCKED_EXTENSIONS: frozenset[str] = frozenset({
     ".exe", ".bat", ".cmd", ".com", ".msi", ".scr",
-    ".sh", ".bash", ".zsh", ".ps1", ".psm1",
     ".dll", ".so", ".dylib",
-    ".vbs", ".vbe", ".js", ".jse", ".py", ".pyw",
+    ".vbs", ".vbe",
     ".jar", ".class", ".elf", ".appimage",
 })
 

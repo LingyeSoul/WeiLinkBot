@@ -88,10 +88,14 @@ async def list_skills():
     skill_service = get_skill_service()
     config = get_config()
     enabled_set = set(config.agent.enabled_skills)
-    all_skills = skill_service.scan()
+    all_skills = skill_service.scan(filter_disabled=False)
     return SkillsResponse(
         skills=[
-            SkillInfo(name=s.name, description=s.description, enabled=s.name in enabled_set)
+            SkillInfo(
+                name=s.name, description=s.description,
+                enabled=s.name in enabled_set,
+                source=s.source, available=s.available, always=s.always,
+            )
             for s in all_skills
         ]
     )
@@ -294,10 +298,13 @@ async def list_mcp_servers():
         status = mcp_service.get_status(s.id) if mcp_service else "disconnected"
         args = json.loads(s.args) if s.args else []
         env = json.loads(s.env) if s.env else {}
+        headers = json.loads(s.headers) if s.headers else {}
+        enabled_tools = json.loads(s.enabled_tools) if s.enabled_tools else ["*"]
         items.append(MCPServerResponse(
             id=s.id, name=s.name, transport=s.transport,
             command=s.command, args=args, env=env, url=s.url,
-            enabled=s.enabled, status=status,
+            headers=headers, enabled=s.enabled, status=status,
+            tool_timeout=s.tool_timeout, enabled_tools=enabled_tools,
         ))
     return MCPServersResponse(servers=items)
 
@@ -313,7 +320,9 @@ async def create_mcp_server(data: MCPServerCreate):
     return MCPServerResponse(
         id=server.id, name=server.name, transport=server.transport,
         command=server.command, args=data.args, env=data.env,
-        url=server.url, enabled=server.enabled, status="disconnected",
+        url=server.url, headers=data.headers,
+        enabled=server.enabled, status="disconnected",
+        tool_timeout=data.tool_timeout, enabled_tools=data.enabled_tools,
     )
 
 
@@ -331,13 +340,16 @@ async def update_mcp_server(server_id: int, data: MCPServerUpdate):
         raise HTTPException(status_code=404, detail="MCP server not found")
     args = json.loads(server.args) if server.args else []
     env = json.loads(server.env) if server.env else {}
+    headers = json.loads(server.headers) if server.headers else {}
+    enabled_tools = json.loads(server.enabled_tools) if server.enabled_tools else ["*"]
     from .deps import get_mcp_service as _gmcp
     _mcp_svc = _gmcp()
     status = _mcp_svc.get_status(server_id) if _mcp_svc else "disconnected"
     return MCPServerResponse(
         id=server.id, name=server.name, transport=server.transport,
         command=server.command, args=args, env=env, url=server.url,
-        enabled=server.enabled, status=status,
+        headers=headers, enabled=server.enabled, status=status,
+        tool_timeout=server.tool_timeout, enabled_tools=enabled_tools,
     )
 
 
@@ -380,7 +392,10 @@ async def reconnect_mcp_server(server_id: int):
         "args": json.loads(server.args) if server.args else [],
         "env": json.loads(server.env) if server.env else {},
         "url": server.url,
+        "headers": json.loads(server.headers) if server.headers else {},
         "enabled": server.enabled,
+        "tool_timeout": server.tool_timeout,
+        "enabled_tools": json.loads(server.enabled_tools) if server.enabled_tools else ["*"],
     }
     conn = await mcp_service.connect_server(server.id, config)
     return {"id": server_id, "status": conn.status}

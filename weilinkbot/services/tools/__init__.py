@@ -75,12 +75,14 @@ def init_workspace_tools(workspace_service) -> None:
     from .workspace_list_tool import WorkspaceListTool
     from .workspace_grep_tool import WorkspaceGrepTool
     from .workspace_write_tool import WorkspaceWriteTool
+    from .workspace_edit_tool import WorkspaceEditTool
 
     registry = get_registry()
     registry.register(WorkspaceReadTool(workspace_service))
     registry.register(WorkspaceListTool(workspace_service))
     registry.register(WorkspaceGrepTool(workspace_service))
     registry.register(WorkspaceWriteTool(workspace_service))
+    registry.register(WorkspaceEditTool(workspace_service))
 
 
 def init_sticker_tool(session_factory) -> None:

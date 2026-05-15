@@ -120,8 +120,9 @@ class AgentConfig(BaseModel):
         "browser_fetch", "browser_eval", "browser_use",
     ])
     enabled_skills: list[str] = Field(default_factory=list)
+    disabled_skills: list[str] = Field(default_factory=list)
     enabled_workspace_tools: list[str] = Field(
-        default_factory=lambda: ["workspace_read", "workspace_list", "workspace_grep", "workspace_write"]
+        default_factory=lambda: ["workspace_read", "workspace_list", "workspace_grep", "workspace_write", "workspace_edit"]
     )
     enabled_sticker_tools: list[str] = Field(
         default_factory=lambda: ["search_sticker", "send_sticker", "list_sticker_packs"]
@@ -137,11 +138,8 @@ class WorkspaceConfig(BaseModel):
     root: str = "workspace"
     blocked_extensions: list[str] = Field(default_factory=lambda: [
         ".exe", ".bat", ".cmd", ".com", ".msi", ".scr",
-        ".sh", ".bash", ".zsh",
-        ".ps1", ".psm1",
         ".dll", ".so", ".dylib",
-        ".vbs", ".vbe", ".js", ".jse",
-        ".py", ".pyw",
+        ".vbs", ".vbe",
         ".jar", ".class",
         ".elf", ".appimage",
     ])

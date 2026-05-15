@@ -80,6 +80,9 @@ _MIGRATIONS: list[tuple[str, str, str]] = [
     ("llm_presets", "api_key_encrypted", "BOOLEAN NOT NULL DEFAULT 0"),
     ("llm_presets", "supports_tools", "BOOLEAN NOT NULL DEFAULT 1"),
     ("messages", "is_consolidated", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("mcp_servers", "headers", "TEXT NOT NULL DEFAULT '{}'"),
+    ("mcp_servers", "tool_timeout", "INTEGER NOT NULL DEFAULT 30"),
+    ("mcp_servers", "enabled_tools", "TEXT NOT NULL DEFAULT '[\"*\"]'"),
 ]
 
 

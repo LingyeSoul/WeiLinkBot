@@ -24,7 +24,9 @@
 - **记忆系统** - 基于 mem0ai + ChromaDB 的向量记忆，支持本地 ONNX / ModelScope / 远程 Embedding，HNSW 索引参数可调；支持批量摘要（轮数/超时双触发）、事实+摘要双维度存储、时间衰减与重排检索
 - **Agent 状态机** - 基于显式状态机的 Agent 循环（INIT → INJECT → EXECUTE → COMPRESS → FINALIZE → DONE），支持原生 Function Calling 和 Prompt 回退，可调试、可扩展、可容错恢复
 - **网络工具** - Bing 中国搜索、网页内容提取、网页交互（Browser Use）、无头浏览器渲染（Obscura），支持 JavaScript 执行和动态内容加载，工具执行超时保护与结果截断
-- **工作区工具** - 沙盒化的文件操作（读/写/列表/搜索），支持可配置根目录、大小限制和扩展名过滤，每个工具可独立开关
+- **工作区工具** - 沙盒化的文件操作（读/写/编辑/列表/搜索），支持可配置根目录、大小限制和扩展名过滤，新增 `workspace_edit` 支持精确文本替换编辑，每个工具可独立开关
+- **技能系统** - 目录式技能管理（`workspace/skills/<name>/SKILL.md`），支持渐进式加载（摘要注入上下文、按需读取完整内容）、需求检查（CLI 工具/环境变量）、always-on 技能、禁用列表，兼容旧版平铺 `.md` 文件
+- **MCP 集成** - 支持 stdio / SSE / Streamable HTTP 三种传输方式，自动发现并注册 MCP 工具、资源（Resources）和提示词（Prompts），支持工具过滤（enabledTools）、每服务器超时配置、瞬态错误自动重试、HTTP 连接预检
 - **会话压缩** - 自动压缩旧消息为摘要，支持 Token 预算管理和消息数量限制，防止上下文窗口溢出；基于 tiktoken 的精确 Token 计数
 - **并发控制** - 全局信号量限制 LLM 并发请求，每用户消息队列防止竞态条件
 - **网页控制台** - 实时状态、会话查看、预设管理、用户控制、表情包管理、工作区配置、事件日志、统计面板
@@ -109,7 +111,163 @@ weilinkbot serve --port 3000  # 指定端口
 Web Tools  Workspace  Stickers   Builtin
 (search,   (read,     (search,   (math,
  fetch,    write,     list,      time)
- browser)  grep)      send)
+ browser)  edit,      send)
+           grep)
+   │
+   ▼
+MCP Tools (stdio / SSE / HTTP,
+ resources, prompts)
+```
+
+## 技能系统（Skills）
+
+技能是 Markdown 文件，定义了 Agent 的专业行为。支持两种格式：
+
+### 目录式技能（推荐）
+
+```
+workspace/skills/
+├── translation/
+│   └── SKILL.md
+├── code-review/
+│   └── SKILL.md
+└── my-custom-skill/
+    └── SKILL.md
+```
+
+每个 `SKILL.md` 支持 YAML frontmatter：
+
+```markdown
+---
+name: translation
+description: Translate between languages with style preservation.
+metadata:
+  nanobot:
+    always: true              # 始终注入上下文（可选）
+    requires:
+      bins: ["trans"]         # 依赖的 CLI 工具（可选）
+      env: ["DEEPL_API_KEY"]  # 依赖的环境变量（可选）
+---
+
+# Translation Skill
+
+When translating, preserve the original tone and formatting...
+```
+
+### 渐进式加载
+
+为节省 Token，技能系统采用渐进式加载策略：
+
+1. **上下文注入**：`always` 技能注入完整内容；其他已启用技能仅注入摘要（名称 + 描述）
+2. **按需加载**：Agent 可通过 `workspace_read` 工具在需要时读取完整技能内容
+3. **需求检查**：缺少依赖（CLI 工具或环境变量）的技能会被自动标记为不可用
+
+### 配置
+
+在控制台的 Agent 设置中管理技能：
+
+| 选项 | 说明 |
+|------|------|
+| `enabled_skills` | 启用的技能名称列表 |
+| `disabled_skills` | 禁用的技能名称列表（从加载中排除） |
+
+### 导入
+
+支持单个 `.md` 文件或 `.zip` 压缩包导入。ZIP 包支持 `manifest.json` 元数据。
+
+## MCP 集成（Model Context Protocol）
+
+支持连接外部 MCP 服务器，将其工具、资源和提示词注册为原生 Agent 工具。
+
+### 传输方式
+
+| 方式 | 配置 | 适用场景 |
+|------|------|----------|
+| **stdio** | `command` + `args` | 本地进程（npx / uvx） |
+| **SSE** | `url` | 远程 HTTP 端点（`/sse`） |
+| **Streamable HTTP** | `url` | 远程 HTTP 端点（`/mcp/`） |
+
+### 配置示例
+
+通过控制台或 API 添加 MCP 服务器：
+
+```json
+{
+  "name": "filesystem",
+  "transport": "stdio",
+  "command": "npx",
+  "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/dir"],
+  "enabled": true,
+  "tool_timeout": 30,
+  "enabled_tools": ["*"]
+}
+```
+
+远程 MCP 服务器：
+
+```json
+{
+  "name": "my-remote-mcp",
+  "transport": "streamableHttp",
+  "url": "https://example.com/mcp/",
+  "headers": { "Authorization": "Bearer xxxxx" },
+  "tool_timeout": 60,
+  "enabled_tools": ["search", "fetch"]
+}
+```
+
+### 高级功能
+
+| 功能 | 说明 |
+|------|------|
+| **工具过滤** | `enabled_tools` 指定注册的工具列表，`["*"]` 表示全部 |
+| **超时控制** | `tool_timeout` 每个工具调用的超时秒数（默认 30） |
+| **自动重试** | 瞬态连接错误（断开、重置）自动重试一次 |
+| **资源注册** | MCP Resources 自动注册为只读工具 |
+| **提示词注册** | MCP Prompts 自动注册为只读工具 |
+| **连接预检** | HTTP 连接前先探测端口可达性，避免崩溃 |
+| **Schema 兼容** | 自动规范化 nullable JSON Schema，兼容 OpenAI/Anthropic API |
+
+### 工具命名
+
+MCP 工具名称格式：`{server_name}__{tool_name}`
+
+资源格式：`{server_name}__resource__{resource_name}`
+
+提示词格式：`{server_name}__prompt__{prompt_name}`
+
+## 工作区（Workspace）
+
+工作区是 Agent 的沙盒化文件操作环境。
+
+### 工具列表
+
+| 工具 | 说明 |
+|------|------|
+| `workspace_read` | 读取文件内容（支持行范围） |
+| `workspace_write` | 写入/追加文件内容 |
+| `workspace_edit` | 精确文本替换编辑（比全文重写更高效） |
+| `workspace_list` | 列出文件和目录（支持 glob 模式） |
+| `workspace_grep` | 搜索文件内容（支持正则） |
+
+### 安全沙盒
+
+所有文件操作通过 `WorkspaceSandbox` 安全校验：
+
+- **路径验证**：拒绝绝对路径、`..` 遍历、符号链接逃逸
+- **扩展名过滤**：阻止可执行文件（`.exe`, `.bat`, `.dll` 等），允许 `.py`、`.js`、`.sh` 等脚本文件
+- **大小限制**：读取上限 1MB，写入上限 512KB
+- **结果限制**：目录列表最多 500 条，搜索最多 100 条
+
+### 配置
+
+```json
+{
+  "root": "workspace",
+  "read_max_size": 1048576,
+  "write_max_size": 524288,
+  "blocked_extensions": [".exe", ".bat", ".dll", ...]
+}
 ```
 
 ## LLM 提供商
@@ -216,6 +374,26 @@ Web Tools  Workspace  Stickers   Builtin
 | `GET` | `/api/agent/workspace/read` | 读取工作区文件 |
 | `POST` | `/api/agent/workspace/upload` | 上传文件到工作区 |
 
+### 技能管理
+
+| 方法 | 路径 | 说明 |
+|--------|------|-------------|
+| `GET` | `/api/agent/skills` | 获取技能列表（含 source、available、always 标记） |
+| `PUT` | `/api/agent/skills` | 更新已启用技能列表 |
+| `POST` | `/api/agent/skills` | 创建技能 |
+| `POST` | `/api/agent/skills/import` | 导入技能（.md 或 .zip） |
+| `DELETE` | `/api/agent/skills/{name}` | 删除技能 |
+
+### MCP 服务器
+
+| 方法 | 路径 | 说明 |
+|--------|------|-------------|
+| `GET` | `/api/agent/mcp` | 获取 MCP 服务器列表（含连接状态） |
+| `POST` | `/api/agent/mcp` | 创建 MCP 服务器配置 |
+| `PUT` | `/api/agent/mcp/{id}` | 更新 MCP 服务器配置 |
+| `DELETE` | `/api/agent/mcp/{id}` | 删除并断开连接 |
+| `POST` | `/api/agent/mcp/{id}/reconnect` | 重新连接 |
+
 ### 记忆与 Agent
 
 | 方法 | 路径 | 说明 |
@@ -304,6 +482,7 @@ WeiLinkBot/
 │   │       ├── send_sticker_tool.py      # 发送表情包
 │   │       ├── workspace_read_tool.py    # 读取工作区文件
 │   │       ├── workspace_write_tool.py   # 写入工作区文件
+│   │       ├── workspace_edit_tool.py    # 精确文本替换编辑
 │   │       ├── workspace_list_tool.py    # 列出工作区文件
 │   │       └── workspace_grep_tool.py    # 搜索工作区文件内容
 │   ├── frontend/           # 控制台前端（Alpine.js + Tailwind）
@@ -330,6 +509,7 @@ WeiLinkBot/
 | 记忆系统 | mem0ai + ChromaDB |
 | 本地 Embedding | ONNX Runtime + ModelScope + Tokenizers |
 | Token 计数 | tiktoken |
+| MCP 客户端 | MCP Python SDK (stdio / SSE / Streamable HTTP) |
 | 无头浏览器 | Obscura (Playwright 内核) |
 | 表情包解压 | py7zr / rarfile / zipfile |
 | 前端 | Alpine.js + Tailwind CSS + Jinja2 |
@@ -337,6 +517,10 @@ WeiLinkBot/
 | 加密 | Cryptography (AES) |
 | WebSocket | FastAPI WebSocket |
 | 打包 | Nuitka / PyInstaller |
+
+## 致谢
+
+本项目中的技能系统（目录式结构、渐进式加载、需求检查）、MCP 集成（Streamable HTTP、资源/提示词注册、工具过滤、超时重试、Schema 规范化）及工作区改进参考了 [HKUDS/nanobot](https://github.com/HKUDS/nanobot) 的设计。感谢 nanobot 团队的优秀开源工作。
 
 ## 合规使用
 

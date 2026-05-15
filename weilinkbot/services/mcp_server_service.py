@@ -35,7 +35,10 @@ class MCPServerService:
             args=json.dumps(data.get("args", [])),
             env=json.dumps(data.get("env", {})),
             url=data.get("url"),
+            headers=json.dumps(data.get("headers", {})),
             enabled=data.get("enabled", True),
+            tool_timeout=data.get("tool_timeout", 30),
+            enabled_tools=json.dumps(data.get("enabled_tools", ["*"])),
         )
         self._db.add(server)
         await self._db.commit()
@@ -47,13 +50,17 @@ class MCPServerService:
         server = await self.get(server_id)
         if not server:
             return None
-        for field in ("name", "transport", "command", "url", "enabled"):
+        for field in ("name", "transport", "command", "url", "enabled", "tool_timeout"):
             if field in data and data[field] is not None:
                 setattr(server, field, data[field])
         if "args" in data and data["args"] is not None:
             server.args = json.dumps(data["args"])
         if "env" in data and data["env"] is not None:
             server.env = json.dumps(data["env"])
+        if "headers" in data and data["headers"] is not None:
+            server.headers = json.dumps(data["headers"])
+        if "enabled_tools" in data and data["enabled_tools"] is not None:
+            server.enabled_tools = json.dumps(data["enabled_tools"])
         await self._db.commit()
         await self._db.refresh(server)
         logger.info("Updated MCP server: id=%d", server_id)

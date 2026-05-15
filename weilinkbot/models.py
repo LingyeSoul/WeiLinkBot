@@ -314,12 +314,15 @@ class MCPServer(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
-    transport: Mapped[str] = mapped_column(String(8), nullable=False)
+    transport: Mapped[str] = mapped_column(String(16), nullable=False)
     command: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
     args: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     env: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    headers: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    tool_timeout: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
+    enabled_tools: Mapped[str] = mapped_column(Text, nullable=False, default='["*"]')
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, server_default=func.now()
     )

@@ -1405,7 +1405,7 @@ function dashboard() {
         toggleWorkspace() {
             const enabling = !this.workspaceConfig.enabled;
             this.workspaceConfig.enabled = enabling;
-            const allTools = ["workspace_read", "workspace_list", "workspace_grep", "workspace_write"];
+            const allTools = ["workspace_read", "workspace_list", "workspace_grep", "workspace_write", "workspace_edit"];
             this.workspaceConfig.enabled_workspace_tools = enabling ? [...allTools] : [];
             this.saveWorkspaceConfig();
         },
