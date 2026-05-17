@@ -488,6 +488,21 @@ class AgentConfigResponse(BaseModel):
     enabled_tools: list[str]
     available_tools: list[str]
     tool_prompt_injection: bool = True
+    # Agent工具高级参数
+    tool_timeout_seconds: float = 60.0
+    max_tool_result_chars: int = 30_000
+    consecutive_fail_limit: int = 3
+    # 浏览器配置
+    browser_enabled: bool = True
+    browser_stealth: bool = False
+    browser_default_timeout: int = 30
+    browser_serve_port: int = 9222
+    # 工作区高级配置
+    workspace_blocked_extensions: list[str] = Field(default_factory=list)
+    workspace_read_max_size: int = 1_048_576
+    workspace_write_max_size: int = 524_288
+    workspace_list_max_entries: int = 500
+    workspace_grep_max_results: int = 100
 
 
 class AgentConfigUpdate(BaseModel):
@@ -498,6 +513,21 @@ class AgentConfigUpdate(BaseModel):
     consolidation_ratio: Optional[float] = Field(None, ge=0.1, le=0.9)
     enabled_tools: Optional[list[str]] = None
     tool_prompt_injection: Optional[bool] = None
+    # Agent工具高级参数
+    tool_timeout_seconds: Optional[float] = Field(None, ge=1, le=300)
+    max_tool_result_chars: Optional[int] = Field(None, ge=1000, le=200000)
+    consecutive_fail_limit: Optional[int] = Field(None, ge=1, le=20)
+    # 浏览器配置
+    browser_enabled: Optional[bool] = None
+    browser_stealth: Optional[bool] = None
+    browser_default_timeout: Optional[int] = Field(None, ge=5, le=120)
+    browser_serve_port: Optional[int] = Field(None, ge=1024, le=65535)
+    # 工作区高级配置
+    workspace_blocked_extensions: Optional[list[str]] = None
+    workspace_read_max_size: Optional[int] = Field(None, ge=1024, le=10_485_760)
+    workspace_write_max_size: Optional[int] = Field(None, ge=1024, le=5_242_880)
+    workspace_list_max_entries: Optional[int] = Field(None, ge=10, le=10000)
+    workspace_grep_max_results: Optional[int] = Field(None, ge=10, le=1000)
 
 
 # ── Skills ─────────────────────────────────────────────────────

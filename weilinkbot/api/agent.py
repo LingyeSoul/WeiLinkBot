@@ -36,6 +36,21 @@ async def get_agent_config():
         enabled_tools=config.agent.enabled_tools,
         available_tools=registry.list_names(),
         tool_prompt_injection=config.agent.tool_prompt_injection,
+        # Agent工具高级参数
+        tool_timeout_seconds=config.agent.tool_timeout_seconds,
+        max_tool_result_chars=config.agent.max_tool_result_chars,
+        consecutive_fail_limit=config.agent.consecutive_fail_limit,
+        # 浏览器配置
+        browser_enabled=config.browser.enabled,
+        browser_stealth=config.browser.stealth,
+        browser_default_timeout=config.browser.default_timeout,
+        browser_serve_port=config.browser.serve_port,
+        # 工作区高级配置
+        workspace_blocked_extensions=list(config.workspace.blocked_extensions),
+        workspace_read_max_size=config.workspace.read_max_size,
+        workspace_write_max_size=config.workspace.write_max_size,
+        workspace_list_max_entries=config.workspace.list_max_entries,
+        workspace_grep_max_results=config.workspace.grep_max_results,
     )
 
 
@@ -58,6 +73,33 @@ async def update_agent_config(data: AgentConfigUpdate):
         config.agent.enabled_tools = data.enabled_tools
     if data.tool_prompt_injection is not None:
         config.agent.tool_prompt_injection = data.tool_prompt_injection
+    # Agent工具高级参数
+    if data.tool_timeout_seconds is not None:
+        config.agent.tool_timeout_seconds = data.tool_timeout_seconds
+    if data.max_tool_result_chars is not None:
+        config.agent.max_tool_result_chars = data.max_tool_result_chars
+    if data.consecutive_fail_limit is not None:
+        config.agent.consecutive_fail_limit = data.consecutive_fail_limit
+    # 浏览器配置
+    if data.browser_enabled is not None:
+        config.browser.enabled = data.browser_enabled
+    if data.browser_stealth is not None:
+        config.browser.stealth = data.browser_stealth
+    if data.browser_default_timeout is not None:
+        config.browser.default_timeout = data.browser_default_timeout
+    if data.browser_serve_port is not None:
+        config.browser.serve_port = data.browser_serve_port
+    # 工作区高级配置
+    if data.workspace_blocked_extensions is not None:
+        config.workspace.blocked_extensions = data.workspace_blocked_extensions
+    if data.workspace_read_max_size is not None:
+        config.workspace.read_max_size = data.workspace_read_max_size
+    if data.workspace_write_max_size is not None:
+        config.workspace.write_max_size = data.workspace_write_max_size
+    if data.workspace_list_max_entries is not None:
+        config.workspace.list_max_entries = data.workspace_list_max_entries
+    if data.workspace_grep_max_results is not None:
+        config.workspace.grep_max_results = data.workspace_grep_max_results
 
     # Update runtime concurrency limit if changed
     try:
@@ -80,6 +122,21 @@ async def update_agent_config(data: AgentConfigUpdate):
         enabled_tools=config.agent.enabled_tools,
         available_tools=registry.list_names(),
         tool_prompt_injection=config.agent.tool_prompt_injection,
+        # Agent工具高级参数
+        tool_timeout_seconds=config.agent.tool_timeout_seconds,
+        max_tool_result_chars=config.agent.max_tool_result_chars,
+        consecutive_fail_limit=config.agent.consecutive_fail_limit,
+        # 浏览器配置
+        browser_enabled=config.browser.enabled,
+        browser_stealth=config.browser.stealth,
+        browser_default_timeout=config.browser.default_timeout,
+        browser_serve_port=config.browser.serve_port,
+        # 工作区高级配置
+        workspace_blocked_extensions=list(config.workspace.blocked_extensions),
+        workspace_read_max_size=config.workspace.read_max_size,
+        workspace_write_max_size=config.workspace.write_max_size,
+        workspace_list_max_entries=config.workspace.list_max_entries,
+        workspace_grep_max_results=config.workspace.grep_max_results,
     )
 
 

@@ -95,7 +95,18 @@ function dashboard() {
 
         // Agent Config
         agentSubTab: 'tools',
-        agentConfig: { max_tool_rounds: 5, max_context_tokens: 0, max_concurrent_requests: 3, consolidation_threshold: 30, consolidation_ratio: 0.3, enabled_tools: [], available_tools: [], tool_prompt_injection: true },
+        agentConfig: { 
+            max_tool_rounds: 5, max_context_tokens: 0, max_concurrent_requests: 3, 
+            consolidation_threshold: 30, consolidation_ratio: 0.3, enabled_tools: [], 
+            available_tools: [], tool_prompt_injection: true,
+            // Agent工具高级参数
+            tool_timeout_seconds: 60, max_tool_result_chars: 30000, consecutive_fail_limit: 3,
+            // 浏览器配置
+            browser_enabled: true, browser_stealth: false, browser_default_timeout: 30, browser_serve_port: 9222,
+            // 工作区高级配置
+            workspace_blocked_extensions: [], workspace_read_max_size: 1048576, 
+            workspace_write_max_size: 524288, workspace_list_max_entries: 500, workspace_grep_max_results: 100,
+        },
         agentConfigLoaded: false,
         skills: { items: [], loaded: false },
         skillForm: { name: "", description: "", content: "" },
@@ -112,6 +123,7 @@ function dashboard() {
         workspaceFileFilter: "",
         workspaceFileContent: null,
         workspaceFilePath: "",
+        workspaceBlockedExtInput: "",
 
         // Token Stats
         tokenStats: { models: [], total_tokens: 0, total_requests: 0 },       // all-time (from API)
@@ -1230,6 +1242,8 @@ function dashboard() {
                 const data = await this.api("/api/agent/config");
                 this.agentConfig = data;
                 this.agentConfigLoaded = true;
+                // Initialize workspace blocked extensions input
+                this.workspaceBlockedExtInput = (data.workspace_blocked_extensions || []).join(", ");
             } catch { /* ignore */ }
         },
         async saveAgentConfig() {
@@ -1243,6 +1257,21 @@ function dashboard() {
                     consolidation_ratio: this.agentConfig.consolidation_ratio,
                     enabled_tools: this.agentConfig.enabled_tools,
                     tool_prompt_injection: this.agentConfig.tool_prompt_injection,
+                    // Agent工具高级参数
+                    tool_timeout_seconds: this.agentConfig.tool_timeout_seconds,
+                    max_tool_result_chars: this.agentConfig.max_tool_result_chars,
+                    consecutive_fail_limit: this.agentConfig.consecutive_fail_limit,
+                    // 浏览器配置
+                    browser_enabled: this.agentConfig.browser_enabled,
+                    browser_stealth: this.agentConfig.browser_stealth,
+                    browser_default_timeout: this.agentConfig.browser_default_timeout,
+                    browser_serve_port: this.agentConfig.browser_serve_port,
+                    // 工作区高级配置
+                    workspace_blocked_extensions: this.agentConfig.workspace_blocked_extensions,
+                    workspace_read_max_size: this.agentConfig.workspace_read_max_size,
+                    workspace_write_max_size: this.agentConfig.workspace_write_max_size,
+                    workspace_list_max_entries: this.agentConfig.workspace_list_max_entries,
+                    workspace_grep_max_results: this.agentConfig.workspace_grep_max_results,
                 }),
             });
             this.showToast(t("toast.agent_saved"), "success");
@@ -1256,6 +1285,13 @@ function dashboard() {
             } else {
                 tools.push(toolName);
             }
+        },
+        updateWorkspaceBlockedExtensions() {
+            const exts = this.workspaceBlockedExtInput
+                .split(",")
+                .map(s => s.trim())
+                .filter(s => s.length > 0);
+            this.agentConfig.workspace_blocked_extensions = exts;
         },
 
         // ── Skills ────────────────────────────────────────────────
