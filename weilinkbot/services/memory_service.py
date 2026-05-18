@@ -689,6 +689,10 @@ class MemoryService:
                     ),
                     timeout=15.0,
                 )
+            if not hasattr(response, "choices"):
+                logger.error("LLM API returned non-structured response (type=%s): %s",
+                             type(response).__name__, str(response)[:200])
+                return None
             text = (response.choices[0].message.content or "").strip()
 
             # Parse JSON from response (handle markdown code blocks)
@@ -1045,6 +1049,10 @@ class MemoryService:
                     ),
                     timeout=30.0,
                 )
+            if not hasattr(response, "choices"):
+                logger.error("LLM summarization returned non-structured response (type=%s): %s",
+                             type(response).__name__, str(response)[:200])
+                return None
             text = (response.choices[0].message.content or "").strip()
 
             match = re.search(r"```(?:json)?\s*\n(.*?)```", text, re.DOTALL)

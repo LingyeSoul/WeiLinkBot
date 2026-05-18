@@ -92,6 +92,10 @@ class LLMService:
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 response = await self._client.chat.completions.create(**kwargs)
+                if not hasattr(response, "choices"):
+                    logger.error("LLM API returned non-structured response (type=%s): %s",
+                                 type(response).__name__, str(response)[:200])
+                    return t("llm.error.request_failed", e=f"unexpected response type: {type(response).__name__}"), 0, None
                 msg = response.choices[0].message
                 text = msg.content or ""
                 tokens = response.usage.total_tokens if response.usage else 0
@@ -170,6 +174,10 @@ class LLMService:
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 response = await client.chat.completions.create(**kwargs)
+                if not hasattr(response, "choices"):
+                    logger.error("Preprocess LLM API returned non-structured response (type=%s, model=%s): %s",
+                                 type(response).__name__, config.model, str(response)[:200])
+                    return "", 0, True
                 text = response.choices[0].message.content or ""
                 tokens = response.usage.total_tokens if response.usage else 0
                 return text, tokens, False
