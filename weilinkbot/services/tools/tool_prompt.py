@@ -23,8 +23,12 @@ _TOOL_CATEGORIES: dict[str, dict[str, Any]] = {
         "tools": ["browser_fetch", "browser_eval", "browser_use"],
         "trigger_zh": (
             "当用户提问涉及当前事件、实时数据、最新新闻、事实核查、"
-            "或你不确定的领域知识时，必须使用 browser_fetch 搜索并获取最新信息。"
+            "或你不确定的领域知识时，必须使用 browser_fetch 通过 Bing 搜索获取最新信息。"
             "不要凭训练数据猜测事实性问题。\n"
+            "搜索方法：将查询词 URL 编码后拼接到 Bing 搜索地址，"
+            "即 https://www.bing.com/search?q=查询词，然后用 browser_fetch 抓取该 URL。"
+            "示例：搜索「Python 3.13 新特性」→ "
+            "browser_fetch(\"https://www.bing.com/search?q=Python+3.13+%E6%96%B0%E7%89%B9%E6%80%A7\")。\n"
             "当用户提供了URL链接并要求分析其内容，或需要获取特定网页的详细信息时，"
             "使用 browser_fetch 抓取页面内容。browser_eval 适合提取页面中的结构化数据，"
             "browser_use 适合需要交互操作（点击、滚动、截图等）的场景。"
@@ -32,8 +36,12 @@ _TOOL_CATEGORIES: dict[str, dict[str, Any]] = {
         "trigger_en": (
             "When the user asks about current events, real-time data, latest news, "
             "fact-checking, or domain knowledge you're uncertain about, "
-            "you MUST use browser_fetch to search and get up-to-date information. "
+            "you MUST use browser_fetch to search via Bing and get up-to-date information. "
             "Do NOT guess factual questions from training data.\n"
+            "How to search: URL-encode the query and append it to the Bing search URL: "
+            "https://www.bing.com/search?q=<query>, then call browser_fetch on that URL. "
+            "Example: search 'Python 3.13 new features' → "
+            "browser_fetch(\"https://www.bing.com/search?q=Python+3.13+new+features\").\n"
             "When the user provides a URL and asks you to analyze its content, "
             "use browser_fetch to retrieve page content. Use browser_eval to extract "
             "structured data from pages, and browser_use for interactive operations "

@@ -96,21 +96,14 @@ def _download_binary() -> Path:
     asset, binary_name = _platform_asset()
     target = _DATA_DIR / binary_name
 
-    # Fetch latest version from GitHub
-    try:
-        latest = _fetch_latest_version()
-    except Exception as exc:
-        # Fallback: if binary already exists, accept it regardless of version
-        logger.warning("Failed to check latest Obscura version: %s", exc)
-        if target.exists():
-            return target
-        raise
-
-    installed = _installed_version()
-
-    # Binary exists and version is current → skip download
-    if target.exists() and installed == latest:
+    # Fast path: binary already on disk — skip network entirely
+    if target.exists():
+        logger.info("Obscura binary found at %s", target)
         return target
+
+    # Binary not on disk — fetch latest version and download
+    latest = _fetch_latest_version()
+    installed = _installed_version()
 
     if installed and installed != latest:
         logger.info("Obscura update available: %s → %s", installed, latest)
@@ -214,11 +207,14 @@ def ensure_ready() -> str:
 
 
 def is_available() -> bool:
-    """Check availability without raising."""
+    """Check availability without raising. Retries on previous failure."""
     global _BINARY_READY
-    if _BINARY_READY is None:
-        try:
-            ensure_ready()
-        except Exception:
-            _BINARY_READY = False
+    if _BINARY_READY is True:
+        return True
+    # Don't permanently cache failures — allow retry in case binary was added later
+    try:
+        ensure_ready()
+    except Exception:
+        _BINARY_READY = False
+        return False
     return _BINARY_READY is True

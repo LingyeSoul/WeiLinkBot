@@ -125,6 +125,27 @@ async def _auto_migrate(conn) -> None:
             logger.info("Auto-migration: encrypted %d LLMPreset api_keys", len(rows))
 
 
+async def _backfill_user_configs(conn) -> None:
+    """Create UserConfig rows for users who have conversations but no config.
+
+    Fixes data from older versions that never created UserConfig records.
+    """
+    result = await conn.execute(text(
+        "SELECT DISTINCT c.user_id FROM conversations c "
+        "LEFT JOIN user_configs u ON c.user_id = u.user_id "
+        "WHERE u.user_id IS NULL"
+    ))
+    rows = result.fetchall()
+    if not rows:
+        return
+    for (user_id,) in rows:
+        await conn.execute(text(
+            "INSERT OR IGNORE INTO user_configs (user_id, source, is_blocked) "
+            "VALUES (:uid, 'wechat', 0)"
+        ), {"uid": user_id})
+    logger.info("Auto-migration: backfilled %d UserConfig rows from conversations", len(rows))
+
+
 async def _migrate_nullable_api_key(conn) -> None:
     """Recreate llm_presets to make api_key and base_url nullable (SQLite limitation)."""
     result = await conn.execute(text("PRAGMA table_info(llm_presets)"))
@@ -188,4 +209,5 @@ async def init_db():
         await conn.execute(text("PRAGMA journal_mode=WAL"))
         await conn.run_sync(Base.metadata.create_all)
         await _auto_migrate(conn)
+        await _backfill_user_configs(conn)
         await _migrate_nullable_api_key(conn)
