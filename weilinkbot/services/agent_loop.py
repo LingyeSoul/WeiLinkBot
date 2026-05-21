@@ -20,7 +20,7 @@ import asyncio
 import json
 import logging
 from enum import Enum, auto
-from typing import Any
+from typing import Any, Optional
 
 from .event_log import get_event_log
 from .llm_service import LLMService
@@ -57,8 +57,8 @@ class AgentContext:
     __slots__ = (
         "messages", "tools", "tool_defs", "total_tokens",
         "consecutive_failures", "fail_limit", "round", "max_rounds",
-        "last_text", "last_tool_calls", "supports_tools",
-        "anti_injection_active", "config",
+        "last_text", "last_tool_calls", "last_reasoning_content",
+        "supports_tools", "anti_injection_active", "config",
     )
 
     def __init__(
@@ -77,6 +77,7 @@ class AgentContext:
         self.max_rounds = config.agent.max_tool_rounds
         self.last_text = ""
         self.last_tool_calls: list[dict] | None = None
+        self.last_reasoning_content: str | None = None
         self.supports_tools = supports_tools
         self.anti_injection_active = False
         self.config = config
@@ -104,7 +105,7 @@ class AgentLoop:
         self,
         context: list[dict[str, Any]],
         supports_tools: bool = True,
-    ) -> tuple[str, int]:
+    ) -> tuple[str, int, Optional[str]]:
         """Run the agent loop state machine."""
         ctx = AgentContext(list(context), supports_tools, self._config)
         state = AgentState.INIT
@@ -122,7 +123,7 @@ class AgentLoop:
                 break
             state = next_state
 
-        return ctx.last_text, ctx.total_tokens
+        return ctx.last_text, ctx.total_tokens, ctx.last_reasoning_content
 
     async def _transition(
         self,
@@ -161,9 +162,10 @@ class AgentLoop:
 
         if not enabled:
             # No tools — skip agent loop entirely
-            text, tokens, _ = await self._llm.chat(ctx.messages)
+            text, tokens, _, reasoning = await self._llm.chat(ctx.messages)
             ctx.total_tokens = tokens
             ctx.last_text = text
+            ctx.last_reasoning_content = reasoning
             return AgentState.DONE
 
         ctx.tools = enabled
@@ -203,11 +205,12 @@ class AgentLoop:
 
     async def _execute_native(self, ctx: AgentContext) -> AgentState:
         """Execute one round of native function calling."""
-        text, tokens, tool_calls = await self._llm.chat(
+        text, tokens, tool_calls, reasoning = await self._llm.chat(
             ctx.messages, tools=ctx.tool_defs,
         )
         ctx.total_tokens += tokens
         ctx.last_text = text
+        ctx.last_reasoning_content = reasoning
 
         if not tool_calls:
             # Silent AI detection
@@ -219,9 +222,10 @@ class AgentLoop:
                         "给用户一个最终回复。不要返回空内容。"
                     ),
                 })
-                text, tokens, _ = await self._llm.chat(ctx.messages)
+                text, tokens, _, reasoning = await self._llm.chat(ctx.messages)
                 ctx.total_tokens += tokens
                 ctx.last_text = text
+                ctx.last_reasoning_content = reasoning
             return AgentState.DONE
 
         # Append assistant message with tool_calls
@@ -277,9 +281,10 @@ class AgentLoop:
             if ctx.messages and ctx.messages[0].get("role") == "system":
                 ctx.messages[0] = {**ctx.messages[0], "content": ctx.messages[0]["content"] + tool_injection}
 
-        text, tokens, _ = await self._llm.chat(ctx.messages)
+        text, tokens, _, reasoning = await self._llm.chat(ctx.messages)
         ctx.total_tokens += tokens
         ctx.last_text = text
+        ctx.last_reasoning_content = reasoning
 
         tool_calls = ToolRegistry.parse_prompt_tool_calls(text)
         if not tool_calls:
@@ -291,9 +296,10 @@ class AgentLoop:
                         "给用户一个最终回复。不要返回空内容。"
                     ),
                 })
-                text, tokens, _ = await self._llm.chat(ctx.messages)
+                text, tokens, _, reasoning = await self._llm.chat(ctx.messages)
                 ctx.total_tokens += tokens
                 ctx.last_text = text
+                ctx.last_reasoning_content = reasoning
             return AgentState.DONE
 
         ctx.messages.append({"role": "assistant", "content": text})
@@ -344,9 +350,10 @@ class AgentLoop:
 
     async def _handle_finalize(self, ctx: AgentContext) -> AgentState:
         """FINALIZE: Force a final text-only response."""
-        text, tokens, _ = await self._llm.chat(ctx.messages)
+        text, tokens, _, reasoning = await self._llm.chat(ctx.messages)
         ctx.total_tokens += tokens
         ctx.last_text = text
+        ctx.last_reasoning_content = reasoning
         return AgentState.DONE
 
     async def _execute_tool(

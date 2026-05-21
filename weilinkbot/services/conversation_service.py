@@ -74,6 +74,7 @@ class ConversationService:
         content: str,
         tokens_used: Optional[int] = None,
         model: Optional[str] = None,
+        reasoning_content: Optional[str] = None,
     ) -> Message:
         """Add a message to the user's conversation."""
         conv = await self.get_or_create_conversation(user_id)
@@ -84,6 +85,7 @@ class ConversationService:
             content=content,
             tokens_used=tokens_used,
             model=model,
+            reasoning_content=reasoning_content,
         )
         self._db.add(msg)
         conv.message_count += 1
@@ -346,7 +348,10 @@ class ConversationService:
         for msg in messages:
             if msg.role == "preprocess":
                 continue
-            context.append({"role": msg.role, "content": msg.content})
+            entry: dict[str, str] = {"role": msg.role, "content": msg.content}
+            if msg.role == "assistant" and msg.reasoning_content:
+                entry["reasoning_content"] = msg.reasoning_content
+            context.append(entry)
 
         # Inject ST preset after-history entries (depth-based from end)
         if st_after_messages:

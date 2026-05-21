@@ -60,7 +60,7 @@ class LLMService:
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
         tools: Optional[list[dict]] = None,
-    ) -> tuple[str, int, Optional[list[dict]]]:
+    ) -> tuple[str, int, Optional[list[dict]], Optional[str]]:
         """Send a chat completion request.
 
         Args:
@@ -70,14 +70,16 @@ class LLMService:
             tools: Optional OpenAI function-calling tool definitions
 
         Returns:
-            (response_text, total_tokens, tool_calls)
+            (response_text, total_tokens, tool_calls, reasoning_content)
             tool_calls is None when no tool call was requested by the LLM.
+            reasoning_content is the thinking/reasoning text from reasoning models
+            (e.g. DeepSeek R1), or None if the model does not support it.
 
         Raises:
             RuntimeError: After all retries exhausted
         """
         if not self._config.api_key:
-            return t("llm.error.no_key"), 0, None
+            return t("llm.error.no_key"), 0, None, None
 
         kwargs: dict = {
             "model": self._config.model,
@@ -95,10 +97,16 @@ class LLMService:
                 if not hasattr(response, "choices"):
                     logger.error("LLM API returned non-structured response (type=%s): %s",
                                  type(response).__name__, str(response)[:200])
-                    return t("llm.error.request_failed", e=f"unexpected response type: {type(response).__name__}"), 0, None
+                    return t("llm.error.request_failed", e=f"unexpected response type: {type(response).__name__}"), 0, None, None
                 msg = response.choices[0].message
                 text = msg.content or ""
                 tokens = response.usage.total_tokens if response.usage else 0
+
+                # Extract reasoning_content (DeepSeek reasoning models)
+                reasoning_content: Optional[str] = None
+                if hasattr(msg, "reasoning_content") and msg.reasoning_content:
+                    reasoning_content = msg.reasoning_content
+                    logger.debug("LLM reasoning_content: %d chars", len(reasoning_content))
 
                 # Extract tool calls if present
                 tool_calls = None
@@ -117,7 +125,7 @@ class LLMService:
 
                 logger.debug("LLM response: %d chars, %d tokens, tool_calls=%s",
                              len(text), tokens, bool(tool_calls))
-                return text, tokens, tool_calls
+                return text, tokens, tool_calls, reasoning_content
 
             except (APIConnectionError, APITimeoutError) as e:
                 last_error = e
@@ -133,10 +141,10 @@ class LLMService:
 
             except Exception as e:
                 logger.error("LLM unexpected error: %s", e)
-                return t("llm.error.request_failed", e=e), 0, None
+                return t("llm.error.request_failed", e=e), 0, None, None
 
         logger.error("LLM failed after %d retries: %s", MAX_RETRIES, last_error)
-        return t("llm.error.unavailable", retries=MAX_RETRIES), 0, None
+        return t("llm.error.unavailable", retries=MAX_RETRIES), 0, None, None
 
     @staticmethod
     async def chat_with_config(

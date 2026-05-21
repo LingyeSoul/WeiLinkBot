@@ -638,9 +638,9 @@ class BotService:
                 set_sticker_context(self._bot, msg)
 
                 if self._agent:
-                    response_text, tokens = await self._agent.run(context, supports_tools=self._supports_tools)
+                    response_text, tokens, reasoning_content = await self._agent.run(context, supports_tools=self._supports_tools)
                 else:
-                    response_text, tokens, _tc = await self._llm.chat(context)
+                    response_text, tokens, _tc, reasoning_content = await self._llm.chat(context)
 
                 # Track session token usage
                 model_name = self._llm.config.model
@@ -654,7 +654,8 @@ class BotService:
                     response_text = t("bot.error.empty_response")
 
                 await conv_service.add_message(
-                    user_id, "assistant", response_text, tokens, model_name
+                    user_id, "assistant", response_text, tokens, model_name,
+                    reasoning_content=reasoning_content,
                 )
                 await db.commit()
 

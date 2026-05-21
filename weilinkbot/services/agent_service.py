@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Optional
 
 from ..config import AppConfig
 from .llm_service import LLMService
@@ -67,7 +67,7 @@ class AgentService:
         self,
         context: list[dict[str, Any]],
         supports_tools: bool = True,
-    ) -> tuple[str, int]:
+    ) -> tuple[str, int, Optional[str]]:
         """Execute the agent loop via state machine.
 
         Args:
@@ -75,6 +75,6 @@ class AgentService:
             supports_tools: Whether the active model supports native function calling.
 
         Returns:
-            (response_text, total_tokens)
+            (response_text, total_tokens, reasoning_content)
         """
         return await self._loop.execute(context, supports_tools)
