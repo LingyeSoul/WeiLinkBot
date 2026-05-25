@@ -21,6 +21,11 @@ except Exception:
     BrowserUseTool = None  # type: ignore[assignment,misc]
     _browser_use_available = None
 
+try:
+    from .browser_download_tool import BrowserDownloadTool
+except Exception:
+    BrowserDownloadTool = None  # type: ignore[assignment,misc]
+
 __all__ = [
     "get_registry",
     "ToolRegistry",
@@ -79,6 +84,21 @@ def init_workspace_tools(workspace_service) -> None:
     registry.register(WorkspaceGrepTool(workspace_service))
     registry.register(WorkspaceWriteTool(workspace_service))
     registry.register(WorkspaceEditTool(workspace_service))
+
+    # browser_download — requires Obscura + websockets + workspace
+    _log = logging.getLogger(__name__)
+    if BrowserDownloadTool is not None and _browser_use_available is not None:
+        try:
+            if _browser_use_available():
+                registry.register(BrowserDownloadTool(workspace_service))
+            else:
+                _log.info("browser_download disabled: websockets not installed")
+        except Exception as exc:
+            _log.warning("browser_download disabled: %s", exc)
+
+    # send_file — always available when workspace is enabled
+    from .send_file_tool import SendFileTool
+    registry.register(SendFileTool(workspace_service))
 
 
 def init_sticker_tool(session_factory) -> None:

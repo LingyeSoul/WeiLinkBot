@@ -125,6 +125,94 @@ async def _eval_js(browser_ws: str, session_id: str, expression: str) -> Any:
     return result.get("result", {}).get("value")
 
 
+async def _cdp_download(
+    browser_ws: str,
+    session_id: str,
+    url: str,
+    download_dir: str,
+    *,
+    timeout: int = 120,
+) -> str:
+    """Download a file via CDP by setting download behavior and navigating.
+
+    Keeps a persistent websocket connection to monitor download events.
+
+    Args:
+        browser_ws: Browser-level WebSocket URL.
+        session_id: CDP session ID attached to the target page.
+        url: The URL to trigger the download.
+        download_dir: Absolute path to the download directory.
+        timeout: Max seconds to wait for download completion.
+
+    Returns:
+        The suggested filename from the browser.
+
+    Raises:
+        RuntimeError: On timeout, cancellation, or CDP errors.
+    """
+    msg_id = 0
+
+    async def _next_id() -> int:
+        nonlocal msg_id
+        msg_id += 1
+        return msg_id
+
+    async with asyncio.timeout(timeout):
+        async with websockets.asyncio.client.connect(
+            browser_ws, max_size=2**22,
+        ) as ws:
+            # Helper: send a CDP command and wait for its response
+            async def send_cmd(method: str, params: dict | None = None) -> Any:
+                nid = await _next_id()
+                msg: dict[str, Any] = {
+                    "id": nid, "method": method, "sessionId": session_id,
+                }
+                if params:
+                    msg["params"] = params
+                await ws.send(json.dumps(msg))
+                async for raw in ws:
+                    resp = json.loads(raw)
+                    if resp.get("id") == nid:
+                        if "error" in resp:
+                            raise RuntimeError(json.dumps(resp["error"]))
+                        return resp.get("result", {})
+                return {}
+
+            # 1. Enable page events
+            await send_cmd("Page.enable")
+
+            # 2. Set download behavior
+            await send_cmd("Page.setDownloadBehavior", {
+                "behavior": "allow",
+                "downloadPath": download_dir,
+            })
+
+            # 3. Navigate to trigger the download
+            await send_cmd("Page.navigate", {"url": url})
+
+            # 4. Monitor download events
+            suggested_filename: str | None = None
+            async for raw in ws:
+                resp = json.loads(raw)
+                method = resp.get("method", "")
+                params = resp.get("params", {})
+
+                if method == "Page.downloadWillBegin":
+                    suggested_filename = params.get("suggestedFilename", "")
+
+                elif method in ("Page.downloadProgress", "Browser.downloadProgress"):
+                    state = params.get("state", "")
+                    if state == "completed":
+                        return suggested_filename or ""
+                    if state == "canceled":
+                        raise RuntimeError("Download was canceled by the browser")
+
+    raise RuntimeError(
+        f"Download timed out after {timeout}s. "
+        "The URL may not trigger a direct file download."
+    )
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Session state
 # ═══════════════════════════════════════════════════════════════════════════════

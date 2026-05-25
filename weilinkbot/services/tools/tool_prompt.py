@@ -94,6 +94,23 @@ _TOOL_CATEGORIES: dict[str, dict[str, Any]] = {
             "to search and send stickers."
         ),
     },
+    "file_transfer": {
+        "label": "文件传输",
+        "label_en": "File Transfer",
+        "tools": ["browser_download", "send_file"],
+        "trigger_zh": (
+            "当用户要求下载网络文件（如图片、文档、PDF等）或发送文件时，"
+            "先使用 browser_download 将文件下载到工作区，"
+            "再使用 send_file 将文件发送给用户。"
+            "这是一个两步操作：下载 + 发送。"
+        ),
+        "trigger_en": (
+            "When the user asks to download files from the web (images, documents, "
+            "PDFs, etc.) or send files, first use browser_download to save the file "
+            "to the workspace, then use send_file to deliver it to the user. "
+            "This is a two-step workflow: download then send."
+        ),
+    },
 }
 
 

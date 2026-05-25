@@ -117,12 +117,12 @@ class AgentConfig(BaseModel):
     consolidation_ratio: float = 0.3  # target compression ratio
     enabled_tools: list[str] = Field(default_factory=lambda: [
         "get_current_time", "calculate",
-        "browser_fetch", "browser_eval", "browser_use",
+        "browser_fetch", "browser_eval", "browser_use", "browser_download",
     ])
     enabled_skills: list[str] = Field(default_factory=list)
     disabled_skills: list[str] = Field(default_factory=list)
     enabled_workspace_tools: list[str] = Field(
-        default_factory=lambda: ["workspace_read", "workspace_list", "workspace_grep", "workspace_write", "workspace_edit"]
+        default_factory=lambda: ["workspace_read", "workspace_list", "workspace_grep", "workspace_write", "workspace_edit", "send_file"]
     )
     enabled_sticker_tools: list[str] = Field(
         default_factory=lambda: ["search_sticker", "send_sticker", "list_sticker_packs"]
@@ -158,6 +158,7 @@ class BrowserConfig(BaseModel):
     stealth: bool = False  # default anti-fingerprinting mode
     default_timeout: int = 30
     serve_port: int = 9222  # CDP server port for puppeteer/playwright
+    download_dir: str = "downloads"  # subdirectory within workspace for browser downloads
 
 
 class AppConfig(BaseModel):
