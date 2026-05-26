@@ -6,9 +6,10 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import Response
+from starlette.templating import Jinja2Templates
 
 from ..config import get_config, AppConfig
 from ..database import init_db, get_session_factory
@@ -34,6 +35,7 @@ from . import settings as settings_routes
 from . import st_presets as st_preset_routes
 from . import world_books as world_book_routes
 from . import sticker_packs as sticker_pack_routes
+from . import chat as chat_routes
 
 logger = logging.getLogger(__name__)
 
@@ -269,6 +271,15 @@ def create_app() -> FastAPI:
     if _STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
+    # Jinja2 templates (variable syntax set to [[ ]] to avoid Alpine.js {{ }} conflicts)
+    import jinja2
+    _jinja_env = jinja2.Environment(
+        loader=jinja2.FileSystemLoader(str(_TEMPLATES_DIR)),
+        variable_start_string="[[",
+        variable_end_string="]]",
+    )
+    _templates = Jinja2Templates(env=_jinja_env)
+
     # Serve locale translation files
     from ..i18n import LOCALES_DIR
     import json as _json
@@ -295,6 +306,7 @@ def create_app() -> FastAPI:
     # Register API routes
     app.include_router(bot_routes.router, prefix="/api/bot", tags=["Bot"])
     app.include_router(conv_routes.router, prefix="/api/conversations", tags=["Conversations"])
+    app.include_router(chat_routes.router, tags=["Chat"])
     app.include_router(prompt_routes.router, prefix="/api/prompts", tags=["Prompts"])
     app.include_router(config_routes.router, prefix="/api/config", tags=["Config"])
     app.include_router(user_routes.router, prefix="/api/users", tags=["Users"])
@@ -393,10 +405,10 @@ def create_app() -> FastAPI:
 
     # Serve dashboard
     @app.get("/", include_in_schema=False)
-    async def dashboard():
+    async def dashboard(request: Request):
         index_path = _TEMPLATES_DIR / "index.html"
         if index_path.exists():
-            return FileResponse(str(index_path))
+            return _templates.TemplateResponse(request, "index.html")
         return {"message": "WeiLinkBot API is running. Frontend not found."}
 
     return app

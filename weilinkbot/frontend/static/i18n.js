@@ -36,8 +36,9 @@ window.i18n = {
         this._syncToBackend(this.lang);
     },
 
-    t(key) {
-        return this.translations[key] || key;
+    t(key, fallback) {
+        if (key in this.translations) return this.translations[key];
+        return fallback ?? "";
     },
 
     async switchLang(lang) {
@@ -71,4 +72,4 @@ window.i18n = {
 window.i18n.init();
 
 // Global shorthand
-window.t = (key) => window.i18n.t(key);
+window.t = (key, fallback) => window.i18n.t(key, fallback);

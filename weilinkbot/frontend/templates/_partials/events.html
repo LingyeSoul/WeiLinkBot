@@ -1,0 +1,104 @@
+    <!-- Events Tab -->
+    <div x-show="activeTab === 'events'" class="space-y-4">
+
+      <!-- Header -->
+      <div class="page-header">
+        <div style="display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-4)">
+          <h1 class="page-title" x-text="t('events.title')">事件日志</h1>
+          <div class="live-indicator" x-show="wsConnected">
+            <span class="live-dot"></span>
+            <span x-text="t('events.connected')">已连接</span>
+          </div>
+          <span class="badge badge-offline" x-show="!wsConnected" x-text="t('events.disconnected')">已断开</span>
+        </div>
+      </div>
+
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <div class="filter-chips">
+          <button class="filter-chip" :class="{'active': eventFilter === 'all'}" @click="eventFilter = 'all'">
+            <span x-text="t('events.filter_all')">全部</span>
+            <span class="chip-count" x-text="events.length">0</span>
+          </button>
+          <button class="filter-chip" :class="{'active': eventFilter === 'info'}" @click="eventFilter = 'info'">
+            Info
+            <span class="chip-count" x-text="events.filter(e => e.level === 'info').length">0</span>
+          </button>
+          <button class="filter-chip" :class="{'active': eventFilter === 'warning'}" @click="eventFilter = 'warning'">
+            Warning
+            <span class="chip-count" x-text="events.filter(e => e.level === 'warning').length">0</span>
+          </button>
+          <button class="filter-chip" :class="{'active': eventFilter === 'error'}" @click="eventFilter = 'error'">
+            Error
+            <span class="chip-count" x-text="events.filter(e => e.level === 'error').length">0</span>
+          </button>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:var(--space-2)">
+          <button class="btn btn-sm" :class="autoScroll ? 'btn-primary' : 'btn-secondary'" @click="toggleAutoScroll()" x-text="t('events.auto_scroll')">自动滚动</button>
+          <button class="btn btn-sm btn-secondary" @click="clearEvents()" x-text="t('events.clear')">清除</button>
+        </div>
+      </div>
+
+      <!-- Event List -->
+      <div class="table-wrap">
+        <div class="event-grid-header">
+          <span>时间</span>
+          <span>级别</span>
+          <span>消息</span>
+          <span>来源</span>
+          <span></span>
+        </div>
+        <div class="event-count-bar">
+          <span x-text="t('events.total').replace('{n}', filteredEvents.length)">共 0 条</span>
+          <span x-text="events.length > 0 ? new Date(events[events.length-1].timestamp * 1000).toLocaleTimeString() : ''"></span>
+        </div>
+        <div id="events-container" style="max-height:70vh;overflow-y:auto;">
+          <template x-for="evt in filteredEvents" :key="evt.id">
+            <div class="event-row" :class="{'expanded': isEventExpanded(evt.id)}">
+              <div class="event-row-main" @click="evt.detail ? toggleEventDetail(evt.id) : null">
+                <span class="event-time" x-text="new Date(evt.timestamp * 1000).toLocaleTimeString()"></span>
+                <span class="event-level" :class="evt.level" x-text="evt.level"></span>
+                <span class="event-message" x-text="evt.message"></span>
+                <span class="event-source" x-text="evt.event"></span>
+                <span class="event-expand" x-show="evt.detail">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="9 18 15 12 9 6"/></svg>
+                </span>
+              </div>
+              <div class="event-detail" x-show="isEventExpanded(evt.id)">
+                <!-- LLM structured detail -->
+                <template x-if="isLlmEvent(evt)">
+                  <div>
+                    <div class="flex flex-wrap gap-2 text-xs" style="margin-bottom:var(--space-3)">
+                      <span x-show="evt.detail.model" class="badge badge-model" x-text="'Model: ' + evt.detail.model"></span>
+                      <span x-show="evt.detail.tokens" class="badge badge-green" x-text="'Tokens: ' + evt.detail.tokens"></span>
+                      <span x-show="evt.detail.user_id" class="tag" x-text="'User: ' + evt.detail.user_id"></span>
+                    </div>
+                    <div class="detail-grid">
+                      <div class="detail-block" x-show="evt.detail.request">
+                        <div class="detail-block-title" x-text="t('events.sent_to_llm')">发送到 LLM</div>
+                        <pre><template x-for="(msg, mi) in formatMessages(evt.detail.request)" :key="mi"><div style="padding:var(--space-2);border-bottom:1px solid var(--border)"><span class="badge" :class="{'badge-accent': msg.role === 'user', 'badge-green': msg.role === 'assistant', 'badge-orange': msg.role === 'system'}" x-text="msg.role" style="margin-right:var(--space-2)"></span><span style="font-size:var(--text-xs)" x-text="msg.content"></span></div></template></pre>
+                      </div>
+                      <div class="detail-block" x-show="evt.detail.response">
+                        <div class="detail-block-title" x-text="t('events.llm_response')">LLM 响应</div>
+                        <pre style="color:var(--success)" x-text="evt.detail.response"></pre>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+                <!-- Non-LLM raw JSON -->
+                <div x-show="!isLlmEvent(evt)">
+                  <div class="detail-block">
+                    <div class="detail-block-title">JSON</div>
+                    <pre style="font-size:var(--text-xs)" x-text="evt.detail ? JSON.stringify(evt.detail, null, 2) : ''"></pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+          <div x-show="events.length === 0" class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+            <p x-text="t('events.empty')">暂无事件</p>
+          </div>
+        </div>
+      </div>
+    </div>

@@ -1,0 +1,304 @@
+    <!-- World Books Tab -->
+    <div x-show="activeTab === 'world-books'" class="split-page">
+        <div class="page-header-row" style="margin-bottom:var(--space-6);">
+            <h2 class="page-title" x-text="t('world_books.title')">World Books</h2>
+            <div class="header-actions" style="display:flex;gap:var(--space-2);">
+                <label class="btn btn-secondary" style="cursor:pointer;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    <span x-text="t('world_books.import')">Import</span>
+                    <input type="file" accept=".json" class="hidden" @change="importWorldBook($event)">
+                </label>
+                <button class="btn btn-primary" @click="showWorldBookForm = !showWorldBookForm; if(!showWorldBookForm) resetWorldBookForm();">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:16px;height:16px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    <span x-text="t('world_books.add')">+ Add World Book</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Add/Edit Form (collapsible) -->
+        <div x-show="showWorldBookForm" x-transition class="card" style="margin-bottom:var(--space-6);">
+            <div class="form-group">
+                <label class="form-label" x-text="t('world_books.name')">Name</label>
+                <input x-model="worldBookForm.name" type="text" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label" x-text="t('world_books.description')">Description</label>
+                <input x-model="worldBookForm.description" type="text" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label" x-text="t('st_presets.raw_json')">Raw JSON</label>
+                <textarea x-model="worldBookForm.raw_json" rows="6" class="form-input" style="font-family:var(--font-mono);"></textarea>
+            </div>
+            <div style="display:flex;gap:var(--space-3);padding-top:var(--space-4);border-top:1px solid var(--border);">
+                <button class="btn btn-primary" @click="saveWorldBook()">
+                    <span x-text="worldBookForm.id ? t('models.update') : t('world_books.add')"></span>
+                </button>
+                <button class="btn btn-secondary" @click="resetWorldBookForm()" x-text="t('prompts.cancel')">Cancel</button>
+            </div>
+        </div>
+
+        <!-- World Book Selector Tabs -->
+        <div class="sub-tabs" style="margin-bottom:0;">
+            <template x-for="wb in worldBooks" :key="wb.id">
+                <button class="sub-tab" :class="{'active': wb.is_active}" @click="viewWorldBookEntries(wb)">
+                    <span x-text="wb.name"></span>
+                    <span class="badge badge-accent" style="margin-left:var(--space-1);" x-show="wb.is_active" x-text="t('world_books.active')"></span>
+                </button>
+            </template>
+        </div>
+
+        <!-- World book action row -->
+        <div x-show="worldBooks.length > 0" style="display:flex;align-items:center;justify-content:space-between;padding:var(--space-3) 0;margin-bottom:var(--space-4);">
+            <span style="font-size:var(--text-sm);color:var(--muted);">
+                <template x-for="wb in worldBooks" :key="'count-'+wb.id">
+                    <span x-show="wb.is_active" x-text="t('world_books.entry_count').replace('{count}', wb.entries_count || '0')"></span>
+                </template>
+            </span>
+            <div style="display:flex;gap:var(--space-2);">
+                <template x-for="wb in worldBooks" :key="'act-'+wb.id">
+                    <div x-show="wb.is_active" style="display:flex;gap:var(--space-2);">
+                        <button class="btn btn-secondary btn-sm" @click="exportWorldBook(wb.id, wb.name)" x-text="t('world_books.export')">Export</button>
+                        <button class="btn btn-sm btn-danger" @click="deleteWorldBook(wb.id, wb.name)" x-text="t('models.delete')">Delete</button>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Split layout: entry list + editor -->
+        <div class="split-layout">
+            <!-- Left: Entry List (380px extra wide) -->
+            <div class="split-list-panel split-list-panel-extra-wide">
+                <div class="split-list-header">
+                    <div class="split-list-header-title">
+                        <span style="font-weight:600;font-size:var(--text-sm);" x-text="t('world_books.entries_manager')">Entries</span>
+                        <span class="badge badge-accent" x-text="wbEntries.length"></span>
+                    </div>
+                    <div class="split-list-search">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input type="text" :placeholder="t('world_books.search_entries')" :aria-label="t('world_books.search_entries')">
+                    </div>
+                    <button class="btn btn-success btn-sm" style="width:100%;" @click="addWBEntry()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        <span x-text="t('world_books.add_entry')">Add Entry</span>
+                    </button>
+                </div>
+                <div class="split-list-items" style="padding:var(--space-2);">
+                    <template x-for="entry in wbEntries" :key="entry.id">
+                        <div class="split-list-item" :class="{'active': wbExpandedEntry === entry.id}"
+                             draggable="true"
+                             @dragstart="wbDragStart(entry.id, $event)"
+                             @dragover.prevent="wbDragOver(entry.id, $event)"
+                             @drop="wbDrop(entry.id, $event)"
+                             @click="editWBEntry(entry)">
+                            <div style="flex:1;min-width:0;">
+                                <div class="split-list-item-header" style="display:flex;align-items:center;gap:var(--space-2);">
+                                    <span style="font-size:var(--text-lg);color:var(--muted);cursor:grab;line-height:1;flex-shrink:0;" :title="t('world_books.drag_hint')">&#9776;</span>
+                                    <span class="split-list-item-name" x-text="entry.comment || entry.key_primary || '(no key)'"></span>
+                                    <span class="badge badge-accent" x-show="entry.constant" style="font-size:10px;flex-shrink:0;">const</span>
+                                    <span class="badge" :class="entry.enabled ? 'badge-green' : 'badge-disabled'" style="font-size:10px;flex-shrink:0;"
+                                          x-text="entry.enabled ? t('world_books.on') : t('world_books.off')"></span>
+                                </div>
+                                <div style="display:flex;align-items:center;gap:var(--space-2);margin-top:var(--space-1);">
+                                    <!-- Keyword chips -->
+                                    <div style="display:flex;gap:3px;flex-wrap:wrap;flex:1;overflow:hidden;">
+                                        <template x-for="(key, ki) in (entry.key_primary || '').split(',').filter(k => k.trim()).slice(0, 3)" :key="ki">
+                                            <span class="badge badge-accent" style="font-size:10px;font-family:var(--font-mono);" x-text="key.trim()"></span>
+                                        </template>
+                                        <span class="badge badge-accent" style="font-size:10px;"
+                                              x-show="(entry.key_primary || '').split(',').filter(k => k.trim()).length > 3"
+                                              x-text="'+' + ((entry.key_primary || '').split(',').filter(k => k.trim()).length - 3)"></span>
+                                    </div>
+                                    <span style="font-size:10px;color:var(--muted);flex-shrink:0;"
+                                          x-text="entry.position === 'before_char' ? 'before' : 'after'"></span>
+                                    <span style="font-size:10px;color:var(--muted);flex-shrink:0;" x-text="'#' + entry.insertion_order"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                    <div x-show="wbEntries.length === 0" class="empty-state" style="padding:var(--space-8);">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:40px;height:40px;opacity:0.3;margin-bottom:var(--space-3);"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+                        <p x-text="t('world_books.no_entries')">No entries</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Entry Editor -->
+            <div class="split-editor-panel">
+                <!-- No entry selected -->
+                <div x-show="!wbExpandedEntry && wbEntries.length > 0" class="split-editor-empty">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:48px;height:48px;opacity:0.3;margin-bottom:var(--space-4);"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+                    <p x-text="t('world_books.select_entry')">Select an entry to edit</p>
+                </div>
+                <div x-show="!wbExpandedEntry && wbEntries.length === 0" class="split-editor-empty">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:48px;height:48px;opacity:0.3;margin-bottom:var(--space-4);"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+                    <p x-text="t('world_books.no_entries')">No entries</p>
+                </div>
+
+                <!-- Editor for selected entry -->
+                <template x-for="entry in wbEntries" :key="'editor-'+entry.id">
+                    <div x-show="wbExpandedEntry === entry.id" class="split-editor-form">
+                        <!-- Top bar -->
+                        <div class="split-editor-topbar">
+                            <div style="display:flex;align-items:center;gap:var(--space-3);min-width:0;">
+                                <span style="font-weight:600;font-size:var(--text-base);" x-text="entry.comment || entry.key_primary || '(no key)'"></span>
+                                <span class="badge" :class="entry.enabled ? 'badge-green' : 'badge-disabled'"
+                                      x-text="entry.enabled ? t('world_books.enabled') : t('world_books.disabled')"></span>
+                                <span class="badge badge-accent" x-show="entry.constant" x-text="t('world_books.constant')"></span>
+                            </div>
+                            <div style="display:flex;gap:var(--space-2);flex-shrink:0;">
+                                <button class="btn-icon" style="width:28px;height:28px;" @click="moveWBEntry(entry.id, -1)" :disabled="wbEntries[0]?.id === entry.id" :title="t('world_books.move_up')">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M18 15l-6-6-6 6"/></svg>
+                                </button>
+                                <button class="btn-icon" style="width:28px;height:28px;" @click="moveWBEntry(entry.id, 1)" :disabled="wbEntries[wbEntries.length-1]?.id === entry.id" :title="t('world_books.move_down')">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M6 9l6 6 6-6"/></svg>
+                                </button>
+                                <button class="btn btn-primary btn-sm" @click="saveWBEntry()" x-show="wbEntryEditId === entry.id">
+                                    <span x-text="t('world_books.save_entry')">Save</span>
+                                </button>
+                                <button class="btn btn-danger btn-sm" @click="deleteWBEntry(entry.id)">
+                                    <span x-text="t('world_books.delete_entry')">Delete</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Editor body -->
+                        <div class="split-editor-body">
+                            <div style="max-width:640px;">
+                                <!-- Comment / name -->
+                                <div class="form-group">
+                                    <label class="form-label" x-text="t('world_books.comment')">Comment</label>
+                                    <input type="text" :value="entry.comment || ''"
+                                           @input="wbEntryEditId === entry.id && (wbEntryForm.comment = $event.target.value)"
+                                           @focus="editWBEntry(entry)"
+                                           class="form-input" :placeholder="t('world_books.comment_hint')">
+                                </div>
+
+                                <!-- Primary Key (tag editor) -->
+                                <div class="form-group">
+                                    <label class="form-label" x-text="t('world_books.key_primary')">Primary Key</label>
+                                    <p class="form-hint" x-text="t('world_books.primary_key_hint')">Keywords that trigger this entry.</p>
+                                    <input type="text" :value="entry.key_primary"
+                                           @input="wbEntryEditId === entry.id && (wbEntryForm.key_primary = $event.target.value)"
+                                           @focus="editWBEntry(entry)"
+                                           class="form-input" style="font-family:var(--font-mono);" placeholder="keyword1,keyword2,...">
+                                </div>
+
+                                <!-- Secondary Key (conditional) -->
+                                <div class="form-group" x-show="entry.selective">
+                                    <label class="form-label" x-text="t('world_books.key_secondary')">Secondary Key</label>
+                                    <p class="form-hint" x-text="t('world_books.secondary_key_hint')">Must also match when selective mode is on.</p>
+                                    <input type="text" :value="entry.key_secondary || ''"
+                                           @input="wbEntryEditId === entry.id && (wbEntryForm.key_secondary = $event.target.value)"
+                                           @focus="editWBEntry(entry)"
+                                           class="form-input" style="font-family:var(--font-mono);" placeholder="secondary1,secondary2,...">
+                                </div>
+
+                                <!-- Content -->
+                                <div class="form-group">
+                                    <label class="form-label" x-text="t('world_books.content')">Content</label>
+                                    <div class="content-textarea-wrap">
+                                        <textarea :value="entry.content" rows="8"
+                                                  @input="wbEntryEditId === entry.id && (wbEntryForm.content = $event.target.value)"
+                                                  @focus="editWBEntry(entry)"
+                                                  style="font-family:var(--font-body);"
+                                                  :placeholder="t('world_books.content_placeholder')"></textarea>
+                                        <div class="content-textarea-footer">
+                                            <span x-text="t('world_books.content')"></span>
+                                            <span x-text="(entry.content || '').length + ' ' + t('world_books.chars')"></span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <hr style="border:none;border-top:1px solid var(--border);margin:var(--space-6) 0;">
+
+                                <!-- Toggle flags -->
+                                <div class="form-group">
+                                    <label class="form-label" style="margin-bottom:var(--space-3);" x-text="t('world_books.trigger_logic')">Trigger Logic</label>
+                                    <div class="form-toggle-row">
+                                        <div>
+                                            <div class="form-toggle-label" x-text="t('world_books.constant')">Constant</div>
+                                            <div class="form-toggle-desc" x-text="t('world_books.constant_hint')">Always inject</div>
+                                        </div>
+                                        <label class="toggle">
+                                            <input type="checkbox" :checked="entry.constant"
+                                                   @change="wbEntryEditId === entry.id && (wbEntryForm.constant = $event.target.checked) || editWBEntry(entry)"
+                                                   @focus="editWBEntry(entry)" />
+                                            <span class="toggle-track"></span>
+                                        </label>
+                                    </div>
+                                    <div class="form-toggle-row">
+                                        <div>
+                                            <div class="form-toggle-label" x-text="t('world_books.selective')">Selective</div>
+                                            <div class="form-toggle-desc" x-text="t('world_books.selective_hint')">Require both keys</div>
+                                        </div>
+                                        <label class="toggle">
+                                            <input type="checkbox" :checked="entry.selective"
+                                                   @change="wbEntryEditId === entry.id && (wbEntryForm.selective = $event.target.checked) || editWBEntry(entry)"
+                                                   @focus="editWBEntry(entry)" />
+                                            <span class="toggle-track"></span>
+                                        </label>
+                                    </div>
+                                    <div class="form-toggle-row">
+                                        <div>
+                                            <div class="form-toggle-label" x-text="t('world_books.case_sensitive')">Case Sensitive</div>
+                                            <div class="form-toggle-desc" x-text="t('world_books.case_sensitive_hint')">Exact case match</div>
+                                        </div>
+                                        <label class="toggle">
+                                            <input type="checkbox" :checked="entry.case_sensitive"
+                                                   @change="wbEntryEditId === entry.id && (wbEntryForm.case_sensitive = $event.target.checked) || editWBEntry(entry)"
+                                                   @focus="editWBEntry(entry)" />
+                                            <span class="toggle-track"></span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <hr style="border:none;border-top:1px solid var(--border);margin:var(--space-6) 0;">
+
+                                <!-- Position / Depth / Priority -->
+                                <div class="form-group">
+                                    <label class="form-label" x-text="t('world_books.position')">Position</label>
+                                    <select :value="entry.position"
+                                            @change="wbEntryEditId === entry.id && (wbEntryForm.position = $event.target.value)"
+                                            @focus="editWBEntry(entry)"
+                                            class="form-select">
+                                        <option value="before_char" x-text="t('world_books.pos_before_char')">Before char</option>
+                                        <option value="after_char" x-text="t('world_books.pos_after_char')">After char</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label class="form-label" x-text="t('world_books.insertion_order')">Insertion Order</label>
+                                        <input type="number" min="0"
+                                               :value="entry.insertion_order"
+                                               @input="wbEntryEditId === entry.id && (wbEntryForm.insertion_order = parseInt($event.target.value) || 0)"
+                                               @focus="editWBEntry(entry)"
+                                               class="form-input" style="width:120px;">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" x-text="t('world_books.priority')">Priority</label>
+                                        <input type="number" min="0"
+                                               :value="entry.priority"
+                                               @input="wbEntryEditId === entry.id && (wbEntryForm.priority = parseInt($event.target.value) || 0)"
+                                               @focus="editWBEntry(entry)"
+                                               class="form-input" style="width:120px;">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Bottom actions -->
+                        <div class="split-editor-actions">
+                            <button class="btn btn-primary" @click="saveWBEntry()" x-show="wbEntryEditId === entry.id">
+                                <span x-text="t('world_books.save_entry')">Save Entry</span>
+                            </button>
+                            <span x-show="wbEntryEditId !== entry.id" style="font-size:var(--text-xs);color:var(--muted);" x-text="t('world_books.auto_load_hint')">Editing auto-loads on focus</span>
+                            <button class="btn btn-danger" @click="deleteWBEntry(entry.id)">
+                                <span x-text="t('world_books.delete_entry')">Delete</span>
+                            </button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>

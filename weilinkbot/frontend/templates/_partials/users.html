@@ -1,0 +1,62 @@
+    <!-- Users Tab -->
+    <div x-show="activeTab === 'users'" class="space-y-6">
+      <div class="page-header">
+        <div class="page-header-row">
+          <div>
+            <h1 class="page-title" x-text="t('users.title')">用户管理</h1>
+            <p class="page-subtitle" x-text="users.length + ' 位用户'"></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th x-text="t('users.user_id')">用户 ID</th>
+              <th x-text="t('users.nickname')">昵称</th>
+              <th style="width:180px" x-text="t('users.actions')">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="user in users" :key="user.user_id">
+              <tr x-data="{ editing: false, editNickname: '' }">
+                <td>
+                  <span style="font-family:var(--font-mono);font-size:var(--text-xs)" x-text="user.user_id"></span>
+                </td>
+                <td>
+                  <template x-if="!editing">
+                    <span x-text="user.nickname || '--'" :style="!user.nickname && 'color:var(--muted)'"></span>
+                  </template>
+                  <template x-if="editing">
+                    <div style="display:flex;align-items:center;gap:var(--space-2)">
+                      <input type="text" x-model="editNickname"
+                             @keyup.enter="saveNickname(user, editNickname); editing = false"
+                             @keyup.escape="editing = false"
+                             class="form-input" style="width:140px;padding:var(--space-1) var(--space-2);font-size:var(--text-xs)"
+                             :placeholder="t('users.nickname')">
+                      <button class="btn btn-sm btn-primary" @click="saveNickname(user, editNickname); editing = false" x-text="t('memory.detail.save')">保存</button>
+                      <button class="btn btn-sm btn-secondary" @click="editing = false">&times;</button>
+                    </div>
+                  </template>
+                </td>
+                <td>
+                  <div style="display:flex;gap:var(--space-2)">
+                    <button class="btn btn-sm btn-secondary" @click="editing = true; editNickname = user.nickname || ''" x-text="t('users.edit_nickname')">编辑</button>
+                    <button class="btn btn-sm btn-danger" @click="deleteUser(user)" x-text="t('users.delete')">删除</button>
+                  </div>
+                </td>
+              </tr>
+            </template>
+            <tr x-show="users.length === 0">
+              <td colspan="3">
+                <div class="empty-state">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                  <p x-text="t('users.empty')">暂无用户</p>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>

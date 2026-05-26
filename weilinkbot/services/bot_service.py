@@ -720,6 +720,133 @@ class BotService:
                 except Exception:
                     pass
 
+    async def process_web_message(self, user_id: str, text: str) -> None:
+        """Process a message from the web UI (no WeChat SDK dependency)."""
+        from .ws_service import get_ws_service
+
+        ws = get_ws_service()
+        await ws.broadcast("chat_typing", {"user_id": user_id, "typing": True})
+
+        try:
+            self._message_count += 1
+            session_factory = get_session_factory()
+            async with session_factory() as db:
+                conv_service = ConversationService(db)
+                await conv_service.get_or_create_user_config(user_id)
+                await conv_service.add_message(user_id, "user", text)
+                await db.commit()
+
+                # Memory search
+                memories: list[dict[str, str]] = []
+                if self._memory and self._memory.available:
+                    try:
+                        memories = await asyncio.wait_for(
+                            self._memory.search(user_id, text), timeout=5.0
+                        )
+                    except asyncio.TimeoutError:
+                        logger.warning("Memory search timed out for web user %s", user_id)
+
+                # Summaries
+                recent_summaries: list[str] = []
+                try:
+                    from sqlalchemy import select as _sel, desc
+                    rows = (await db.execute(
+                        _sel(MemorySummary.content)
+                        .where(MemorySummary.user_id == user_id)
+                        .order_by(desc(MemorySummary.created_at))
+                        .limit(5)
+                    )).scalars().all()
+                    recent_summaries = list(rows)
+                except Exception:
+                    pass
+
+                # World book matching
+                matched_world_book_entries = []
+                try:
+                    from ..services.world_book_service import WorldBookService
+                    wb_service = WorldBookService(db)
+                    matched_world_book_entries = await wb_service.match_entries(text)
+                except Exception:
+                    pass
+
+                conv_service._has_world_book_entries = bool(matched_world_book_entries)
+
+                context = await conv_service.build_context(
+                    user_id,
+                    memories=memories,
+                    max_context_chars=self._config.memory.max_context_chars,
+                    summaries=recent_summaries,
+                    max_context_tokens=self._config.agent.max_context_tokens,
+                    model=self._llm.config.model,
+                )
+
+                # World book injection
+                if matched_world_book_entries:
+                    before_entries = [e for e in matched_world_book_entries if e.position != "after_char"]
+                    after_entries = [e for e in matched_world_book_entries if e.position == "after_char"]
+                    for entry in reversed(before_entries):
+                        context.insert(1, {"role": "system", "content": entry.content})
+                    for entry in after_entries:
+                        context.append({"role": "system", "content": entry.content})
+
+                await get_event_log().push("info", "llm", "llm.request", f"Web LLM request for {user_id}: {text[:50]}...", {"user_id": user_id, "model": self._llm.config.model})
+
+                if self._agent:
+                    response_text, tokens, reasoning_content = await self._agent.run(context, supports_tools=self._supports_tools)
+                else:
+                    response_text, tokens, _tc, reasoning_content = await self._llm.chat(context)
+
+                model_name = self._llm.config.model
+                self._session_tokens[model_name] = self._session_tokens.get(model_name, 0) + tokens
+                self._session_requests[model_name] = self._session_requests.get(model_name, 0) + 1
+
+                if not response_text or not response_text.strip():
+                    response_text = t("bot.error.empty_response")
+
+                await conv_service.add_message(
+                    user_id, "assistant", response_text, tokens, model_name,
+                    reasoning_content=reasoning_content,
+                )
+                await db.commit()
+
+                await get_event_log().push("info", "llm", "llm.response", f"Web LLM response for {user_id} ({tokens} tokens)", {"user_id": user_id, "model": model_name, "tokens": tokens})
+
+                # Deliver via WebSocket
+                await ws.broadcast("chat_response", {
+                    "user_id": user_id,
+                    "content": response_text,
+                    "tokens": tokens,
+                    "model": model_name,
+                })
+                await ws.broadcast("token_stats", self.session_token_stats)
+                await ws.broadcast("conversations_updated", {"user_id": user_id})
+                logger.info("Web chat response sent to %s (%d tokens)", user_id, tokens)
+
+                # Memory buffering
+                if self._memory and self._memory.available:
+                    threshold_reached = await self._memory_buffer.add(user_id, "user", text)
+                    await self._memory_buffer.add(user_id, "assistant", response_text)
+                    if threshold_reached:
+                        asyncio.create_task(self._trigger_summarization(user_id))
+
+                # Auto-compact
+                if self._consolidator:
+                    try:
+                        await self._consolidator.auto_compact(db, user_id)
+                    except Exception:
+                        pass
+
+        except Exception as e:
+            logger.exception("Error processing web message from %s: %s", user_id, e)
+            await ws.broadcast("chat_response", {
+                "user_id": user_id,
+                "content": t("bot.error.process"),
+                "tokens": 0,
+                "model": "",
+            })
+        finally:
+            await ws.broadcast("chat_typing", {"user_id": user_id, "typing": False})
+
     # ── Memory summarization ────────────────────────────────────
 
     async def _timeout_check_loop(self) -> None:

@@ -30,11 +30,15 @@ function dashboard() {
         conversations: [],
         selectedUser: null,
         selectedMessages: [],
+        chatInput: "",
+        chatSearchQuery: "",
+        webTyping: false,
 
         // Prompts
         prompts: [],
         showPromptForm: false,
         promptForm: { id: null, name: "", content: "", is_default: false },
+        promptSearch: "",
 
         // Models
         models: [],
@@ -67,7 +71,7 @@ function dashboard() {
         stPresets: [],
         showSTPresetForm: false,
         stPresetForm: { id: null, name: "", raw_json: "", system_prompt: "" },
-        showSTPresetEntriesModal: false,
+        stSelectedPresetId: null,
         stPresetEntriesPresetId: null,
         stPresetEntriesPresetName: "",
         stPresetEntries: [],
@@ -75,12 +79,12 @@ function dashboard() {
         stEntryForm: { name: "", content: "", role: "system", injection_position: 0, injection_depth: 4, identifier: "" },
         stDragIndex: -1,
         stExpandedEntry: -1,
+        presetTab: 'prompts',
 
         // World Books
         worldBooks: [],
         showWorldBookForm: false,
         worldBookForm: { id: null, name: "", description: "", raw_json: "" },
-        showWBEntriesModal: false,
         wbEntriesBookId: null,
         wbEntriesBookName: "",
         wbEntries: [],
@@ -410,6 +414,71 @@ function dashboard() {
             this.showToast(t("toast.conv_cleared"), "success");
         },
 
+        // ── Web Chat ────────────────────────────────────────────
+        async sendWebMessage() {
+            const content = this.chatInput.trim();
+            if (!content) return;
+            const userId = this.selectedUser || "web:admin";
+            this.chatInput = "";
+            // Optimistic: append user message locally
+            this.selectedMessages.push({
+                id: "temp-" + Date.now(),
+                role: "user",
+                content: content,
+                timestamp: Math.floor(Date.now() / 1000),
+            });
+            this.$nextTick(() => {
+                const el = document.getElementById("msg-container");
+                if (el) el.scrollTop = el.scrollHeight;
+            });
+            // If no conversation selected, select the web user
+            if (!this.selectedUser) {
+                this.selectedUser = userId;
+            }
+            try {
+                await this.api("/api/chat", {
+                    method: "POST",
+                    body: JSON.stringify({ user_id: userId, content }),
+                });
+            } catch (e) {
+                this.showToast(e.message, "error");
+            }
+        },
+
+        get filteredConversations() {
+            if (!this.chatSearchQuery) return this.conversations;
+            const q = this.chatSearchQuery.toLowerCase();
+            return this.conversations.filter(c =>
+                (c.user_id && c.user_id.toLowerCase().includes(q)) ||
+                (c.last_message && c.last_message.toLowerCase().includes(q))
+            );
+        },
+
+        getConvInitial(userId) {
+            if (!userId) return "?";
+            return userId.replace("web:", "").charAt(0).toUpperCase();
+        },
+
+        getConvAvatarColor(userId) {
+            const colors = ["#2f6feb", "#17a34a", "#dc2626", "#eab308", "#7c3aed", "#0891b2", "#ea580c"];
+            let hash = 0;
+            for (let i = 0; i < (userId || "").length; i++) hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+            return colors[Math.abs(hash) % colors.length];
+        },
+
+        handleChatInputKeydown(e) {
+            if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                this.sendWebMessage();
+            }
+        },
+
+        autoResizeTextarea(e) {
+            const el = e.target;
+            el.style.height = "auto";
+            el.style.height = Math.min(el.scrollHeight, 120) + "px";
+        },
+
         // ── Prompts ──────────────────────────────────────────────
         async refreshPrompts() {
             try {
@@ -596,6 +665,9 @@ function dashboard() {
                 first_mes: card.first_mes || "",
                 mes_example: card.mes_example || "",
                 is_active: card.is_active || false,
+                avatar_path: card.avatar_path || "",
+                tags: card.tags ? [...card.tags] : [],
+                system_prompt: card.system_prompt || "",
             };
             this.showCharForm = true;
         },
@@ -613,6 +685,8 @@ function dashboard() {
                 scenario: form.scenario,
                 first_mes: form.first_mes || null,
                 mes_example: form.mes_example || null,
+                system_prompt: form.system_prompt || null,
+                tags: form.tags && form.tags.length ? form.tags : [],
             };
             if (form.id) {
                 await this.api(`/api/characters/${form.id}`, { method: "PUT", body: JSON.stringify(body) });
@@ -722,7 +796,17 @@ function dashboard() {
         },
 
         // ── ST Presets ───────────────────────────────────────────────
-        async refreshSTPresets() { try { const data = await this.api("/api/st-presets"); console.log("[App] HTTP stPresets:", data.length, "items"); this.stPresets = data; } catch { this.stPresets = []; } },
+        async refreshSTPresets() {
+            try {
+                const data = await this.api("/api/st-presets");
+                console.log("[App] HTTP stPresets:", data.length, "items");
+                this.stPresets = data;
+                if (!this.stSelectedPresetId && data.length > 0) {
+                    const active = data.find(p => p.is_active) || data[0];
+                    this.editSTPreset(active);
+                }
+            } catch { this.stPresets = []; }
+        },
         resetSTPresetForm() { this.stPresetForm = { id: null, name: "", raw_json: "", system_prompt: "" }; this.showSTPresetForm = false; },
         async saveSTPreset() {
             const form = this.stPresetForm;
@@ -744,6 +828,7 @@ function dashboard() {
         async deleteSTPreset(id, name) {
             if (!confirm(t("confirm.delete_st_preset").replace("{name}", name))) return;
             await this.api(`/api/st-presets/${id}`, { method: "DELETE" });
+            if (this.stSelectedPresetId === id) { this.stSelectedPresetId = null; this.stPresetEntries = []; }
             await this.refreshSTPresets(); this.showToast(t("toast.st_preset_deleted"), "success");
         },
         async importSTPreset(event) {
@@ -766,19 +851,18 @@ function dashboard() {
                 URL.revokeObjectURL(url); this.showToast(t("toast.st_preset_exported"), "success");
             } catch (e) { this.showToast(e.message, "error"); }
         },
-        async viewSTPresetEntries(preset) {
+        async editSTPreset(preset) {
+            this.stSelectedPresetId = preset.id;
             this.stPresetEntriesPresetId = preset.id;
             this.stPresetEntriesPresetName = preset.name;
             this.stPresetEntries = [];
-            this.showSTPresetEntriesModal = true;
+            this.stExpandedEntry = -1;
+            this.stEntryEditIndex = -1;
+            if (!preset.is_active) {
+                await this.activateSTPreset(preset.id);
+            }
             try { this.stPresetEntries = await this.api(`/api/st-presets/${preset.id}/entries`); }
             catch { this.stPresetEntries = []; }
-        },
-        closeSTPresetEntriesModal() {
-            this.showSTPresetEntriesModal = false;
-            this.stPresetEntriesPresetId = null;
-            this.stPresetEntriesPresetName = "";
-            this.stPresetEntries = [];
         },
         async toggleSTPresetEntry(presetId, entryIndex, currentEnabled) {
             try {
@@ -912,18 +996,9 @@ function dashboard() {
             this.wbEntriesBookId = wb.id;
             this.wbEntriesBookName = wb.name;
             this.wbEntries = [];
-            this.showWBEntriesModal = true;
             this.wbExpandedEntry = null;
             this.wbEntryEditId = null;
             try { const data = await this.api(`/api/world-books/${wb.id}`); this.wbEntries = data.entries || []; } catch { this.wbEntries = []; }
-        },
-        closeWBEntriesModal() {
-            this.showWBEntriesModal = false;
-            this.wbEntriesBookId = null;
-            this.wbEntriesBookName = "";
-            this.wbEntries = [];
-            this.wbExpandedEntry = null;
-            this.wbEntryEditId = null;
         },
         resetWBEntryForm() {
             this.wbEntryEditId = null;
@@ -1539,7 +1614,7 @@ function dashboard() {
             }
         },
 
-        handleWsMessage(msg) {
+        async handleWsMessage(msg) {
             console.log("[WS] Processing message type:", msg.type);
             
             switch (msg.type) {
@@ -1589,6 +1664,10 @@ function dashboard() {
                 case "st_presets":
                     console.log("[WS] Updating stPresets:", msg.data.length, "items");
                     this.stPresets = msg.data;
+                    if (!this.stSelectedPresetId && msg.data.length > 0) {
+                        const active = msg.data.find(p => p.is_active) || msg.data[0];
+                        this.editSTPreset(active);
+                    }
                     break;
 
                 case "world_books":
@@ -1631,6 +1710,31 @@ function dashboard() {
                     document.dispatchEvent(new CustomEvent("memory-stats-updated", { detail: msg.data }));
                     break;
 
+                case "chat_typing":
+                    this.webTyping = msg.data.typing;
+                    break;
+
+                case "chat_response":
+                    this.webTyping = false;
+                    // Remove optimistic temp messages and refresh
+                    this.selectedMessages = this.selectedMessages.filter(m => !String(m.id).startsWith("temp-"));
+                    // Append the real response
+                    if (this.selectedUser === msg.data.user_id || !this.selectedUser) {
+                        this.selectedMessages.push({
+                            id: "resp-" + Date.now(),
+                            role: "assistant",
+                            content: msg.data.content,
+                            tokens_used: msg.data.tokens,
+                            timestamp: Math.floor(Date.now() / 1000),
+                        });
+                        this.$nextTick(() => {
+                            const el = document.getElementById("msg-container");
+                            if (el) el.scrollTop = el.scrollHeight;
+                        });
+                    }
+                    await this.refreshConversations();
+                    break;
+
                 default:
                     console.warn("[WS] Unknown message type:", msg.type, msg);
                     break;
@@ -1651,6 +1755,7 @@ function dashboard() {
 
 function memoriesPanel() {
     return {
+        memSubTab: 'config',
         status: { available: false },
         statusLoaded: false,
         showConfig: false,

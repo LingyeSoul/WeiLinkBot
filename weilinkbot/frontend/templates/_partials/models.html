@@ -1,0 +1,213 @@
+    <!-- Models Tab -->
+    <div x-show="activeTab === 'models'">
+        <div class="page-header">
+            <div class="page-header-row">
+                <div>
+                    <h1 class="page-title" x-text="t('models.title')">Model Management</h1>
+                    <p class="page-subtitle">管理 LLM 模型预设，配置参数与能力</p>
+                </div>
+                <button class="btn btn-primary"
+                        @click="showModelForm = !showModelForm; resetModelForm()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    <span x-text="t('models.add')">+ Add Model</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Add/Edit Model Modal -->
+        <div class="modal-overlay" x-show="showModelForm" x-transition.opacity style="display:none;">
+            <div class="modal" @click.outside="showModelForm = false; resetModelForm()">
+                <div class="modal-header">
+                    <h2 class="modal-title" x-text="modelForm.id ? t('models.edit') : t('models.add')">Add Model</h2>
+                    <button class="btn btn-icon" @click="showModelForm = false; resetModelForm()" aria-label="Close">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" x-text="t('models.display_name')">Display Name</label>
+                            <input x-model="modelForm.name" type="text" class="form-input" placeholder="e.g. DeepSeek V3">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" x-text="t('models.select_provider')">Provider</label>
+                            <select x-model.number="modelForm.provider_id" class="form-select">
+                                <option :value="null" disabled x-text="t('models.select_provider')">Select a provider...</option>
+                                <template x-for="p in providers.filter(p => p.is_enabled)" :key="p.id">
+                                    <option :value="p.id" x-text="p.name + ' (' + p.provider_type + ')'"></option>
+                                </template>
+                            </select>
+                            <template x-if="modelForm.provider_id">
+                                <div class="form-hint">
+                                    <span x-text="providers.find(p => p.id === modelForm.provider_id)?.base_url || ''"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" x-text="t('models.model_id')">Model ID</label>
+                            <input x-model="modelForm.model" type="text" class="form-input" placeholder="gpt-4o-mini" style="font-family: var(--font-mono); font-size: var(--text-xs);">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" x-text="t('models.max_tokens')">Max Tokens</label>
+                            <input x-model.number="modelForm.max_tokens" type="number" class="form-input">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" x-text="t('models.temperature')">Temperature</label>
+                        <input x-model.number="modelForm.temperature" type="number" step="0.1" min="0" max="2" class="form-input" style="max-width: 200px;">
+                    </div>
+
+                    <!-- Capabilities -->
+                    <div class="form-group" style="border-top: 1px solid var(--border); padding-top: var(--space-4);">
+                        <label class="form-label" x-text="t('models.capabilities')">Capabilities</label>
+                        <div class="checkbox-group">
+                            <label class="form-checkbox">
+                                <input x-model="modelForm.capability_text" type="checkbox">
+                                <span x-text="t('models.cap_text')">Text</span>
+                            </label>
+                            <label class="form-checkbox">
+                                <input x-model="modelForm.capability_audio" type="checkbox">
+                                <span x-text="t('models.cap_audio')">Audio</span>
+                            </label>
+                            <label class="form-checkbox">
+                                <input x-model="modelForm.capability_image" type="checkbox">
+                                <span x-text="t('models.cap_image')">Image</span>
+                            </label>
+                            <label class="form-checkbox">
+                                <input x-model="modelForm.supports_tools" type="checkbox">
+                                <span x-text="t('models.supports_tools')">Tools</span>
+                            </label>
+                        </div>
+                        <span class="form-hint" x-text="t('models.supports_tools_hint')"></span>
+                    </div>
+
+                    <!-- Preprocessing -->
+                    <div class="form-group" style="border-top: 1px solid var(--border); padding-top: var(--space-4);">
+                        <label class="form-label" x-text="t('models.preprocess')">Preprocessing</label>
+
+                        <!-- Voice preprocessing -->
+                        <div class="card" style="padding: var(--space-3); margin-bottom: var(--space-3);">
+                            <label class="form-checkbox" style="margin-bottom: var(--space-2);">
+                                <input x-model="modelForm.preprocess_voice" type="checkbox">
+                                <span class="form-label" style="margin-bottom: 0;" x-text="t('models.preprocess_voice')">Preprocess voice</span>
+                            </label>
+                            <select x-model.number="modelForm.preprocess_voice_model_id"
+                                    :disabled="!modelForm.preprocess_voice"
+                                    class="form-select" style="margin-bottom: var(--space-2);">
+                                <option :value="null" x-text="t('models.none')">None</option>
+                                <template x-for="m in models.filter(m => m.id !== modelForm.id)" :key="m.id">
+                                    <option :value="m.id" x-text="m.name + ' (' + m.model + ')'"></option>
+                                </template>
+                            </select>
+                            <!-- Voice method selector -->
+                            <div x-show="modelForm.preprocess_voice && modelForm.preprocess_voice_model_id"
+                                 class="filter-chips" style="margin-bottom: var(--space-2);">
+                                <span class="filter-chip" @click="modelForm.voice_method = 'llm'"
+                                      :class="modelForm.voice_method === 'llm' ? 'active' : ''"
+                                      x-text="t('models.voice_method_llm')">LLM</span>
+                                <span class="filter-chip" @click="modelForm.voice_method = 'asr'"
+                                      :class="modelForm.voice_method === 'asr' ? 'active' : ''"
+                                      x-text="t('models.voice_method_asr')">ASR</span>
+                            </div>
+                            <!-- ASR language hint -->
+                            <div x-show="modelForm.preprocess_voice && modelForm.preprocess_voice_model_id && modelForm.voice_method === 'asr'">
+                                <input x-model="modelForm.asr_language" type="text" class="form-input"
+                                       :placeholder="t('models.asr_language_hint')">
+                            </div>
+                        </div>
+
+                        <!-- Image preprocessing -->
+                        <div class="card" style="padding: var(--space-3);">
+                            <label class="form-checkbox" style="margin-bottom: var(--space-2);">
+                                <input x-model="modelForm.preprocess_image" type="checkbox">
+                                <span class="form-label" style="margin-bottom: 0;" x-text="t('models.preprocess_image')">Preprocess image</span>
+                            </label>
+                            <select x-model.number="modelForm.preprocess_image_model_id"
+                                    :disabled="!modelForm.preprocess_image"
+                                    class="form-select">
+                                <option :value="null" x-text="t('models.none')">None</option>
+                                <template x-for="m in models.filter(m => m.id !== modelForm.id)" :key="m.id">
+                                    <option :value="m.id" x-text="m.name + ' (' + m.model + ')'"></option>
+                                </template>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Activate toggle -->
+                    <div class="form-checkbox" style="border-top: 1px solid var(--border); padding-top: var(--space-4);">
+                        <input x-model="modelForm.is_active" type="checkbox" id="model-active">
+                        <label for="model-active" x-text="t('models.activate_now')">Activate immediately</label>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" @click="showModelForm = false; resetModelForm()"
+                            x-text="t('prompts.cancel')">Cancel</button>
+                    <button class="btn btn-primary" @click="saveModel()">
+                        <span x-text="modelForm.id ? t('models.update') : t('models.add_model')"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Model List -->
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th x-text="t('cli.name')">Name</th>
+                        <th x-text="t('models.provider')">Provider</th>
+                        <th x-text="t('status.model')">Model</th>
+                        <th>Temperature</th>
+                        <th>Max Tokens</th>
+                        <th x-text="t('users.status')">Status</th>
+                        <th x-text="t('users.actions')">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="m in models" :key="m.id">
+                        <tr>
+                            <td>
+                                <div style="font-weight: 600;" x-text="m.name"></div>
+                            </td>
+                            <td>
+                                <span x-text="m.provider_name || m.provider" style="color: var(--muted);"></span>
+                            </td>
+                            <td>
+                                <span class="badge badge-model" style="font-family: var(--font-mono);" x-text="m.model"></span>
+                            </td>
+                            <td>
+                                <span style="font-family: var(--font-mono); font-size: var(--text-xs);" x-text="m.temperature"></span>
+                            </td>
+                            <td>
+                                <span style="font-family: var(--font-mono); font-size: var(--text-xs);" x-text="m.max_tokens"></span>
+                            </td>
+                            <td>
+                                <span class="badge" :class="m.is_active ? 'badge-green' : 'badge-offline'"
+                                      x-text="m.is_active ? t('models.active') : t('models.inactive')"></span>
+                            </td>
+                            <td>
+                                <div style="display: flex; gap: var(--space-1);">
+                                    <button class="btn btn-sm btn-primary" @click="activateModel(m.id)" x-show="!m.is_active"
+                                            x-text="t('models.activate')">Activate</button>
+                                    <button class="btn btn-sm btn-secondary" @click="editModel(m)"
+                                            x-text="t('models.edit')">Edit</button>
+                                    <button class="btn btn-sm btn-danger" @click="deleteModel(m.id, m.name)" x-show="!m.is_active"
+                                            x-text="t('models.delete')">Delete</button>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="models.length === 0">
+                        <td colspan="7">
+                            <div class="empty-state">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg>
+                                <p x-text="t('models.empty')">No models configured. Click "Add Model" to get started.</p>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>

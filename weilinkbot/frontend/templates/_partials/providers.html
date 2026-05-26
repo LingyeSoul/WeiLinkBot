@@ -1,0 +1,107 @@
+    <!-- Providers Tab -->
+    <div x-show="activeTab === 'providers'">
+        <div class="page-header">
+            <div class="page-header-row">
+                <div>
+                    <h1 class="page-title" x-text="t('providers.title')">Provider Management</h1>
+                    <p class="page-subtitle">管理 LLM API 服务提供商的连接和密钥</p>
+                </div>
+                <button class="btn btn-primary"
+                        @click="showProviderForm = !showProviderForm; if(!showProviderForm) resetProviderForm();">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    <span x-text="t('providers.add')">+ Add Provider</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Add/Edit Provider Modal -->
+        <div class="modal-overlay" x-show="showProviderForm" x-transition.opacity style="display:none;">
+            <div class="modal" @click.outside="showProviderForm = false; resetProviderForm()">
+                <div class="modal-header">
+                    <h2 class="modal-title" x-text="providerForm.id ? t('models.edit') : t('providers.add')">Add Provider</h2>
+                    <button class="btn btn-icon" @click="showProviderForm = false; resetProviderForm()" aria-label="Close">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label" x-text="t('providers.name')">Name</label>
+                        <input x-model="providerForm.name" type="text" class="form-input" placeholder="My Provider">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" x-text="t('providers.type')">Type</label>
+                        <select x-model="providerForm.provider_type" class="form-select">
+                            <option value="custom">Custom</option>
+                            <option value="openai">OpenAI</option>
+                            <option value="deepseek">DeepSeek</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" x-text="t('providers.base_url')">Base URL</label>
+                        <input x-model="providerForm.base_url" type="text" class="form-input" placeholder="https://api.openai.com/v1">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" x-text="t('providers.api_key')">API Key</label>
+                        <input x-model="providerForm.api_key" type="password" class="form-input" placeholder="sk-...">
+                        <span class="form-hint">密钥将被安全存储，界面仅显示脱敏版本</span>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" x-text="t('providers.description')">Description</label>
+                        <input x-model="providerForm.description" type="text" class="form-input">
+                    </div>
+                    <div class="form-checkbox" style="border-top: 1px solid var(--border); padding-top: var(--space-4);">
+                        <input x-model="providerForm.is_enabled" type="checkbox" id="provider-enabled">
+                        <label for="provider-enabled" x-text="t('providers.enabled')">Enabled</label>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" @click="resetProviderForm()"
+                            x-text="t('prompts.cancel')">Cancel</button>
+                    <button class="btn btn-primary" @click="saveProvider()">
+                        <span x-text="providerForm.id ? t('models.update') : t('providers.add')"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Provider Card Grid -->
+        <div class="card-grid">
+            <template x-for="p in providers" :key="p.id">
+                <div class="card">
+                    <div class="card-header">
+                        <div style="display: flex; align-items: center; gap: var(--space-3);">
+                            <span class="card-title" x-text="p.name"></span>
+                            <span class="badge badge-accent" x-text="p.provider_type"></span>
+                        </div>
+                        <span class="status-indicator"
+                              :class="p.is_enabled ? 'status-connected' : 'status-disconnected'"
+                              x-text="p.is_enabled ? t('providers.enabled') : t('models.inactive')"></span>
+                    </div>
+                    <div class="provider-detail-list" style="display: flex; flex-direction: column; gap: var(--space-3); margin-bottom: var(--space-4);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: var(--text-sm);">
+                            <span style="color: var(--muted); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.04em;">URL</span>
+                            <span style="font-family: var(--font-mono); font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px;" x-text="p.base_url"></span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: var(--text-sm);" x-show="p.description">
+                            <span style="color: var(--muted); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.04em;">说明</span>
+                            <span style="font-size: var(--text-xs); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px;" x-text="p.description || ''"></span>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: var(--space-2); padding-top: var(--space-3); border-top: 1px solid var(--border); margin-top: auto;">
+                        <button class="btn btn-sm btn-secondary" @click="editProvider(p)"
+                                x-text="t('models.edit')">Edit</button>
+                        <button class="btn btn-sm btn-danger" @click="deleteProvider(p.id, p.name)"
+                                x-text="t('models.delete')">Delete</button>
+                    </div>
+                </div>
+            </template>
+
+            <!-- Empty State -->
+            <div x-show="providers.length === 0" style="grid-column: 1 / -1;">
+                <div class="empty-state">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+                    <p>No providers configured</p>
+                </div>
+            </div>
+        </div>
+    </div>

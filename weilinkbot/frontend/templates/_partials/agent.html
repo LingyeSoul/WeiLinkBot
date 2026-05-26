@@ -1,0 +1,468 @@
+    <div x-show="activeTab === 'agent'">
+
+        <!-- Sub-tab bar -->
+        <div class="tab-bar" role="tablist">
+            <button class="tab-btn" :class="agentSubTab === 'tools' && 'active'"
+                    @click="agentSubTab = 'tools'" x-text="t('agent.subtab_tools') || 'Tools'"></button>
+            <button class="tab-btn" :class="agentSubTab === 'skills' && 'active'"
+                    @click="agentSubTab = 'skills'" x-text="t('agent.subtab_skills') || 'Skills'"></button>
+            <button class="tab-btn" :class="agentSubTab === 'mcp' && 'active'"
+                    @click="agentSubTab = 'mcp'" x-text="t('agent.subtab_mcp') || 'MCP'"></button>
+            <button class="tab-btn" :class="agentSubTab === 'workspace' && 'active'"
+                    @click="agentSubTab = 'workspace'; refreshWorkspaceConfig(); refreshWorkspaceFiles()"
+                    x-text="t('agent.subtab_workspace') || 'Workspace'"></button>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <!-- Tab 1: Tools -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <div x-show="agentSubTab === 'tools'" x-cloak>
+
+            <!-- Agent Settings -->
+            <div class="card" style="margin-bottom:var(--space-6);">
+                <div class="card-header">
+                    <h3 class="card-title" x-text="t('agent.settings_title') || 'Agent Settings'"></h3>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" x-text="t('agent.max_rounds') || 'Max Tool Rounds'"></label>
+                    <div style="display:flex;align-items:center;gap:var(--space-3);">
+                        <input x-model.number="agentConfig.max_tool_rounds" type="number" min="1" max="20" class="form-input" style="max-width:100px;">
+                        <span style="font-size:var(--text-xs);color:var(--muted);" x-text="t('agent.max_rounds_hint') || 'Maximum tool call rounds per request'"></span>
+                    </div>
+                </div>
+
+                <!-- Context & Performance -->
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);">
+                    <div class="form-group">
+                        <label class="form-label" x-text="t('agent.max_context_tokens') || 'Max Context Tokens'"></label>
+                        <input x-model.number="agentConfig.max_context_tokens" type="number" min="0" max="200000" step="1000" class="form-input">
+                        <p class="form-hint" x-text="t('agent.max_context_tokens_hint') || 'Token budget for context window'"></p>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" x-text="t('agent.max_concurrent') || 'Max Concurrent Requests'"></label>
+                        <input x-model.number="agentConfig.max_concurrent_requests" type="number" min="1" max="20" class="form-input">
+                        <p class="form-hint" x-text="t('agent.max_concurrent_hint') || 'Concurrent LLM requests limit'"></p>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" x-text="t('agent.consolidation_threshold') || 'Consolidation Threshold'"></label>
+                        <input x-model.number="agentConfig.consolidation_threshold" type="number" min="5" max="200" class="form-input">
+                        <p class="form-hint" x-text="t('agent.consolidation_threshold_hint') || 'Messages before consolidation'"></p>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" x-text="t('agent.consolidation_ratio') || 'Consolidation Ratio'"></label>
+                        <input x-model.number="agentConfig.consolidation_ratio" type="number" min="0.1" max="0.9" step="0.05" class="form-input">
+                        <p class="form-hint" x-text="t('agent.consolidation_ratio_hint') || 'Ratio of messages to consolidate'"></p>
+                    </div>
+                </div>
+
+                <!-- Tool Prompt Injection -->
+                <div class="form-toggle-row" style="margin-top:var(--space-2);">
+                    <div>
+                        <div class="form-toggle-label" x-text="t('agent.tool_prompt_injection') || 'Tool Prompt Injection'"></div>
+                        <div class="form-toggle-desc" x-text="t('agent.tool_prompt_injection_hint') || 'Inject tool descriptions into system prompt'"></div>
+                    </div>
+                    <label class="toggle">
+                        <input type="checkbox" x-model="agentConfig.tool_prompt_injection">
+                        <span class="toggle-track"></span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Enabled Tools Table -->
+            <div class="card" style="margin-bottom:var(--space-6);">
+                <div class="card-header">
+                    <h3 class="card-title" x-text="t('agent.enabled_tools') || 'Enabled Tools'"></h3>
+                </div>
+                <div class="table-wrap" style="border:none;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th x-text="t('agent.tool_name') || 'Tool Name'"></th>
+                                <th x-text="t('agent.tool_description') || 'Description'"></th>
+                                <th style="width:80px;text-align:center;" x-text="t('agent.tool_status')"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="tool in agentConfig.available_tools.filter(t => !t.startsWith('workspace_'))" :key="tool">
+                                <tr>
+                                    <td><span style="font-weight:500;" x-text="tool"></span></td>
+                                    <td><span style="color:var(--muted);font-size:var(--text-sm);" x-text="t('agent.tool_desc.' + tool)"></span></td>
+                                    <td style="text-align:center;">
+                                        <label class="toggle">
+                                            <input type="checkbox" :checked="agentConfig.enabled_tools.includes(tool)"
+                                                   @change="toggleAgentTool(tool)">
+                                            <span class="toggle-track"></span>
+                                        </label>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                    <p x-show="!agentConfig.available_tools.length" style="padding:var(--space-6);text-align:center;color:var(--muted);font-size:var(--text-sm);" x-text="t('agent.no_tools') || 'No tools available'"></p>
+                </div>
+            </div>
+
+            <!-- Tool Advanced Settings (collapsible) -->
+            <div class="card" style="margin-bottom:var(--space-6);">
+                <details class="group">
+                    <summary style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:var(--space-4);font-weight:600;font-size:var(--text-base);">
+                        <span x-text="t('agent.tool_advanced') || 'Advanced Settings'"></span>
+                        <svg style="width:16px;height:16px;color:var(--muted);transition:transform 200ms ease;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 9l-7 7-7-7"/></svg>
+                    </summary>
+                    <div style="padding:0 var(--space-4) var(--space-4);border-top:1px solid var(--border);">
+                        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-4);margin-top:var(--space-4);">
+                            <div class="form-group">
+                                <label class="form-label" x-text="t('agent.tool_timeout') || 'Tool Timeout (s)'"></label>
+                                <input x-model.number="agentConfig.tool_timeout_seconds" type="number" min="1" max="300" class="form-input">
+                                <p class="form-hint" x-text="t('agent.tool_timeout_hint') || 'Max seconds per tool call'"></p>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" x-text="t('agent.max_result_chars') || 'Max Result Chars'"></label>
+                                <input x-model.number="agentConfig.max_tool_result_chars" type="number" min="1000" max="200000" class="form-input">
+                                <p class="form-hint" x-text="t('agent.max_result_chars_hint') || 'Max characters in tool result'"></p>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" x-text="t('agent.fail_limit') || 'Fail Limit'"></label>
+                                <input x-model.number="agentConfig.consecutive_fail_limit" type="number" min="1" max="20" class="form-input">
+                                <p class="form-hint" x-text="t('agent.fail_limit_hint') || 'Consecutive failures before abort'"></p>
+                            </div>
+                        </div>
+                    </div>
+                </details>
+            </div>
+
+            <!-- Browser Settings (collapsible) -->
+            <div class="card" style="margin-bottom:var(--space-6);">
+                <details class="group">
+                    <summary style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:var(--space-4);font-weight:600;font-size:var(--text-base);">
+                        <span x-text="t('agent.browser_settings') || 'Browser Settings'"></span>
+                        <svg style="width:16px;height:16px;color:var(--muted);transition:transform 200ms ease;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 9l-7 7-7-7"/></svg>
+                    </summary>
+                    <div style="padding:0 var(--space-4) var(--space-4);border-top:1px solid var(--border);">
+                        <div class="form-toggle-row" style="margin-top:var(--space-4);">
+                            <div>
+                                <div class="form-toggle-label" x-text="t('agent.browser_stealth') || 'Stealth Mode'"></div>
+                            </div>
+                            <label class="toggle">
+                                <input type="checkbox" x-model="agentConfig.browser_stealth">
+                                <span class="toggle-track"></span>
+                            </label>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);margin-top:var(--space-4);">
+                            <div class="form-group">
+                                <label class="form-label" x-text="t('agent.browser_timeout') || 'Default Timeout (s)'"></label>
+                                <input x-model.number="agentConfig.browser_default_timeout" type="number" min="5" max="120" class="form-input">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" x-text="t('agent.browser_port') || 'Serve Port'"></label>
+                                <input x-model.number="agentConfig.browser_serve_port" type="number" min="1024" max="65535" class="form-input">
+                            </div>
+                        </div>
+                    </div>
+                </details>
+            </div>
+
+            <!-- Save Button -->
+            <button @click="saveAgentConfig()" class="btn btn-primary" x-text="t('agent.save') || 'Save'"></button>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <!-- Tab 2: Skills -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <div x-show="agentSubTab === 'skills'" x-cloak>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-5);">
+                <h3 style="font-weight:600;font-size:var(--text-lg);" x-text="t('agent.skills_title') || 'Skills'"></h3>
+                <div style="display:flex;gap:var(--space-2);">
+                    <label class="btn btn-secondary btn-sm" style="cursor:pointer;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        <span x-text="t('agent.import_skill') || 'Import'"></span>
+                        <input type="file" accept=".md,.zip" style="display:none;" @change="importSkills($event)">
+                    </label>
+                    <button @click="showSkillForm = !showSkillForm" class="btn btn-primary btn-sm">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        <span x-text="t('agent.add_skill') || 'Add Skill'"></span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Skill create form -->
+            <div x-show="showSkillForm" class="card" style="margin-bottom:var(--space-5);border-color:color-mix(in oklab, var(--success), transparent 60%);background:color-mix(in oklab, var(--success), transparent 96%);">
+                <div class="form-group">
+                    <label class="form-label" x-text="t('agent.skill_name') || 'Name'"></label>
+                    <input x-model="skillForm.name" :placeholder="t('agent.skill_name_placeholder') || 'Skill name'" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" x-text="t('agent.skill_desc_label') || 'Description'"></label>
+                    <input x-model="skillForm.description" :placeholder="t('agent.skill_desc_placeholder') || 'Short description'" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" x-text="t('agent.skill_content') || 'Content'"></label>
+                    <textarea x-model="skillForm.content" rows="4" :placeholder="t('agent.skill_content_placeholder') || 'Skill markdown content...'" class="form-input" style="font-family:var(--font-mono);min-height:120px;"></textarea>
+                </div>
+                <div style="display:flex;gap:var(--space-2);">
+                    <button @click="createSkill()" class="btn btn-primary btn-sm" x-text="t('agent.save') || 'Save'"></button>
+                    <button @click="showSkillForm = false" class="btn btn-secondary btn-sm" x-text="t('agent.cancel') || 'Cancel'"></button>
+                </div>
+            </div>
+
+            <!-- Skill grid -->
+            <div class="skill-grid">
+                <template x-for="skill in skills.items" :key="skill.name">
+                    <div class="skill-card">
+                        <div class="skill-card-header">
+                            <span class="skill-card-name" x-text="skill.name"></span>
+                            <span class="skill-version" x-text="skill.version || 'v1.0'"></span>
+                        </div>
+                        <p class="skill-card-desc" x-text="skill.description || ''"></p>
+                        <div class="skill-card-footer">
+                            <button @click="deleteSkill(skill.name)" class="btn btn-danger btn-sm" style="padding:var(--space-1) var(--space-2);font-size:var(--text-xs);" x-text="t('agent.delete') || 'Delete'"></button>
+                            <label class="toggle toggle-success">
+                                <input type="checkbox" :checked="skill.enabled" @change="toggleSkill(skill.name)">
+                                <span class="toggle-track"></span>
+                            </label>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            <p x-show="!skills.items.length && skills.loaded" style="text-align:center;color:var(--muted);padding:var(--space-8) 0;font-size:var(--text-sm);" x-text="t('agent.no_skills') || 'No skills installed'"></p>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <!-- Tab 3: MCP -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <div x-show="agentSubTab === 'mcp'" x-cloak>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-5);">
+                <h3 style="font-weight:600;font-size:var(--text-lg);" x-text="t('agent.mcp_title') || 'MCP Servers'"></h3>
+                <button @click="showMcpForm = !showMcpForm" class="btn btn-primary btn-sm">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    <span x-text="t('agent.add_mcp') || 'Add Server'"></span>
+                </button>
+            </div>
+
+            <!-- MCP create form -->
+            <div x-show="showMcpForm" class="card" style="margin-bottom:var(--space-5);border-color:color-mix(in oklab, var(--accent), transparent 60%);background:color-mix(in oklab, var(--accent), transparent 96%);">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" x-text="t('agent.mcp_name') || 'Server Name'"></label>
+                        <input x-model="mcpForm.name" :placeholder="t('agent.mcp_name_placeholder') || 'my-mcp-server'" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" x-text="t('agent.mcp_transport') || 'Transport'"></label>
+                        <select x-model="mcpForm.transport" class="form-select">
+                            <option value="stdio">stdio</option>
+                            <option value="sse">SSE</option>
+                            <option value="streamableHttp">Streamable HTTP</option>
+                        </select>
+                    </div>
+                </div>
+                <template x-if="mcpForm.transport === 'stdio'">
+                    <div>
+                        <div class="form-group">
+                            <label class="form-label" x-text="t('agent.mcp_command') || 'Command'"></label>
+                            <input x-model="mcpForm.command" :placeholder="t('agent.mcp_cmd_placeholder') || 'npx my-mcp-server'" class="form-input" style="font-family:var(--font-mono);">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" x-text="t('agent.mcp_args') || 'Arguments'"></label>
+                            <input x-model="mcpForm.argsStr" :placeholder="t('agent.mcp_args_placeholder') || 'arg1, arg2'" class="form-input" style="font-family:var(--font-mono);">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" x-text="t('agent.mcp_env') || 'Environment'"></label>
+                            <input x-model="mcpForm.envStr" :placeholder="t('agent.mcp_env_placeholder') || 'KEY=value, KEY2=value2'" class="form-input" style="font-family:var(--font-mono);">
+                        </div>
+                    </div>
+                </template>
+                <template x-if="mcpForm.transport === 'sse'">
+                    <div class="form-group">
+                        <label class="form-label">URL</label>
+                        <input x-model="mcpForm.url" placeholder="http://localhost:8080/sse" class="form-input" style="font-family:var(--font-mono);">
+                    </div>
+                </template>
+                <template x-if="mcpForm.transport === 'streamableHttp'">
+                    <div class="form-group">
+                        <label class="form-label">URL</label>
+                        <input x-model="mcpForm.url" placeholder="http://localhost:8080/mcp/" class="form-input" style="font-family:var(--font-mono);">
+                    </div>
+                </template>
+                <div style="display:flex;gap:var(--space-2);">
+                    <button @click="createMcpServer()" class="btn btn-primary btn-sm" x-text="t('agent.save') || 'Save'"></button>
+                    <button @click="showMcpForm = false" class="btn btn-secondary btn-sm" x-text="t('agent.cancel') || 'Cancel'"></button>
+                </div>
+            </div>
+
+            <!-- MCP server list -->
+            <div class="mcp-list">
+                <template x-for="srv in mcpServers.items" :key="srv.id">
+                    <div class="mcp-card">
+                        <div class="mcp-info">
+                            <div class="mcp-info-name" x-text="srv.name"></div>
+                            <div class="mcp-info-endpoint" x-text="srv.transport === 'stdio' ? srv.command : (srv.url || '')"></div>
+                        </div>
+                        <div class="mcp-meta">
+                            <span class="transport-badge" x-text="srv.transport"></span>
+                            <span class="status-indicator" :class="srv.status === 'connected' ? 'status-connected' : 'status-disconnected'"
+                                  x-text="srv.status === 'connected' ? t('events.connected') : (srv.status === 'error' ? t('status.error') : t('events.disconnected'))"></span>
+                            <label class="toggle">
+                                <input type="checkbox" :checked="srv.enabled" @change="toggleMcpEnabled(srv)">
+                                <span class="toggle-track"></span>
+                            </label>
+                            <button @click="reconnectMcpServer(srv.id)" class="btn btn-secondary btn-sm" x-text="t('agent.reconnect') || 'Reconnect'"></button>
+                            <button @click="deleteMcpServer(srv.id)" class="btn btn-danger btn-sm" x-text="t('agent.delete') || 'Delete'"></button>
+                        </div>
+                    </div>
+                </template>
+                <p x-show="!mcpServers.items.length && mcpServers.loaded" style="text-align:center;color:var(--muted);padding:var(--space-8) 0;font-size:var(--text-sm);" x-text="t('agent.no_mcp') || 'No MCP servers configured'"></p>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <!-- Tab 4: Workspace -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <div x-show="agentSubTab === 'workspace'" x-cloak>
+
+            <!-- Workspace Config Card -->
+            <div class="card" style="margin-bottom:var(--space-6);">
+                <div class="card-header">
+                    <h3 class="card-title" x-text="t('agent.workspace.title') || 'Workspace Configuration'"></h3>
+                </div>
+
+                <!-- Enable toggle -->
+                <div class="form-toggle-row">
+                    <div>
+                        <div class="form-toggle-label" x-text="t('agent.workspace.enabled') || 'Enable Workspace'"></div>
+                    </div>
+                    <label class="toggle toggle-success">
+                        <input type="checkbox" :checked="workspaceConfig.enabled" @change="toggleWorkspace()">
+                        <span class="toggle-track"></span>
+                    </label>
+                </div>
+
+                <!-- Config fields (when enabled) -->
+                <div x-show="workspaceConfig.enabled" style="margin-top:var(--space-4);">
+
+                    <!-- Root path -->
+                    <div class="form-group">
+                        <label class="form-label" x-text="t('agent.workspace.root') || 'Root Path'"></label>
+                        <input x-model="workspaceConfig.root" @change="saveWorkspaceConfig()"
+                               class="form-input" style="font-family:var(--font-mono);" placeholder="/path/to/workspace">
+                    </div>
+
+                    <!-- Workspace tools -->
+                    <div class="form-group">
+                        <label class="form-label" x-text="t('agent.workspace.tools') || 'Workspace Tools'"></label>
+                        <div style="display:flex;flex-direction:column;gap:var(--space-2);">
+                            <template x-for="tool in ['workspace_read', 'workspace_list', 'workspace_grep', 'workspace_write', 'workspace_edit']" :key="tool">
+                                <div class="form-toggle-row">
+                                    <div>
+                                        <div class="form-toggle-label" x-text="tool"></div>
+                                        <div class="form-toggle-desc" x-text="t('agent.tool_desc.' + tool)"></div>
+                                    </div>
+                                    <label class="toggle">
+                                        <input type="checkbox"
+                                               :checked="(workspaceConfig.enabled_workspace_tools || []).includes(tool)"
+                                               @change="toggleWorkspaceTool(tool)">
+                                        <span class="toggle-track"></span>
+                                    </label>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Advanced settings -->
+                    <div class="card" style="margin-top:var(--space-4);background:var(--bg);">
+                        <details class="group">
+                            <summary style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-weight:500;font-size:var(--text-sm);">
+                                <span x-text="t('agent.workspace.advanced') || 'Advanced Settings'"></span>
+                                <svg style="width:16px;height:16px;color:var(--muted);transition:transform 200ms ease;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 9l-7 7-7-7"/></svg>
+                            </summary>
+                            <div style="padding-top:var(--space-4);border-top:1px solid var(--border);margin-top:var(--space-3);">
+                                <div class="form-group">
+                                    <label class="form-label" x-text="t('agent.workspace.blocked_ext') || 'Blocked Extensions'"></label>
+                                    <input x-model="workspaceBlockedExtInput" @change="updateWorkspaceBlockedExtensions()"
+                                           class="form-input" style="font-family:var(--font-mono);"
+                                           :placeholder="t('agent.workspace.blocked_ext_hint') || '.exe, .dll, .so'">
+                                    <p class="form-hint" x-text="t('agent.workspace.blocked_ext_desc') || 'Comma-separated list of blocked file extensions'"></p>
+                                </div>
+                                <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);">
+                                    <div class="form-group">
+                                        <label class="form-label" x-text="t('agent.workspace.read_max') || 'Read Max Size'"></label>
+                                        <input x-model.number="agentConfig.workspace_read_max_size" type="number" min="1024" max="10485760" class="form-input">
+                                        <p class="form-hint" x-text="t('agent.workspace.read_max_hint') || 'Max bytes for file read'"></p>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" x-text="t('agent.workspace.write_max') || 'Write Max Size'"></label>
+                                        <input x-model.number="agentConfig.workspace_write_max_size" type="number" min="1024" max="5242880" class="form-input">
+                                        <p class="form-hint" x-text="t('agent.workspace.write_max_hint') || 'Max bytes for file write'"></p>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" x-text="t('agent.workspace.list_max') || 'List Max Entries'"></label>
+                                        <input x-model.number="agentConfig.workspace_list_max_entries" type="number" min="10" max="10000" class="form-input">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" x-text="t('agent.workspace.grep_max') || 'Grep Max Results'"></label>
+                                        <input x-model.number="agentConfig.workspace_grep_max_results" type="number" min="10" max="1000" class="form-input">
+                                    </div>
+                                </div>
+                                <button @click="saveAgentConfig()" class="btn btn-primary btn-sm" x-text="t('agent.save') || 'Save'"></button>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+            </div>
+
+            <!-- File Browser Card -->
+            <div x-show="workspaceConfig.enabled" class="card">
+                <div class="card-header">
+                    <h3 class="card-title" x-text="t('agent.workspace.fileBrowser') || 'File Browser'"></h3>
+                    <div style="display:flex;align-items:center;gap:var(--space-2);">
+                        <input x-model="workspaceFileFilter" @input.debounce.400ms="refreshWorkspaceFiles()"
+                               class="form-input" style="max-width:160px;font-size:var(--text-xs);" placeholder="*.py, *.md">
+                        <label class="btn btn-secondary btn-sm" style="cursor:pointer;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                            <span x-text="t('agent.workspace.upload') || 'Upload'"></span>
+                            <input type="file" style="display:none;" @change="uploadWorkspaceFile($event)">
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Breadcrumb -->
+                <div style="display:flex;align-items:center;gap:var(--space-1);font-size:var(--text-xs);color:var(--muted);margin-bottom:var(--space-3);">
+                    <button @click="workspaceCurrentPath = ''; refreshWorkspaceFiles()"
+                            style="text-decoration:underline;cursor:pointer;" x-text="t('agent.workspace.root') || 'Root'"></button>
+                    <template x-for="(seg, i) in workspaceCurrentPath.split('/').filter(Boolean)" :key="i">
+                        <span style="display:flex;align-items:center;gap:var(--space-1);">
+                            <span>/</span>
+                            <button @click="workspaceCurrentPath = workspaceCurrentPath.split('/').filter(Boolean).slice(0, i + 1).join('/'); refreshWorkspaceFiles()"
+                                    style="text-decoration:underline;cursor:pointer;" x-text="seg"></button>
+                        </span>
+                    </template>
+                </div>
+
+                <!-- File list -->
+                <div style="border:1px solid var(--border);border-radius:var(--radius-sm);max-height:280px;overflow-y:auto;">
+                    <template x-for="file in workspaceFiles" :key="file.path">
+                        <div @click="file.is_dir ? (workspaceCurrentPath = file.path, refreshWorkspaceFiles()) : viewWorkspaceFile(file.path)"
+                             style="display:flex;align-items:center;justify-content:space-between;padding:var(--space-2) var(--space-3);border-bottom:1px solid var(--border);font-size:var(--text-sm);cursor:pointer;transition:background 150ms ease;"
+                             onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='transparent'">
+                            <div style="display:flex;align-items:center;gap:var(--space-2);">
+                                <span x-show="file.is_dir" style="color:var(--warn);font-size:14px;">&#128193;</span>
+                                <span x-show="!file.is_dir" style="color:var(--muted);font-size:14px;">&#128196;</span>
+                                <span x-text="file.name"></span>
+                            </div>
+                            <span x-show="!file.is_dir && file.size != null" style="font-size:var(--text-xs);color:var(--muted);font-family:var(--font-mono);" x-text="formatFileSize(file.size)"></span>
+                        </div>
+                    </template>
+                    <p x-show="!workspaceFiles.length && workspaceLoaded" style="text-align:center;color:var(--muted);padding:var(--space-6) 0;font-size:var(--text-sm);" x-text="t('agent.workspace.noFiles') || 'No files found'"></p>
+                </div>
+
+                <!-- File content viewer -->
+                <div x-show="workspaceFileContent !== null" style="margin-top:var(--space-4);border:1px solid var(--border);border-radius:var(--radius-sm);padding:var(--space-4);background:var(--bg);">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-2);">
+                        <span style="font-size:var(--text-xs);font-family:var(--font-mono);color:var(--muted);" x-text="workspaceFilePath"></span>
+                        <button @click="workspaceFileContent = null" style="font-size:var(--text-lg);color:var(--muted);line-height:1;">&times;</button>
+                    </div>
+                    <pre style="font-size:var(--text-xs);font-family:var(--font-mono);white-space:pre-wrap;max-height:240px;overflow-y:auto;line-height:1.5;" x-text="workspaceFileContent"></pre>
+                </div>
+            </div>
+        </div>
+
+    </div>

@@ -1,0 +1,379 @@
+    <div x-show="activeTab === 'memories'" x-cloak>
+        <div x-data="memoriesPanel()" x-init="init()">
+
+            <!-- Sub-tabs -->
+            <div class="sub-tabs">
+                <button class="sub-tab" :class="memSubTab === 'config' && 'active'"
+                        @click="memSubTab = 'config'" x-text="t('memory.config.show') || 'Config'"></button>
+                <button class="sub-tab" :class="memSubTab === 'browse' && 'active'"
+                        @click="memSubTab = 'browse'" x-text="t('memory.users.title') || 'Browse'"></button>
+            </div>
+
+            <!-- ═══ Sub-tab: Config ═══ -->
+            <div x-show="memSubTab === 'config'" x-cloak>
+
+                <!-- Status summary -->
+                <div class="card" style="margin-bottom:var(--space-6);" x-show="statusLoaded">
+                    <div class="card-header">
+                        <div style="display:flex;align-items:center;gap:var(--space-3);">
+                            <span class="card-title" x-text="t('memory.status.embedding_model') || 'Embedding Model'"></span>
+                            <span class="badge" :class="status.available ? 'badge-green' : 'badge-offline'"
+                                  x-text="status.available ? (t('memory.status.enabled') || 'Enabled') : (t('memory.status.disabled') || 'Disabled')"></span>
+                        </div>
+                        <span style="font-size:var(--text-sm);color:var(--muted);"
+                              x-text="status.available ? status.embedding_model || 'configured' : (t('memory.status.disabled') || 'Disabled')"></span>
+                    </div>
+                    <template x-if="status.available">
+                        <div style="display:flex;gap:var(--space-6);font-size:var(--text-sm);color:var(--muted);flex-wrap:wrap;">
+                            <span><span x-text="t('memory.status.total') || 'Total'"></span>: <strong style="color:var(--fg);font-family:var(--font-mono);" x-text="totalMemories"></strong></span>
+                            <span><span x-text="t('memory.status.users') || 'Users'"></span>: <strong style="color:var(--fg);font-family:var(--font-mono);" x-text="users.length"></strong></span>
+                            <span><span x-text="t('memory.status.vector') || 'Vectors'"></span>: <strong style="color:var(--fg);font-family:var(--font-mono);" x-text="status.vector_count ?? '—'"></strong></span>
+                            <span><span x-text="t('memory.status.onnx') || 'ONNX'"></span>: <strong style="color:var(--fg);font-family:var(--font-mono);" x-text="status.onnx_loaded === null ? '—' : (status.onnx_loaded ? (t('memory.status.onnx_loaded') || 'Loaded') : (t('memory.status.onnx_lazy') || 'Lazy'))"></strong></span>
+                        </div>
+                    </template>
+                    <template x-if="status.init_error">
+                        <p style="font-size:var(--text-sm);color:var(--warn);margin-top:var(--space-2);" x-text="status.init_error"></p>
+                    </template>
+                    <template x-if="!status.available && !showConfig">
+                        <p style="font-size:var(--text-sm);color:var(--warn);margin-top:var(--space-2);" x-text="t('memory.status.not_configured') || 'Not configured'"></p>
+                    </template>
+                </div>
+
+                <!-- Embedding Provider Section -->
+                <div class="card" style="margin-bottom:var(--space-6);">
+                    <div class="card-header">
+                        <h3 class="card-title" x-text="t('memory.config.embedding_title') || 'Embedding Provider'"></h3>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" x-text="t('memory.config.provider') || 'Provider'"></label>
+                            <select x-model="configForm.embedding_provider" @change="onEmbeddingProviderChange()" class="form-select">
+                                <option value="openai" x-text="t('memory.config.openai_compat') || 'OpenAI Compatible'"></option>
+                                <option value="modelscope-local" x-text="t('memory.config.modelscope_local') || 'ModelScope Local'"></option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label"><span x-text="t('memory.config.model') || 'Model'"></span> *</label>
+                            <input type="text" x-model="configForm.embedding_model" placeholder="text-embedding-3-small" class="form-input">
+                        </div>
+                    </div>
+                    <template x-if="configForm.embedding_provider !== 'modelscope-local'">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label"><span x-text="t('memory.config.base_url') || 'Base URL'"></span> <span style="color:var(--muted);font-size:var(--text-xs);" x-text="t('memory.config.fallback_hint') || '(optional)'"></span></label>
+                                <input type="text" x-model="configForm.embedding_base_url" placeholder="https://api.openai.com/v1" class="form-input">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label"><span x-text="t('memory.config.api_key') || 'API Key'"></span> <span style="color:var(--muted);font-size:var(--text-xs);" x-text="t('memory.config.fallback_hint') || '(optional)'"></span></label>
+                                <input type="password" x-model="configForm.embedding_api_key"
+                                       :placeholder="configForm.embedding_api_key_set ? '••••••••' : 'sk-...'" class="form-input">
+                            </div>
+                        </div>
+                    </template>
+                    <template x-if="configForm.embedding_provider === 'modelscope-local'">
+                        <div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label" x-text="t('memory.config.modelscope_model_id') || 'ModelScope Model ID'"></label>
+                                    <input type="text" x-model="configForm.embedding_modelscope_model_id" placeholder="Xenova/bge-small-zh-v1.5" class="form-input">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" x-text="t('memory.config.local_model_dir') || 'Local Model Dir'"></label>
+                                    <input type="text" x-model="configForm.embedding_local_path" placeholder="./data/models/bge-small-zh-v1.5" class="form-input">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" x-text="t('memory.config.onnx_quant_model') || 'ONNX Quantization'"></label>
+                                <select x-model="configForm.embedding_onnx_model_file" @change="onEmbeddingOnnxModelChange()" class="form-select">
+                                    <option value="onnx/model_fp16.onnx" x-text="t('memory.config.onnx_fp16') || 'FP16'"></option>
+                                    <option value="onnx/model_quantized.onnx" x-text="t('memory.config.onnx_quantized') || 'Quantized'"></option>
+                                    <option value="onnx/model_int8.onnx" x-text="t('memory.config.onnx_int8') || 'INT8'"></option>
+                                    <option value="onnx/model_uint8.onnx" x-text="t('memory.config.onnx_uint8') || 'UINT8'"></option>
+                                    <option value="onnx/model_q4f16.onnx" x-text="t('memory.config.onnx_q4f16') || 'Q4F16'"></option>
+                                    <option value="onnx/model_q4.onnx" x-text="t('memory.config.onnx_q4') || 'Q4'"></option>
+                                    <option value="onnx/model_bnb4.onnx" x-text="t('memory.config.onnx_bnb4') || 'BNB4'"></option>
+                                    <option value="onnx/model.onnx" x-text="t('memory.config.onnx_fp32') || 'FP32'"></option>
+                                </select>
+                            </div>
+                            <div x-show="isLocalEmbeddingProvider" style="border-radius:var(--radius-sm);border:1px solid color-mix(in oklab, var(--accent), transparent 60%);background:color-mix(in oklab, var(--accent), transparent 92%);padding:var(--space-3) var(--space-4);font-size:var(--text-sm);color:var(--accent);margin-top:var(--space-2);">
+                                <p style="font-weight:500;" x-text="t('memory.config.onnx_init_notice') || 'ONNX model will be loaded on first use'"></p>
+                                <p style="margin-top:var(--space-1);" x-text="localEmbeddingBusyText"></p>
+                                <div x-show="isLocalEmbeddingBusy" style="margin-top:var(--space-2);display:flex;align-items:center;gap:var(--space-2);color:var(--accent);" aria-live="polite">
+                                    <span style="display:inline-block;width:16px;height:16px;border-radius:50%;border:2px solid color-mix(in oklab, var(--accent), transparent 60%);border-top-color:var(--accent);animation:spin 0.8s linear infinite;"></span>
+                                    <span x-text="t('memory.config.onnx_busy_msg') || 'Loading model...'"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- LLM Extraction Section -->
+                <div class="card" style="margin-bottom:var(--space-6);">
+                    <div class="card-header">
+                        <h3 class="card-title" x-text="t('memory.config.llm_title') || 'LLM Extraction'"></h3>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" x-text="t('memory.config.provider') || 'Provider'"></label>
+                            <select x-model.number="configForm.llm_provider_id" class="form-select">
+                                <option :value="0" x-text="t('memory.config.use_main_model') || 'Use Main Model'"></option>
+                                <template x-for="p in providers.filter(p => p.is_enabled)" :key="p.id">
+                                    <option :value="p.id" x-text="p.name + ' (' + p.provider_type + ')'"></option>
+                                </template>
+                            </select>
+                            <template x-if="configForm.llm_provider_id > 0">
+                                <div class="form-hint" x-text="providers.find(p => p.id === configForm.llm_provider_id)?.base_url || ''"></div>
+                            </template>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label"><span x-text="t('memory.config.model') || 'Model'"></span> <span style="color:var(--muted);font-size:var(--text-xs);" x-text="t('memory.config.fallback_hint') || '(optional)'"></span></label>
+                            <input type="text" x-model="configForm.llm_model" placeholder="gpt-4o-mini" class="form-input">
+                        </div>
+                    </div>
+                    <template x-if="configForm.llm_provider_id === 0">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label"><span x-text="t('memory.config.base_url') || 'Base URL'"></span> <span style="color:var(--muted);font-size:var(--text-xs);" x-text="t('memory.config.fallback_hint') || '(optional)'"></span></label>
+                                <input type="text" x-model="configForm.llm_base_url" placeholder="https://api.openai.com/v1" class="form-input">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label"><span x-text="t('memory.config.api_key') || 'API Key'"></span> <span style="color:var(--muted);font-size:var(--text-xs);" x-text="t('memory.config.fallback_hint') || '(optional)'"></span></label>
+                                <input type="password" x-model="configForm.llm_api_key"
+                                       :placeholder="configForm.llm_api_key_set ? '••••••••' : 'sk-...'" class="form-input">
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Retrieval Tuning -->
+                <div class="card" style="margin-bottom:var(--space-6);">
+                    <div class="card-header">
+                        <h3 class="card-title" x-text="t('memory.config.retrieval_tuning') || 'Retrieval Tuning'"></h3>
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-4);">
+                        <div class="form-group">
+                            <label class="form-label" x-text="t('memory.config.top_k') || 'Top K'"></label>
+                            <input type="number" x-model.number="configForm.top_k" min="1" max="100" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" x-text="t('memory.config.min_score') || 'Min Score'"></label>
+                            <input type="number" x-model.number="configForm.min_score" min="0" max="1" step="0.05" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" x-text="t('memory.config.max_context_chars') || 'Max Context Chars'"></label>
+                            <input type="number" x-model.number="configForm.max_context_chars" min="100" max="100000" class="form-input">
+                        </div>
+                    </div>
+                    <div x-show="isLocalEmbeddingProvider" class="form-toggle-row" style="border-top:1px solid var(--border);margin-top:var(--space-4);">
+                        <div>
+                            <div class="form-toggle-label" x-text="t('memory.config.preload_onnx') || 'Preload ONNX Model'"></div>
+                        </div>
+                        <label class="toggle">
+                            <input type="checkbox" x-model="configForm.preload_onnx">
+                            <span class="toggle-track"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- HNSW Parameters -->
+                <div class="card" style="margin-bottom:var(--space-6);">
+                    <div class="card-header">
+                        <h3 class="card-title" x-text="t('memory.config.hnsw_title') || 'HNSW Parameters'"></h3>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" x-text="t('memory.config.hnsw_space') || 'Distance Metric'"></label>
+                        <select x-model="configForm.hnsw_space" class="form-select" style="max-width:200px;">
+                            <option value="cosine">cosine</option>
+                            <option value="l2">l2</option>
+                            <option value="ip">ip</option>
+                        </select>
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-4);">
+                        <div class="form-group">
+                            <label class="form-label" x-text="t('memory.config.hnsw_m') || 'M'"></label>
+                            <input type="number" x-model.number="configForm.hnsw_m" min="1" max="1000" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" x-text="t('memory.config.hnsw_construction_ef') || 'Construction EF'"></label>
+                            <input type="number" x-model.number="configForm.hnsw_construction_ef" min="1" max="1000" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" x-text="t('memory.config.hnsw_search_ef') || 'Search EF'"></label>
+                            <input type="number" x-model.number="configForm.hnsw_search_ef" min="1" max="1000" class="form-input">
+                        </div>
+                    </div>
+                    <p style="font-size:var(--text-xs);color:var(--warn);margin-top:var(--space-2);" x-text="t('memory.config.hnsw_warning') || 'Changing HNSW parameters requires reindexing'"></p>
+                </div>
+
+                <!-- Buffer Settings -->
+                <div class="card" style="margin-bottom:var(--space-6);">
+                    <div class="card-header">
+                        <h3 class="card-title" x-text="t('memory.config.buffer_title') || 'Buffer Settings'"></h3>
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-4);">
+                        <div class="form-group">
+                            <label class="form-label" x-text="t('memory.config.turn_threshold') || 'Turn Threshold'"></label>
+                            <input type="number" x-model.number="configForm.turn_threshold" min="1" max="100" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" x-text="t('memory.config.timeout') || 'Timeout (min)'"></label>
+                            <input type="number" x-model.number="configForm.timeout_minutes" min="1" max="1440" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" x-text="t('memory.config.time_decay') || 'Time Decay (days)'"></label>
+                            <input type="number" x-model.number="configForm.time_decay_days" min="1" max="365" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" x-text="t('memory.config.rerank_weight') || 'Rerank Weight'"></label>
+                            <input type="number" x-model.number="configForm.rerank_weight" min="0" max="1" step="0.05" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" x-text="t('memory.config.exact_sim_weight') || 'Exact Sim Weight'"></label>
+                            <input type="number" x-model.number="configForm.exact_sim_weight" min="0" max="1" step="0.05" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" x-text="t('memory.config.expand_factor') || 'Expand Factor'"></label>
+                            <input type="number" x-model.number="configForm.expand_factor" min="1" max="10" class="form-input">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Bar -->
+                <div style="display:flex;justify-content:space-between;align-items:center;padding-top:var(--space-6);border-top:1px solid var(--border);margin-top:var(--space-4);">
+                    <button @click="exportMemories()" :disabled="!status.available" class="btn btn-secondary" x-text="t('memory.config.export_json') || 'Export JSON'"></button>
+                    <div style="display:flex;gap:var(--space-3);">
+                        <button @click="testConnection()" :disabled="testing" class="btn btn-secondary">
+                            <span x-show="!testing" x-text="t('memory.config.test_connection') || 'Test Connection'"></span>
+                            <span x-show="testing && !isLocalEmbeddingProvider" x-text="t('memory.config.testing') || 'Testing...'"></span>
+                            <span x-show="testing && isLocalEmbeddingProvider" x-text="t('memory.config.testing_local') || 'Testing local...'"></span>
+                        </button>
+                        <button @click="saveConfig()" :disabled="saving" class="btn btn-primary">
+                            <span x-show="!saving" x-text="t('memory.config.save') || 'Save Config'"></span>
+                            <span x-show="saving && !isLocalEmbeddingProvider" x-text="t('memory.config.saving') || 'Saving...'"></span>
+                            <span x-show="saving && isLocalEmbeddingProvider" x-text="t('memory.config.saving_local') || 'Saving local...'"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ Sub-tab: Browse ═══ -->
+            <div x-show="memSubTab === 'browse'" x-cloak>
+                <template x-if="status.available">
+                    <div>
+                        <!-- Search Bar -->
+                        <div style="display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-5);">
+                            <div class="search-box" style="flex:1;max-width:480px;">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                                <input type="text" x-model="searchQuery" @keyup.enter="searchMemories()"
+                                       :placeholder="t('memory.detail.search') || 'Semantic search...'">
+                            </div>
+                        </div>
+
+                        <!-- Stats row -->
+                        <div style="display:flex;gap:var(--space-5);margin-bottom:var(--space-5);flex-wrap:wrap;">
+                            <div style="display:flex;align-items:center;gap:var(--space-2);font-size:var(--text-sm);color:var(--muted);">
+                                <span x-text="t('memory.status.total') || 'Total'"></span>
+                                <span style="font-weight:600;font-family:var(--font-mono);color:var(--fg);" x-text="totalMemories"></span>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:var(--space-2);font-size:var(--text-sm);color:var(--muted);">
+                                <span x-text="t('memory.status.users') || 'Users'"></span>
+                                <span style="font-weight:600;font-family:var(--font-mono);color:var(--fg);" x-text="users.length"></span>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:var(--space-2);font-size:var(--text-sm);color:var(--muted);">
+                                <span x-text="t('memory.status.vector') || 'Vectors'"></span>
+                                <span style="font-weight:600;font-family:var(--font-mono);color:var(--fg);" x-text="status.vector_count ?? '—'"></span>
+                            </div>
+                        </div>
+
+                        <!-- Split layout: user list + memory detail -->
+                        <div style="display:grid;grid-template-columns:240px 1fr;gap:var(--space-5);">
+                            <!-- User list sidebar -->
+                            <div>
+                                <h4 style="font-weight:600;font-size:var(--text-sm);margin-bottom:var(--space-3);" x-text="t('memory.users.title') || 'Users'"></h4>
+                                <template x-if="users.length === 0">
+                                    <p style="font-size:var(--text-sm);color:var(--muted);" x-text="t('memory.users.no_users') || 'No users yet'"></p>
+                                </template>
+                                <div style="display:flex;flex-direction:column;gap:var(--space-1);">
+                                    <template x-for="u in users" :key="u.user_id">
+                                        <button @click="selectUser(u.user_id)"
+                                                :style="selectedUser === u.user_id
+                                                    ? 'background:color-mix(in oklab, var(--accent), transparent 92%);color:var(--accent);border-left:3px solid var(--accent);'
+                                                    : 'background:transparent;border-left:3px solid transparent;'"
+                                                style="width:100%;text-align:left;padding:var(--space-2) var(--space-3);border-radius:var(--radius-sm);font-size:var(--text-sm);display:flex;justify-content:space-between;align-items:center;transition:all 150ms ease;cursor:pointer;">
+                                            <span x-text="u.nickname || u.user_id"></span>
+                                            <span style="font-size:var(--text-xs);color:var(--muted);font-family:var(--font-mono);" x-text="u.count"></span>
+                                        </button>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <!-- Memory detail panel -->
+                            <div>
+                                <template x-if="!selectedUser">
+                                    <div class="empty-state" style="padding:var(--space-12) var(--space-6);">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:40px;height:40px;"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                                        <p x-text="t('memory.detail.select_user') || 'Select a user to view memories'"></p>
+                                    </div>
+                                </template>
+                                <template x-if="selectedUser">
+                                    <div>
+                                        <!-- Header with user name and clear button -->
+                                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-4);">
+                                            <h4 style="font-weight:600;font-size:var(--text-sm);">
+                                                <span x-text="t('memory.detail.title') || 'Memories'"></span>:
+                                                <span style="color:var(--accent);" x-text="selectedUserNickname || selectedUser"></span>
+                                            </h4>
+                                            <button @click="clearAllMemories()" class="btn btn-danger btn-sm" x-text="t('memory.detail.clear_all') || 'Clear All'"></button>
+                                        </div>
+
+                                        <!-- Memory cards -->
+                                        <div style="display:flex;flex-direction:column;gap:var(--space-3);">
+                                            <template x-if="displayedMemories.length === 0">
+                                                <div class="empty-state" style="padding:var(--space-8) var(--space-4);">
+                                                    <p style="font-size:var(--text-sm);" x-text="t('memory.detail.no_memories') || 'No memories found'"></p>
+                                                </div>
+                                            </template>
+                                            <template x-for="mem in displayedMemories" :key="mem.id">
+                                                <div class="card" style="padding:var(--space-4);">
+                                                    <!-- View mode -->
+                                                    <template x-if="editingId !== mem.id">
+                                                        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-3);">
+                                                            <p style="font-size:var(--text-sm);line-height:1.6;flex:1;" x-text="mem.memory || mem.text"></p>
+                                                            <div x-show="!mem._isSearchResult" style="display:flex;gap:var(--space-1);flex-shrink:0;">
+                                                                <button @click="startEdit(mem)" class="btn btn-secondary btn-sm" x-text="t('memory.detail.edit') || 'Edit'"></button>
+                                                                <button @click="deleteMemory(mem.id)" class="btn btn-danger btn-sm" style="padding:var(--space-1) var(--space-2);">&times;</button>
+                                                            </div>
+                                                        </div>
+                                                    </template>
+                                                    <!-- Edit mode -->
+                                                    <template x-if="editingId === mem.id">
+                                                        <div style="display:flex;flex-direction:column;gap:var(--space-2);">
+                                                            <input type="text" x-model="editText"
+                                                                   @keyup.enter="saveEdit(mem.id)"
+                                                                   @keyup.escape="cancelEdit()"
+                                                                   class="form-input">
+                                                            <div style="display:flex;gap:var(--space-2);justify-content:flex-end;">
+                                                                <button @click="cancelEdit()" class="btn btn-secondary btn-sm" x-text="t('memory.detail.cancel') || 'Cancel'"></button>
+                                                                <button @click="saveEdit(mem.id)" class="btn btn-primary btn-sm" x-text="t('memory.detail.save') || 'Save'"></button>
+                                                            </div>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+                <template x-if="!status.available">
+                    <div class="empty-state" style="padding:var(--space-12) var(--space-6);">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:40px;height:40px;"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                        <p x-text="t('memory.status.not_configured') || 'Memory system not configured. Go to Config tab to set up.'"></p>
+                    </div>
+                </template>
+            </div>
+
+        </div>
+    </div>

@@ -1,0 +1,156 @@
+    <!-- Status Tab -->
+    <div x-show="activeTab === 'status'" class="space-y-6">
+
+      <!-- Header -->
+      <div class="page-header">
+        <div class="status-row">
+          <span class="status-dot" :class="{'online': botStatus.status === 'running', 'offline': botStatus.status === 'stopped', 'error': botStatus.status === 'error', 'starting': botStatus.status === 'starting'}"></span>
+          <span class="status-label" x-text="t('state.' + (botStatus.status || 'unknown'))">--</span>
+          <span class="status-sub" x-show="botStatus.status === 'running' && botStatus.uptime_seconds != null" x-text="t('status.uptime') + ' ' + formatUptime(getDisplayUptimeSeconds())"></span>
+          <div class="ws-indicator">
+            <span class="ws-dot" :style="!wsConnected && 'background: var(--danger)'"></span>
+            <span x-text="wsConnected ? 'WebSocket ' + t('events.connected') : 'WebSocket ' + t('events.disconnected')"></span>
+          </div>
+        </div>
+        <h1 class="page-title" x-text="t('status.title')">状态仪表盘</h1>
+        <p class="page-desc">Bot Dashboard</p>
+      </div>
+
+      <!-- Stat cards -->
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-card-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+            <span x-text="t('status.user_id')">用户 ID</span>
+          </div>
+          <div class="stat-card-value" x-text="botStatus.user_id || '--'">--</div>
+          <div class="stat-card-sub" x-show="botStatus.account_id" x-text="'Account: ' + botStatus.account_id"></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/></svg>
+            <span x-text="t('status.active_model')">当前模型</span>
+          </div>
+          <div class="stat-card-value" x-text="botStatus.active_model_name || '--'">--</div>
+          <div class="stat-card-sub" x-show="botStatus.active_model" x-text="botStatus.active_model"></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span x-text="t('status.uptime')">运行时长</span>
+          </div>
+          <div class="stat-card-value" x-text="formatUptime(getDisplayUptimeSeconds())">--</div>
+          <div class="stat-card-sub" x-show="botStatus.status === 'running'" x-text="t('state.running')">运行中</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span x-text="tokenView === 'session' ? t('status.session_tokens') : t('status.total_tokens')">Token 用量</span>
+          </div>
+          <div class="stat-card-value" x-text="formatNumber(activeTokenStats.total_tokens)">--</div>
+          <div class="stat-card-sub" x-text="formatNumber(activeTokenStats.total_requests) + ' ' + t('status.requests')">--</div>
+        </div>
+      </div>
+
+      <!-- Token Usage -->
+      <div class="usage-section">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-4)">
+          <h2 class="section-title" x-text="t('status.token_usage')">Token 用量</h2>
+          <div class="filter-chips">
+            <button class="filter-chip" :class="{'active': tokenView === 'session'}" @click="tokenView = 'session'" x-text="t('status.this_session')">本次会话</button>
+            <button class="filter-chip" :class="{'active': tokenView === 'history'}" @click="tokenView = 'history'" x-text="t('status.all_time')">全量累计</button>
+          </div>
+        </div>
+        <div class="usage-bars">
+          <div class="usage-row" x-show="activeTokenStats.models && activeTokenStats.models.length > 0">
+            <template x-for="m in activeTokenStats.models" :key="m.model">
+              <div style="margin-bottom: var(--space-4);">
+                <div class="usage-row-header">
+                  <span class="usage-row-label" x-text="m.name || m.model"></span>
+                  <span class="usage-row-value" x-text="formatNumber(m.tokens) + ' tokens'"></span>
+                </div>
+                <div class="usage-bar-track">
+                  <div class="usage-bar-fill" :style="'width:' + (activeTokenStats.total_tokens ? Math.round(m.tokens / activeTokenStats.total_tokens * 100) : 0) + '%'"></div>
+                </div>
+                <div class="usage-breakdown">
+                  <span><span class="dot" style="background:var(--accent)"></span> <span x-text="m.requests + ' ' + t('status.requests')"></span></span>
+                  <span><span class="dot" style="background:color-mix(in oklab, var(--accent), transparent 40%)"></span> <span x-text="(activeTokenStats.total_tokens ? Math.round(m.tokens / activeTokenStats.total_tokens * 100) : 0) + '%'"></span></span>
+                </div>
+              </div>
+            </template>
+          </div>
+          <div x-show="!activeTokenStats.models || activeTokenStats.models.length === 0"
+               class="text-gray-400 text-sm text-center py-4"
+               x-text="tokenView === 'session' ? t('status.no_session_requests') : t('status.no_token_usage')">
+          </div>
+        </div>
+      </div>
+
+      <!-- Bot info + System info -->
+      <div class="info-grid">
+        <div class="info-card">
+          <div class="info-card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M4 12a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1"/><path d="M6 12v7a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-7"/><path d="M9 20h6"/></svg>
+            <span>Bot 信息</span>
+          </div>
+          <div class="info-row">
+            <span class="info-row-label" x-text="t('status.status')">运行状态</span>
+            <span class="info-row-value">
+              <span class="badge" :class="{'badge-online': botStatus.status === 'running', 'badge-offline': botStatus.status === 'stopped', 'badge-starting': botStatus.status === 'starting'}" x-text="t('state.' + (botStatus.status || 'unknown'))"></span>
+            </span>
+          </div>
+          <div class="info-row">
+            <span class="info-row-label" x-text="t('status.user_id')">用户 ID</span>
+            <span class="info-row-value" x-text="botStatus.user_id || '--'">--</span>
+          </div>
+          <div class="info-row">
+            <span class="info-row-label" x-text="t('status.account_id')">账号 ID</span>
+            <span class="info-row-value" x-text="botStatus.account_id || '--'">--</span>
+          </div>
+          <div class="info-row">
+            <span class="info-row-label" x-text="t('status.active_model')">绑定模型</span>
+            <span class="info-row-value"><span class="badge badge-model" x-text="botStatus.active_model_name || '--'">--</span></span>
+          </div>
+        </div>
+        <div class="info-card">
+          <div class="info-card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            <span x-text="t('status.system_info') || '系统信息'">系统信息</span>
+          </div>
+          <div class="info-row">
+            <span class="info-row-label" x-text="t('status.version') || '版本'">版本</span>
+            <span class="info-row-value font-mono" x-text="botVersion">--</span>
+          </div>
+          <div class="info-row">
+            <span class="info-row-label">Token 用量</span>
+            <span class="info-row-value font-mono" x-text="formatNumber(activeTokenStats.total_tokens) + ' (' + formatNumber(activeTokenStats.total_requests) + ' req)'">--</span>
+          </div>
+          <div class="info-row">
+            <span class="info-row-label" x-text="t('status.this_session')">本次会话</span>
+            <span class="info-row-value font-mono" x-text="formatNumber(sessionTokenStats.total_tokens) + ' tokens'">--</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="quick-actions">
+        <button class="btn btn-success" x-show="botStatus.status !== 'running' && botStatus.status !== 'starting'" @click="startBot()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          <span x-text="t('status.start_bot')">启动 Bot</span>
+        </button>
+        <button class="btn btn-danger" x-show="botStatus.status === 'running' || botStatus.status === 'starting'" @click="stopBot()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+          <span x-text="t('status.stop_bot')">停止 Bot</span>
+        </button>
+        <button class="btn btn-secondary" @click="refreshBotStatus()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          <span x-text="t('status.refresh')">刷新状态</span>
+        </button>
+      </div>
+
+      <!-- Error -->
+      <div x-show="botStatus.error" class="bg-red-50 border border-red-200 rounded-xl p-6">
+        <h2 class="text-red-700 font-semibold mb-2" x-text="t('status.error')">Error</h2>
+        <p class="text-red-600 text-sm" x-text="botStatus.error"></p>
+      </div>
+    </div>

@@ -1,0 +1,198 @@
+    <!-- Sticker Packs Tab -->
+    <div x-show="activeTab === 'stickers'" class="space-y-4">
+
+        <!-- Page Header -->
+        <div class="page-header">
+            <div class="page-header-row">
+                <div>
+                    <h2 class="page-title" x-text="t('stickers.title')">Sticker Packs</h2>
+                    <p class="page-subtitle" x-text="t('stickers.subtitle') || ''"></p>
+                </div>
+                <div class="flex gap-2">
+                    <button @click="openPackForm()" class="btn btn-primary">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        <span x-text="t('stickers.add_pack')">New Pack</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toolstrip -->
+        <div class="toolstrip">
+            <div class="toolstrip-field" style="flex-direction:row;align-items:center;gap:var(--space-2);">
+                <label style="font-size:var(--text-sm);color:var(--muted);white-space:nowrap;" x-text="t('stickers.import_archive') || 'Import Archive'"></label>
+                <label class="btn btn-secondary btn-sm cursor-pointer">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    <span x-text="t('stickers.import_btn') || 'Choose File'">Choose File</span>
+                    <input type="file" accept=".zip,.7z,.rar" class="hidden"
+                           @change="importStickerArchive($event)">
+                </label>
+            </div>
+            <div class="toolstrip-separator"></div>
+            <div class="toolstrip-field" style="flex-direction:row;align-items:center;gap:var(--space-2);flex:1;">
+                <label style="font-size:var(--text-sm);color:var(--muted);white-space:nowrap;" x-text="t('stickers.scan_label') || 'Local Path'"></label>
+                <input x-model="scanPath" type="text" class="form-input" style="height:32px;max-width:320px;"
+                       :placeholder="t('stickers.scan_placeholder')">
+                <button @click="scanStickerPath()" class="btn btn-secondary btn-sm">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <span x-text="t('stickers.scan_path')">Scan</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Pack Grid with Accordion Cards -->
+        <div class="card-grid" x-data="{ expandedPack: null }">
+            <template x-for="pack in stickerPacks" :key="pack.id">
+                <div class="accordion-card">
+                    <!-- Accordion Header -->
+                    <div class="accordion-header" @click="expandedPack = expandedPack === pack.id ? null : pack.id">
+                        <div style="display:flex;align-items:center;gap:var(--space-3);min-width:0;">
+                            <div style="width:44px;height:44px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;background:color-mix(in oklab, var(--accent), transparent 85%);">
+                                <img x-show="pack.cover_sticker_id" :src="'/api/sticker-packs/stickers/' + pack.cover_sticker_id + '/file'"
+                                     style="width:44px;height:44px;border-radius:var(--radius-sm);object-fit:cover;" alt="">
+                                <span x-show="!pack.cover_sticker_id" style="font-size:22px;">&#128444;</span>
+                            </div>
+                            <div style="min-width:0;">
+                                <div style="font-weight:600;font-size:var(--text-base);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" x-text="pack.name"></div>
+                                <div style="display:flex;align-items:center;gap:var(--space-2);margin-top:2px;">
+                                    <span style="font-size:var(--text-xs);color:var(--muted);" x-text="pack.sticker_count + ' ' + t('stickers.sticker_count')"></span>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:var(--space-2);flex-shrink:0;">
+                            <button class="btn btn-secondary btn-sm" @click.stop="editPack(pack)" :title="t('stickers.edit') || 'Edit'">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            </button>
+                            <button class="btn btn-secondary btn-sm" @click.stop="deletePack(pack.id)" :title="t('stickers.delete_pack') || 'Delete'">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            </button>
+                            <div style="width:24px;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:transform var(--motion-fast) var(--ease-standard);"
+                                 :style="expandedPack === pack.id ? 'transform:rotate(180deg)' : ''">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><polyline points="6 9 12 15 18 9"/></svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Accordion Body -->
+                    <div class="accordion-body" :class="{ 'expanded': expandedPack === pack.id }">
+                        <div class="accordion-body-inner">
+                            <div style="display:flex;align-items:center;justify-content:space-between;padding:var(--space-3) 0;gap:var(--space-2);">
+                                <span style="font-size:var(--text-sm);font-weight:500;color:var(--muted);" x-text="t('stickers.sticker_list') || 'Stickers'"></span>
+                                <div style="display:flex;align-items:center;gap:var(--space-2);">
+                                    <label class="btn btn-primary btn-sm cursor-pointer">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                        <span x-text="t('stickers.add_sticker')">Add</span>
+                                        <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="hidden"
+                                               @change="addSticker($event)">
+                                    </label>
+                                    <button class="btn btn-secondary btn-sm" @click="openPackDetail(pack)" :title="t('stickers.open_detail') || 'Open Detail'">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                                        <span x-text="t('stickers.detail') || 'Detail'">Detail</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <!-- Sticker subgrid (preview from pack detail) -->
+                            <div class="stickers-grid">
+                                <template x-for="s in (selectedPack && selectedPack.id === pack.id ? selectedPackStickers : [])" :key="s.id">
+                                    <div class="sticker-item">
+                                        <img :src="'/api/sticker-packs/stickers/' + s.id + '/file'"
+                                             style="width:60px;height:60px;object-fit:contain;border-radius:var(--radius-sm);" alt="">
+                                        <span class="sticker-item-desc" x-text="s.text_description || ''"></span>
+                                        <div class="sticker-overlay">
+                                            <button @click="deleteSticker(s.id)" title="Delete">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </template>
+                                <div x-show="!(selectedPack && selectedPack.id === pack.id)"
+                                     style="grid-column:1/-1;text-align:center;color:var(--muted);font-size:var(--text-sm);padding:var(--space-4);"
+                                     x-text="t('stickers.click_detail') || 'Click Detail to view stickers'">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- Empty State -->
+        <div x-show="stickerPacks.length === 0" class="empty-state" style="padding:var(--space-12) var(--space-6);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+            <p x-text="t('stickers.no_packs')">No sticker packs yet.</p>
+        </div>
+
+        <!-- Pack Form Modal -->
+        <div x-show="showPackForm" x-transition x-cloak
+             class="modal-overlay"
+             @keydown.escape.window="showPackForm = false"
+             @click.self="showPackForm = false">
+            <div class="modal" style="max-width:480px;">
+                <h3 class="modal-title" x-text="packForm.id ? t('stickers.edit_pack') || t('stickers.pack_name') : t('stickers.add_pack')"></h3>
+                <div class="form-group">
+                    <label class="form-label" x-text="t('stickers.pack_name')"></label>
+                    <input x-model="packForm.name" type="text" class="form-input"
+                           :placeholder="t('stickers.pack_name_placeholder')">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" x-text="t('stickers.description')"></label>
+                    <textarea x-model="packForm.description" rows="2" class="form-input"
+                              style="resize:vertical;min-height:60px;"
+                              :placeholder="t('stickers.description_placeholder')"></textarea>
+                </div>
+                <div class="modal-actions">
+                    <button @click="showPackForm = false" class="btn btn-secondary" x-text="t('prompts.cancel') || 'Cancel'">Cancel</button>
+                    <button @click="savePack()" class="btn btn-primary" x-text="t('stickers.save') || 'Save'">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sticker Detail Modal -->
+        <div x-show="showStickerDetail" x-transition x-cloak
+             class="modal-overlay"
+             @keydown.escape.window="showStickerDetail = false"
+             @click.self="showStickerDetail = false">
+            <div class="modal" style="max-width:640px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-5);">
+                    <h3 class="modal-title" style="margin-bottom:0;" x-text="selectedPack?.name"></h3>
+                    <div style="display:flex;gap:var(--space-2);">
+                        <label class="btn btn-primary btn-sm cursor-pointer">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            <span x-text="t('stickers.add_sticker')">Add</span>
+                            <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="hidden"
+                                   @change="addSticker($event)">
+                        </label>
+                        <button @click="deletePackFromDetail()" class="btn btn-danger btn-sm">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            <span x-text="t('stickers.delete_pack')">Delete Pack</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="stickers-grid" style="max-height:400px;overflow-y:auto;">
+                    <template x-for="s in selectedPackStickers" :key="s.id">
+                        <div class="sticker-item">
+                            <img :src="'/api/sticker-packs/stickers/' + s.id + '/file'"
+                                 style="width:60px;height:60px;object-fit:contain;border-radius:var(--radius-sm);" alt="">
+                            <input type="text" :value="s.text_description"
+                                   @change="updateStickerDesc(s.id, $event.target.value)"
+                                   style="width:100%;text-align:center;font-size:var(--text-xs);border:1px solid var(--border);border-radius:var(--radius-sm);padding:2px var(--space-1);background:var(--bg);outline:none;margin-top:var(--space-1);"
+                                   :placeholder="t('stickers.text_description_placeholder')">
+                            <div class="sticker-overlay">
+                                <button @click="deleteSticker(s.id)">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+                <div x-show="selectedPackStickers.length === 0"
+                     style="text-align:center;color:var(--muted);padding:var(--space-8);"
+                     x-text="t('stickers.no_stickers')">
+                </div>
+                <div class="modal-actions">
+                    <button @click="showStickerDetail = false" class="btn btn-secondary" x-text="t('prompts.close') || 'Close'">Close</button>
+                </div>
+            </div>
+        </div>
+
+    </div>

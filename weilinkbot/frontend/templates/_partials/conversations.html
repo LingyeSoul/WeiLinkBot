@@ -1,0 +1,110 @@
+    <!-- Conversations Tab (Chat Layout) -->
+    <div x-show="activeTab === 'conversations'" class="chat-layout">
+
+      <!-- Conversation List Panel -->
+      <div class="conv-panel">
+        <div class="conv-header">
+          <h1 x-text="t('conv.title')">对话</h1>
+          <div class="conv-header-row">
+            <div class="search-box">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" :placeholder="t('conv.search') || '搜索对话...'" x-model="chatSearchQuery">
+            </div>
+            <button class="btn-new-chat" @click="selectedUser = null; selectedMessages = []" title="新建对话">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="conv-list">
+          <template x-for="conv in filteredConversations" :key="conv.user_id">
+            <div class="conv-item" :class="{'active': selectedUser === conv.user_id}" @click="selectConversation(conv.user_id)">
+              <div class="conv-avatar" :style="'background:' + getConvAvatarColor(conv.user_id)" x-text="getConvInitial(conv.user_id)"></div>
+              <div class="conv-body">
+                <div class="conv-top">
+                  <span class="conv-name" x-text="conv.user_id"></span>
+                  <span class="conv-time" x-text="conv.message_count + ' msg'"></span>
+                </div>
+                <div class="conv-preview" x-text="conv.last_message || ''"></div>
+              </div>
+            </div>
+          </template>
+          <div x-show="conversations.length === 0" class="empty-state" style="padding:var(--space-8) var(--space-4)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <p x-text="t('conv.no_conversations')">暂无对话</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chat Panel -->
+      <div class="chat-panel">
+        <!-- Topbar -->
+        <div class="chat-topbar" x-show="selectedUser">
+          <div class="chat-topbar-info">
+            <div class="chat-topbar-name" x-text="selectedUser"></div>
+            <div class="chat-topbar-meta" x-text="selectedMessages.length + ' ' + t('conv.messages')"></div>
+          </div>
+          <div class="chat-topbar-actions">
+            <div class="model-pill" x-show="botStatus.active_model_name">
+              <span class="model-pill-dot"></span>
+              <span x-text="botStatus.active_model_name"></span>
+            </div>
+            <button class="btn-icon" @click="clearConversation(selectedUser)" :title="t('conv.clear_history')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Messages -->
+        <div class="chat-messages" id="msg-container" x-show="selectedUser">
+          <template x-for="msg in selectedMessages" :key="msg.id">
+            <div class="msg" :class="msg.role">
+              <div class="msg-avatar" x-text="msg.role === 'user' ? 'U' : 'A'"></div>
+              <div>
+                <div class="msg-content" :class="{'msg-system': msg.role === 'system', 'msg-preprocess': msg.role === 'preprocess'}" x-text="msg.content"></div>
+                <div class="msg-time">
+                  <span x-text="msg.role"></span>
+                  <span x-show="msg.tokens_used" x-text="' · ' + msg.tokens_used + ' tokens'"></span>
+                </div>
+              </div>
+            </div>
+          </template>
+          <!-- Typing indicator -->
+          <div class="msg assistant" x-show="webTyping">
+            <div class="msg-avatar">A</div>
+            <div class="typing-indicator">
+              <span class="typing-dot"></span>
+              <span class="typing-dot"></span>
+              <span class="typing-dot"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Empty state -->
+        <div class="empty-chat" x-show="!selectedUser">
+          <div class="empty-chat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </div>
+          <h2 x-text="t('conv.select_hint')">选择一个对话</h2>
+          <p x-text="t('conv.select_hint_desc') || '从左侧列表选择对话，或开始新对话'">从左侧列表选择对话，或开始新对话</p>
+        </div>
+
+        <!-- Input Area -->
+        <div class="chat-input-area" x-show="selectedUser || true">
+          <div class="chat-input-row">
+            <textarea class="chat-input-field"
+                      x-model="chatInput"
+                      @keydown="handleChatInputKeydown($event)"
+                      @input="autoResizeTextarea($event)"
+                      :placeholder="t('conv.input_placeholder') || '输入消息...'"
+                      rows="1"></textarea>
+            <button class="chat-send-btn" @click="sendWebMessage()" :disabled="!chatInput.trim()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </button>
+          </div>
+          <div class="chat-input-hint">
+            <span x-text="'web:admin'"></span>
+            <span><kbd>Enter</kbd> 发送 · <kbd>Shift+Enter</kbd> 换行</span>
+          </div>
+        </div>
+      </div>
+    </div>

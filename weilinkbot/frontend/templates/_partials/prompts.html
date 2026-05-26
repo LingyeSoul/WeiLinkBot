@@ -1,0 +1,131 @@
+    <!-- Prompts Tab -->
+    <div x-show="activeTab === 'prompts'" class="split-page">
+      <div class="split-layout">
+        <!-- Left: Prompt List -->
+        <aside class="split-list-panel">
+          <div class="split-list-header">
+            <div class="split-list-header-title">
+              <h2 style="font-size:var(--text-lg);font-weight:700;" x-text="t('prompts.title')">提示词管理</h2>
+              <button class="btn btn-sm btn-primary" @click="promptForm = { id: null, name: '', content: '', is_default: false }; showPromptForm = true;">+ <span x-text="t('prompts.new')"></span></button>
+            </div>
+            <div class="split-list-search">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
+              </svg>
+              <input type="text" placeholder="搜索提示词..." x-model="promptSearch" @input.debounce.200ms="">
+            </div>
+          </div>
+          <div class="split-list-items">
+            <template x-for="prompt in prompts.filter(p => !promptSearch || p.name.toLowerCase().includes(promptSearch.toLowerCase()))" :key="prompt.id">
+              <div class="split-list-item"
+                   :class="{ 'active': promptForm.id === prompt.id }"
+                   @click="editPrompt(prompt)">
+                <div style="flex:1;min-width:0;">
+                  <div class="split-list-item-name">
+                    <span x-text="prompt.name"></span>
+                    <span x-show="prompt.is_default" class="badge badge-accent" style="margin-left:var(--space-1);font-size:11px;" x-text="t('prompts.default_badge')"></span>
+                  </div>
+                  <div class="split-list-item-preview" x-text="prompt.content ? prompt.content.substring(0, 60) + (prompt.content.length > 60 ? '...' : '') : ''"></div>
+                </div>
+              </div>
+            </template>
+            <div x-show="prompts.length === 0" class="split-editor-empty" style="padding:var(--space-6);">
+              <p style="font-size:var(--text-sm);" x-text="t('prompts.new')">暂无提示词</p>
+            </div>
+          </div>
+        </aside>
+
+        <!-- Right: Editor Panel -->
+        <main class="split-editor-panel">
+          <!-- Empty state when no prompt selected -->
+          <div x-show="!promptForm.id" class="split-editor-empty">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
+            </svg>
+            <p style="font-size:var(--text-sm);color:var(--muted);" x-text="t('prompts.content_placeholder')">选择或新建一个提示词</p>
+          </div>
+
+          <!-- Editor when prompt is selected -->
+          <div x-show="promptForm.id" class="split-editor-form">
+            <!-- Topbar -->
+            <div class="split-editor-topbar">
+              <div style="display:flex;align-items:center;gap:var(--space-3);min-width:0;">
+                <h3 style="font-size:var(--text-base);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" x-text="promptForm.name"></h3>
+                <span x-show="promptForm.is_default" class="badge badge-accent" x-text="t('prompts.default_badge')"></span>
+              </div>
+              <div style="display:flex;align-items:center;gap:var(--space-2);">
+                <button class="btn btn-sm btn-secondary" @click="setDefaultPrompt(promptForm.id)" x-show="!promptForm.is_default" x-text="t('prompts.set_default_btn')">Set Default</button>
+                <button class="btn btn-sm btn-danger" @click="deletePrompt(promptForm.id)" x-text="t('prompts.delete')">Delete</button>
+              </div>
+            </div>
+
+            <!-- Body -->
+            <div class="split-editor-body">
+              <div class="form-group">
+                <label class="form-label" x-text="t('prompts.name')">Name</label>
+                <input class="form-input" type="text" x-model="promptForm.name" :placeholder="t('prompts.name_placeholder')">
+              </div>
+              <div class="form-group">
+                <label class="form-label" x-text="t('prompts.content')">Content</label>
+                <div class="content-textarea-wrap">
+                  <textarea x-model="promptForm.content"
+                            :placeholder="t('prompts.content_placeholder')"
+                            rows="12"></textarea>
+                  <div class="content-textarea-footer">
+                    <span x-text="(promptForm.content || '').length + ' chars'"></span>
+                    <label class="form-checkbox">
+                      <input type="checkbox" x-model="promptForm.is_default">
+                      <span x-text="t('prompts.set_default')">Set as default</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="split-editor-actions">
+              <div></div>
+              <div style="display:flex;gap:var(--space-3);">
+                <button class="btn btn-secondary" @click="resetPromptForm()" x-text="t('prompts.cancel')">Cancel</button>
+                <button class="btn btn-primary" @click="savePrompt()">
+                  <span x-text="promptForm.id ? t('prompts.update') : t('prompts.create')"></span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <!-- Create Prompt Modal -->
+    <div x-show="showPromptForm && !promptForm.id" x-cloak
+         class="modal-overlay"
+         @keydown.escape.window="showPromptForm = false"
+         @click.self="showPromptForm = false">
+      <div class="modal">
+        <h3 class="modal-title" x-text="t('prompts.new')">New Prompt</h3>
+        <div class="form-group">
+          <label class="form-label" x-text="t('prompts.name')">Name</label>
+          <input class="form-input" type="text" x-model="promptForm.name" :placeholder="t('prompts.name_placeholder')">
+        </div>
+        <div class="form-group">
+          <label class="form-label" x-text="t('prompts.content')">Content</label>
+          <div class="content-textarea-wrap">
+            <textarea x-model="promptForm.content"
+                      :placeholder="t('prompts.content_placeholder')"
+                      rows="8"></textarea>
+            <div class="content-textarea-footer">
+              <span x-text="(promptForm.content || '').length + ' chars'"></span>
+              <label class="form-checkbox">
+                <input type="checkbox" x-model="promptForm.is_default">
+                <span x-text="t('prompts.set_default')">Set as default</span>
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" @click="resetPromptForm()" x-text="t('prompts.cancel')">Cancel</button>
+          <button class="btn btn-primary" @click="savePrompt()" x-text="t('prompts.create')">Create</button>
+        </div>
+      </div>
+    </div>

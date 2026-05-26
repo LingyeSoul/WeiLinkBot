@@ -1,0 +1,365 @@
+    <!-- ST Presets Tab -->
+    <div x-show="activeTab === 'st-presets'" class="split-page">
+        <div class="page-header-row" style="margin-bottom:var(--space-6);">
+            <h2 class="page-title" x-text="t('st_presets.title')">SillyTavern Presets</h2>
+            <div class="header-actions" style="display:flex;gap:var(--space-2);">
+                <label class="btn btn-secondary" style="cursor:pointer;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    <span x-text="t('st_presets.import')">Import</span>
+                    <input type="file" accept=".json" class="hidden" @change="importSTPreset($event)">
+                </label>
+                <button class="btn btn-primary" @click="showSTPresetForm = !showSTPresetForm; if(!showSTPresetForm) resetSTPresetForm();">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:16px;height:16px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    <span x-text="t('st_presets.add')">+ Add Preset</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Add/Edit Form (collapsible) -->
+        <div x-show="showSTPresetForm" x-transition class="card" style="margin-bottom:var(--space-6);">
+            <div class="form-group">
+                <label class="form-label" x-text="t('st_presets.name')">Name</label>
+                <input x-model="stPresetForm.name" type="text" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label" x-text="t('st_presets.raw_json')">Raw JSON</label>
+                <textarea x-model="stPresetForm.raw_json" rows="6" class="form-input" style="font-family:var(--font-mono);"></textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label" x-text="t('st_presets.system_prompt')">System Prompt</label>
+                <textarea x-model="stPresetForm.system_prompt" rows="2" class="form-input"></textarea>
+            </div>
+            <div style="display:flex;gap:var(--space-3);padding-top:var(--space-4);border-top:1px solid var(--border);">
+                <button class="btn btn-primary" @click="saveSTPreset()">
+                    <span x-text="stPresetForm.id ? t('models.update') : t('st_presets.add')"></span>
+                </button>
+                <button class="btn btn-secondary" @click="resetSTPresetForm()" x-text="t('prompts.cancel')">Cancel</button>
+            </div>
+        </div>
+
+        <!-- Split layout: preset list + editor -->
+        <div class="split-layout">
+            <!-- Left: Preset List -->
+            <div class="split-list-panel">
+                <div class="split-list-header">
+                    <div class="split-list-header-title">
+                        <span style="font-weight:600;font-size:var(--text-sm);" x-text="t('st_presets.title')"></span>
+                        <span class="badge badge-accent" x-text="stPresets.length"></span>
+                    </div>
+                </div>
+                <div class="split-list-items">
+                    <template x-for="p in stPresets" :key="p.id">
+                        <div class="split-list-item" :class="{'active': stSelectedPresetId === p.id}" @click="editSTPreset(p)">
+                            <div style="flex:1;min-width:0;">
+                                <div class="split-list-item-name" x-text="p.name"></div>
+                                <div class="split-list-item-preview" x-text="p.system_prompt || '---'"></div>
+                            </div>
+                            <span class="badge" :class="p.is_active ? 'badge-green' : 'badge-accent'" style="flex-shrink:0;"
+                                  x-text="p.is_active ? t('st_presets.active') : t('models.inactive')"></span>
+                        </div>
+                    </template>
+                    <div x-show="stPresets.length === 0" class="empty-state" style="padding:var(--space-8);">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:40px;height:40px;opacity:0.3;margin-bottom:var(--space-3);"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+                        <p x-text="t('st_presets.no_presets')">No presets configured</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Preset Editor -->
+            <div class="split-editor-panel">
+                <div x-show="!stSelectedPresetId" class="split-editor-empty">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:48px;height:48px;opacity:0.3;margin-bottom:var(--space-4);"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+                    <p x-text="t('st_presets.select_preset')">Select a preset to edit</p>
+                </div>
+                <template x-for="p in stPresets" :key="'editor-'+p.id">
+                    <div x-show="stSelectedPresetId === p.id" class="split-editor-form">
+                        <!-- Top bar -->
+                        <div class="split-editor-topbar">
+                            <div style="display:flex;align-items:center;gap:var(--space-3);min-width:0;">
+                                <span style="font-weight:600;font-size:var(--text-base);" x-text="p.name"></span>
+                                <span class="badge badge-green" x-show="p.is_active" x-text="t('st_presets.active')"></span>
+                            </div>
+                            <div style="display:flex;gap:var(--space-2);flex-shrink:0;">
+                                <button class="btn btn-secondary btn-sm" @click="exportSTPreset(p.id, p.name)" x-text="t('st_presets.export')">Export</button>
+                                <button class="btn btn-secondary btn-sm" @click="deactivateSTPreset()" x-show="p.is_active" x-text="t('st_presets.deactivate')">Deactivate</button>
+                                <button class="btn btn-sm btn-danger" @click="deleteSTPreset(p.id, p.name)" x-text="t('models.delete')">Delete</button>
+                            </div>
+                        </div>
+                        <!-- Body with tabs -->
+                        <div class="split-editor-body">
+                            <!-- Tab bar -->
+                            <div class="tab-bar" role="tablist">
+                                <button class="tab-btn" :class="{'active': presetTab === 'prompts'}" @click="presetTab = 'prompts'" role="tab" x-text="t('st_presets.tab_prompts')">Prompt Templates</button>
+                                <button class="tab-btn" :class="{'active': presetTab === 'sampling'}" @click="presetTab = 'sampling'" role="tab" x-text="t('st_presets.tab_sampling')">Sampling Parameters</button>
+                                <button class="tab-btn" :class="{'active': presetTab === 'advanced'}" @click="presetTab = 'advanced'" role="tab" x-text="t('st_presets.tab_advanced')">Advanced Settings</button>
+                                <button class="tab-btn" :class="{'active': presetTab === 'entries'}" @click="presetTab = 'entries'" role="tab" x-text="t('st_presets.tab_entries')">Entries</button>
+                            </div>
+
+                            <!-- Tab: Prompt Templates -->
+                            <div class="tab-panel" :class="{'active': presetTab === 'prompts'}">
+                                <div class="form-group">
+                                    <label class="form-label" x-text="t('st_presets.system_prompt')">System Prompt</label>
+                                    <textarea x-model="p.system_prompt" rows="6" class="form-input" style="font-family:var(--font-body);line-height:1.6;"></textarea>
+                                    <p class="form-hint" x-text="t('st_presets.prompt_hint')">Write the system prompt template for this preset.</p>
+                                </div>
+                            </div>
+
+                            <!-- Tab: Sampling Parameters -->
+                            <div class="tab-panel" :class="{'active': presetTab === 'sampling'}">
+                                <div class="card" style="margin-bottom:var(--space-5);">
+                                    <div class="form-toggle-row">
+                                        <div>
+                                            <div class="form-toggle-label" x-text="t('st_presets.sampling.temperature')">Temperature</div>
+                                            <div class="form-toggle-desc" x-text="t('st_presets.sampling.temperature_hint')"></div>
+                                        </div>
+                                        <div class="slider-row">
+                                            <input type="range" min="0" max="200" value="70" />
+                                            <span class="slider-value">0.70</span>
+                                        </div>
+                                    </div>
+                                    <div class="form-toggle-row">
+                                        <div>
+                                            <div class="form-toggle-label" x-text="t('st_presets.sampling.top_p')">Top P</div>
+                                            <div class="form-toggle-desc" x-text="t('st_presets.sampling.top_p_hint')"></div>
+                                        </div>
+                                        <div class="slider-row">
+                                            <input type="range" min="0" max="100" value="100" />
+                                            <span class="slider-value">1.00</span>
+                                        </div>
+                                    </div>
+                                    <div class="form-toggle-row">
+                                        <div>
+                                            <div class="form-toggle-label" x-text="t('st_presets.sampling.top_k')">Top K</div>
+                                            <div class="form-toggle-desc" x-text="t('st_presets.sampling.top_k_hint')"></div>
+                                        </div>
+                                        <div class="slider-row">
+                                            <input type="range" min="0" max="100" value="0" />
+                                            <span class="slider-value">0</span>
+                                        </div>
+                                    </div>
+                                    <div class="form-toggle-row">
+                                        <div>
+                                            <div class="form-toggle-label" x-text="t('st_presets.sampling.typical_p')">Typical P</div>
+                                            <div class="form-toggle-desc" x-text="t('st_presets.sampling.typical_p_hint')"></div>
+                                        </div>
+                                        <div class="slider-row">
+                                            <input type="range" min="0" max="100" value="100" />
+                                            <span class="slider-value">1.00</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card" style="margin-bottom:var(--space-5);">
+                                    <div class="form-toggle-row">
+                                        <div>
+                                            <div class="form-toggle-label" x-text="t('st_presets.sampling.rep_penalty')">Repetition Penalty</div>
+                                            <div class="form-toggle-desc" x-text="t('st_presets.sampling.rep_penalty_hint')"></div>
+                                        </div>
+                                        <div class="slider-row">
+                                            <input type="range" min="100" max="200" value="100" />
+                                            <span class="slider-value">1.00</span>
+                                        </div>
+                                    </div>
+                                    <div class="form-toggle-row">
+                                        <div>
+                                            <div class="form-toggle-label" x-text="t('st_presets.sampling.freq_penalty')">Frequency Penalty</div>
+                                            <div class="form-toggle-desc" x-text="t('st_presets.sampling.freq_penalty_hint')"></div>
+                                        </div>
+                                        <div class="slider-row">
+                                            <input type="range" min="0" max="200" value="0" />
+                                            <span class="slider-value">0.00</span>
+                                        </div>
+                                    </div>
+                                    <div class="form-toggle-row">
+                                        <div>
+                                            <div class="form-toggle-label" x-text="t('st_presets.sampling.pres_penalty')">Presence Penalty</div>
+                                            <div class="form-toggle-desc" x-text="t('st_presets.sampling.pres_penalty_hint')"></div>
+                                        </div>
+                                        <div class="slider-row">
+                                            <input type="range" min="0" max="200" value="0" />
+                                            <span class="slider-value">0.00</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card">
+                                    <div class="form-toggle-row">
+                                        <div>
+                                            <div class="form-toggle-label" x-text="t('st_presets.sampling.max_tokens')">Max Tokens</div>
+                                            <div class="form-toggle-desc" x-text="t('st_presets.sampling.max_tokens_hint')"></div>
+                                        </div>
+                                        <div class="slider-row">
+                                            <input type="range" min="64" max="8192" step="64" value="2048" />
+                                            <span class="slider-value">2048</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tab: Advanced Settings -->
+                            <div class="tab-panel" :class="{'active': presetTab === 'advanced'}">
+                                <div class="card" style="margin-bottom:var(--space-5);">
+                                    <div class="form-toggle-row">
+                                        <div>
+                                            <div class="form-toggle-label" x-text="t('st_presets.advanced.injection_pos')">Injection Position</div>
+                                            <div class="form-toggle-desc" x-text="t('st_presets.advanced.injection_pos_hint')"></div>
+                                        </div>
+                                        <select class="form-select" style="width:auto;min-width:140px;">
+                                            <option value="0" x-text="t('st_presets.pos_before')">Before main</option>
+                                            <option value="1" x-text="t('st_presets.pos_after')">After main</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-toggle-row">
+                                        <div>
+                                            <div class="form-toggle-label" x-text="t('st_presets.advanced.message_format')">Message Format</div>
+                                            <div class="form-toggle-desc" x-text="t('st_presets.advanced.message_format_hint')"></div>
+                                        </div>
+                                        <select class="form-select" style="width:auto;min-width:140px;">
+                                            <option value="chatml">ChatML</option>
+                                            <option value="alpaca">Alpaca</option>
+                                            <option value="llama2">LLaMA 2</option>
+                                            <option value="vicuna">Vicuna</option>
+                                            <option value="raw">Raw</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="card">
+                                    <div class="form-group">
+                                        <label class="form-label" x-text="t('st_presets.advanced.raw_json')">Raw JSON</label>
+                                        <textarea x-model="p.raw_json" rows="8" class="form-input" style="font-family:var(--font-mono);font-size:var(--text-xs);"></textarea>
+                                        <p class="form-hint" x-text="t('st_presets.advanced.raw_json_hint')">Direct JSON override for advanced configuration.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tab: Entries -->
+                            <div class="tab-panel" :class="{'active': presetTab === 'entries'}">
+                                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-4);">
+                                    <span style="font-size:var(--text-sm);color:var(--muted);" x-text="t('st_presets.entry_count').replace('{count}', stPresetEntries.length)"></span>
+                                    <button class="btn btn-success btn-sm" @click="addSTEntry()">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                        <span x-text="t('st_presets.add_entry')">Add Entry</span>
+                                    </button>
+                                </div>
+                                <div style="display:flex;flex-direction:column;gap:var(--space-3);">
+                                    <template x-for="(entry, idx) in stPresetEntries" :key="entry.identifier + '-' + idx">
+                                        <div class="accordion-card"
+                                             draggable="true"
+                                             @dragstart="stDragStart(idx, $event)"
+                                             @dragover.prevent="stDragOver(idx, $event)"
+                                             @drop="stDrop(idx, $event)">
+                                            <!-- Collapsed Header -->
+                                            <div class="accordion-header" @click="expandSTEntry(idx)">
+                                                <div style="display:flex;align-items:center;gap:var(--space-3);flex:1;min-width:0;">
+                                                    <span style="color:var(--muted);cursor:grab;font-size:var(--text-lg);line-height:1;flex-shrink:0;" :title="t('st_presets.entries.drag_hint')">&#9776;</span>
+                                                    <label class="toggle" @click.stop>
+                                                        <input type="checkbox" :checked="entry.enabled"
+                                                               @change="toggleSTPresetEntry(stPresetEntriesPresetId, entry.index, entry.enabled)" />
+                                                        <span class="toggle-track"></span>
+                                                    </label>
+                                                    <span style="font-weight:600;font-size:var(--text-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" x-text="entry.name || 'Entry ' + entry.index"></span>
+                                                    <span class="badge"
+                                                          :class="{
+                                                              'badge-accent': entry.role === 'system',
+                                                              'badge-green': entry.role === 'user',
+                                                              'badge-purple': entry.role === 'assistant'
+                                                          }"
+                                                          style="flex-shrink:0;"
+                                                          x-text="entry.role"></span>
+                                                </div>
+                                                <svg style="width:16px;height:16px;color:var(--muted);transition:transform var(--motion-fast) var(--ease-standard);flex-shrink:0;"
+                                                     :class="{'rotate-180': stExpandedEntry === idx}"
+                                                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                                </svg>
+                                            </div>
+                                            <!-- Expanded Content -->
+                                            <div x-show="stExpandedEntry === idx"
+                                                 x-transition:enter="transition ease-out duration-200"
+                                                 x-transition:enter-start="opacity-0"
+                                                 x-transition:enter-end="opacity-100"
+                                                 x-transition:leave="transition ease-in duration-150"
+                                                 x-transition:leave-start="opacity-100"
+                                                 x-transition:leave-end="opacity-0"
+                                                 class="accordion-body-inner" style="padding:var(--space-4);border-top:1px solid var(--border);">
+                                                <div class="form-group">
+                                                    <label class="form-label" x-text="t('st_presets.entry_name')">Entry Name</label>
+                                                    <input type="text" :value="entry.name"
+                                                           @input="stEntryEditIndex === idx && (stEntryForm.name = $event.target.value)"
+                                                           @focus="editSTEntry(entry, idx)"
+                                                           class="form-input" :placeholder="t('st_presets.entry_name')">
+                                                </div>
+                                                <div class="form-row" style="margin-bottom:var(--space-4);">
+                                                    <div class="form-group" style="margin-bottom:0;">
+                                                        <label class="form-label" x-text="t('st_presets.entry_role')">Role</label>
+                                                        <select :value="entry.role"
+                                                                @change="stEntryEditIndex === idx && (stEntryForm.role = $event.target.value)"
+                                                                @focus="editSTEntry(entry, idx)"
+                                                                class="form-select">
+                                                            <option value="system">system</option>
+                                                            <option value="user">user</option>
+                                                            <option value="assistant">assistant</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="form-group" style="margin-bottom:0;">
+                                                        <label class="form-label" x-text="t('st_presets.entry_position')">Position</label>
+                                                        <select :value="entry.injection_position"
+                                                                @change="stEntryEditIndex === idx && (stEntryForm.injection_position = parseInt($event.target.value))"
+                                                                @focus="editSTEntry(entry, idx)"
+                                                                class="form-select">
+                                                            <option value="0" x-text="t('st_presets.pos_before')"></option>
+                                                            <option value="1" x-text="t('st_presets.pos_after')"></option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label class="form-label" x-text="t('st_presets.entry_depth')">Depth</label>
+                                                    <div class="slider-row">
+                                                        <input type="range" min="0" max="100"
+                                                               :value="entry.injection_depth"
+                                                               @input="stEntryEditIndex === idx && (stEntryForm.injection_depth = parseInt($event.target.value) || 0)"
+                                                               @focus="editSTEntry(entry, idx)" />
+                                                        <span class="slider-value" x-text="entry.injection_depth"></span>
+                                                    </div>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label class="form-label" x-text="t('st_presets.entry_content')">Content</label>
+                                                    <textarea :value="entry.content" rows="5"
+                                                              @input="stEntryEditIndex === idx && (stEntryForm.content = $event.target.value)"
+                                                              @focus="editSTEntry(entry, idx)"
+                                                              class="form-input" style="font-family:var(--font-mono);"
+                                                              :placeholder="t('st_presets.entry_content')"></textarea>
+                                                </div>
+                                                <div style="display:flex;align-items:center;justify-content:space-between;padding-top:var(--space-3);border-top:1px solid var(--border);">
+                                                    <div style="display:flex;gap:var(--space-1);">
+                                                        <button @click="moveSTEntry(idx, -1)" :disabled="idx === 0"
+                                                                class="btn-icon btn-sm" style="width:28px;height:28px;" title="Move up">
+                                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><path d="M18 15l-6-6-6 6"/></svg>
+                                                        </button>
+                                                        <button @click="moveSTEntry(idx, 1)" :disabled="idx === stPresetEntries.length - 1"
+                                                                class="btn-icon btn-sm" style="width:28px;height:28px;" title="Move down">
+                                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><path d="M6 9l6 6 6-6"/></svg>
+                                                        </button>
+                                                    </div>
+                                                    <div style="display:flex;gap:var(--space-2);">
+                                                        <button class="btn btn-primary btn-sm" @click="saveSTEntry()" x-show="stEntryEditIndex === idx">
+                                                            <span x-text="t('st_presets.save_entry')"></span>
+                                                        </button>
+                                                        <button class="btn btn-danger btn-sm" @click="deleteSTEntry(idx)">
+                                                            <span x-text="t('st_presets.delete_entry')"></span>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    <div x-show="stPresetEntries.length === 0" class="empty-state" style="padding:var(--space-10);">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:40px;height:40px;opacity:0.3;"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+                                        <p x-text="t('st_presets.no_entries')">No entries</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>

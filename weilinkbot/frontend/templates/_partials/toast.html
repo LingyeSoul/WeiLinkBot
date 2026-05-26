@@ -1,0 +1,10 @@
+<!-- Toast Notification -->
+<div x-show="toast.show" x-transition
+     class="toast"
+     :class="{
+         'toast-success': toast.type === 'success',
+         'toast-error': toast.type === 'error',
+         'toast-info': toast.type === 'info',
+     }"
+     x-text="toast.message">
+</div>

@@ -1,0 +1,2542 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WeiLinkBot Dashboard</title>
+    <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="/static/alpine.min.js"></script>
+    <style>
+        [x-cloak] { display: none !important; }
+        .msg-user { background: #e0f2fe; }
+        .msg-assistant { background: #f0fdf4; }
+        .msg-system { background: #fef9c3; }
+        .msg-preprocess { background: #f5f3ff; opacity: 0.7; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen" x-data="dashboard()" x-init="init()" x-cloak>
+
+<!-- Header -->
+<header class="bg-white shadow-sm border-b">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <img src="/static/logo.svg" alt="WeiLinkBot" class="w-8 h-8">
+            <div class="text-xl font-bold text-gray-800">WeiLinkBot</div>
+            <span class="text-xs px-2 py-1 rounded-full"
+                  :class="{
+                      'bg-green-100 text-green-700': botStatus.status === 'running',
+                      'bg-yellow-100 text-yellow-700': botStatus.status === 'starting',
+                      'bg-red-100 text-red-700': botStatus.status === 'error',
+                      'bg-gray-100 text-gray-700': botStatus.status === 'stopped',
+                  }"
+                  x-text="t('state.' + (botStatus.status || 'unknown'))">
+            </span>
+        </div>
+        <div class="flex gap-2">
+            <button @click="switchLang()"
+                    class="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 text-sm font-medium"
+                    x-text="langLabel">
+            </button>
+            <button @click="startBot()"
+                    x-show="botStatus.status !== 'running' && botStatus.status !== 'starting'"
+                    class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium"
+                    x-text="t('header.start_bot')">
+                Start Bot
+            </button>
+            <button @click="stopBot()"
+                    x-show="botStatus.status === 'running' || botStatus.status === 'starting'"
+                    class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium"
+                    x-text="t('header.stop_bot')">
+                Stop Bot
+            </button>
+        </div>
+    </div>
+</header>
+
+<!-- Tab Navigation -->
+<nav class="bg-white border-b">
+    <div class="max-w-7xl mx-auto px-4 flex gap-1">
+        <template x-for="tab in tabs" :key="tab.id">
+            <button @click="activeTab = tab.id"
+                    class="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
+                    :class="activeTab === tab.id
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'">
+                <span x-text="tab.label"></span>
+            </button>
+        </template>
+    </div>
+</nav>
+
+<main class="max-w-7xl mx-auto px-4 py-6">
+
+    <!-- Status Tab -->
+    <div x-show="activeTab === 'status'" class="space-y-6">
+        <div class="bg-white rounded-xl shadow-sm p-6">
+            <h2 class="text-lg font-semibold mb-4" x-text="t('status.title')">Bot Status</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="text-sm text-gray-500" x-text="t('status.status')">Status</div>
+                    <div class="text-xl font-bold mt-1" x-text="t('state.' + (botStatus.status || 'unknown'))"></div>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="text-sm text-gray-500" x-text="t('status.user_id')">User ID</div>
+                    <div class="text-sm font-mono mt-1 truncate" x-text="botStatus.user_id || '—'"></div>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="text-sm text-gray-500" x-text="t('status.account_id')">Account ID</div>
+                    <div class="text-sm font-mono mt-1 truncate" x-text="botStatus.account_id || '—'"></div>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="text-sm text-gray-500" x-text="t('status.active_model')">Active Model</div>
+                    <div class="text-sm font-mono mt-1 truncate" x-text="botStatus.active_model_name || '—'"></div>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="text-sm text-gray-500" x-text="t('status.uptime')">Uptime</div>
+                    <div class="text-lg font-bold mt-1" x-text="formatUptime(getDisplayUptimeSeconds())"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Token Usage -->
+        <div class="bg-white rounded-xl shadow-sm p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold" x-text="t('status.token_usage')">Token Usage</h2>
+                <div class="flex bg-gray-100 rounded-lg p-0.5">
+                    <button @click="tokenView = 'session'"
+                            class="px-3 py-1 text-xs font-medium rounded-md transition-colors"
+                            :class="tokenView === 'session' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+                            x-text="t('status.this_session')">
+                        This Session
+                    </button>
+                    <button @click="tokenView = 'history'"
+                            class="px-3 py-1 text-xs font-medium rounded-md transition-colors"
+                            :class="tokenView === 'history' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+                            x-text="t('status.all_time')">
+                        All Time
+                    </button>
+                </div>
+            </div>
+            <!-- Summary cards -->
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="text-sm text-gray-500" x-text="tokenView === 'session' ? t('status.session_tokens') : t('status.total_tokens')"></div>
+                    <div class="text-xl font-bold mt-1" x-text="formatNumber(activeTokenStats.total_tokens)"></div>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="text-sm text-gray-500" x-text="tokenView === 'session' ? t('status.session_requests') : t('status.total_requests')"></div>
+                    <div class="text-xl font-bold mt-1" x-text="formatNumber(activeTokenStats.total_requests)"></div>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="text-sm text-gray-500" x-text="t('status.avg_tokens_req')">Avg Tokens/Req</div>
+                    <div class="text-xl font-bold mt-1" x-text="activeTokenStats.total_requests ? Math.round(activeTokenStats.total_tokens / activeTokenStats.total_requests) : '—'"></div>
+                </div>
+            </div>
+            <!-- Per-model table -->
+            <div x-show="activeTokenStats.models && activeTokenStats.models.length > 0"
+                 class="overflow-hidden rounded-lg border">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="text-left px-4 py-2 font-medium" x-text="t('status.model')">Model</th>
+                            <th class="text-right px-4 py-2 font-medium" x-text="t('status.tokens')">Tokens</th>
+                            <th class="text-right px-4 py-2 font-medium" x-text="t('status.requests')">Requests</th>
+                            <th class="text-right px-4 py-2 font-medium" x-text="t('status.share')">Share</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y">
+                        <template x-for="m in activeTokenStats.models" :key="m.model">
+                            <tr>
+                                <td class="px-4 py-2" x-text="m.name || m.model"></td>
+                                <td class="px-4 py-2 text-right" x-text="formatNumber(m.tokens)"></td>
+                                <td class="px-4 py-2 text-right" x-text="m.requests"></td>
+                                <td class="px-4 py-2 text-right">
+                                    <span class="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700"
+                                          x-text="activeTokenStats.total_tokens ? Math.round(m.tokens / activeTokenStats.total_tokens * 100) + '%' : '—'">
+                                    </span>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+            <div x-show="!activeTokenStats.models || activeTokenStats.models.length === 0"
+                 class="text-gray-400 text-sm text-center py-4"
+                 x-text="tokenView === 'session' ? t('status.no_session_requests') : t('status.no_token_usage')">
+            </div>
+        </div>
+
+        <!-- Error -->
+        <div x-show="botStatus.error" class="bg-red-50 border border-red-200 rounded-xl p-6">
+            <h2 class="text-red-700 font-semibold mb-2" x-text="t('status.error')">Error</h2>
+            <p class="text-red-600 text-sm" x-text="botStatus.error"></p>
+        </div>
+    </div>
+
+    <!-- Events Tab -->
+    <div x-show="activeTab === 'events'" class="space-y-4">
+        <div class="bg-white rounded-xl shadow-sm">
+            <div class="p-4 border-b flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <h2 class="text-lg font-semibold" x-text="t('events.title')">事件日志</h2>
+                    <span class="text-xs px-2 py-1 rounded-full"
+                          :class="wsConnected ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'"
+                          x-text="wsConnected ? t('events.connected') : t('events.disconnected')">
+                    </span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="flex bg-gray-100 rounded-lg p-0.5">
+                        <button @click="eventFilter = 'all'"
+                                class="px-2 py-1 text-xs font-medium rounded transition-colors"
+                                :class="eventFilter === 'all' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+                                x-text="t('events.filter_all')">
+                        </button>
+                        <button @click="eventFilter = 'info'"
+                                class="px-2 py-1 text-xs font-medium rounded transition-colors"
+                                :class="eventFilter === 'info' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:text-gray-700'">
+                            Info
+                        </button>
+                        <button @click="eventFilter = 'warning'"
+                                class="px-2 py-1 text-xs font-medium rounded transition-colors"
+                                :class="eventFilter === 'warning' ? 'bg-yellow-100 text-yellow-700' : 'text-gray-500 hover:text-gray-700'">
+                            Warning
+                        </button>
+                        <button @click="eventFilter = 'error'"
+                                class="px-2 py-1 text-xs font-medium rounded transition-colors"
+                                :class="eventFilter === 'error' ? 'bg-red-100 text-red-700' : 'text-gray-500 hover:text-gray-700'">
+                            Error
+                        </button>
+                    </div>
+                    <button @click="toggleAutoScroll()"
+                            class="px-2 py-1 text-xs rounded"
+                            :class="autoScroll ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'"
+                            x-text="t('events.auto_scroll')">
+                    </button>
+                    <button @click="clearEvents()"
+                            class="px-2 py-1 text-xs bg-gray-100 text-gray-500 rounded hover:bg-gray-200"
+                            x-text="t('events.clear')">
+                    </button>
+                </div>
+            </div>
+
+            <div id="events-container" class="max-h-[600px] overflow-y-auto p-4 space-y-2">
+                <template x-for="evt in filteredEvents" :key="evt.id">
+                    <div class="flex gap-3 p-3 rounded-lg text-sm"
+                         :class="{
+                             'bg-red-50': evt.level === 'error',
+                             'bg-yellow-50': evt.level === 'warning',
+                             'bg-gray-50': evt.level === 'info',
+                         }">
+                        <div class="text-xs text-gray-400 whitespace-nowrap min-w-[60px]">
+                            <span x-text="new Date(evt.timestamp * 1000).toLocaleTimeString()"></span>
+                        </div>
+                        <div class="flex-shrink-0">
+                            <span class="inline-block w-2 h-2 rounded-full mt-1.5"
+                                  :class="{
+                                      'bg-green-500': evt.level === 'info',
+                                      'bg-yellow-500': evt.level === 'warning',
+                                      'bg-red-500': evt.level === 'error',
+                                  }">
+                            </span>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs px-1.5 py-0.5 rounded font-mono"
+                                      :class="{
+                                          'bg-blue-100 text-blue-700': evt.category === 'message',
+                                          'bg-purple-100 text-purple-700': evt.category === 'llm',
+                                          'bg-green-100 text-green-700': evt.category === 'bot',
+                                          'bg-orange-100 text-orange-700': evt.category === 'command',
+                                          'bg-pink-100 text-pink-700': evt.category === 'preprocess',
+                                          'bg-gray-100 text-gray-700': !['message','llm','bot','command','preprocess'].includes(evt.category),
+                                      }"
+                                      x-text="evt.event">
+                                </span>
+                            </div>
+                            <div class="text-gray-700 mt-1" x-text="evt.message"></div>
+                            <div x-show="evt.detail" class="mt-1">
+                                <!-- LLM structured detail -->
+                                <template x-if="evt.detail && isLlmEvent(evt)">
+                                    <div>
+                                        <button @click="toggleEventDetail(evt.id)"
+                                                class="text-xs text-indigo-500 hover:text-indigo-700 flex items-center gap-1 transition-colors">
+                                            <svg class="w-3 h-3 transition-transform" :class="isEventExpanded(evt.id) ? 'rotate-90' : ''"
+                                                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                            </svg>
+                                            <span x-text="isEventExpanded(evt.id) ? t('events.collapse_detail') : t('events.expand_detail')"></span>
+                                        </button>
+                                        <div x-show="isEventExpanded(evt.id)"
+                                             x-transition:enter="transition ease-out duration-150"
+                                             x-transition:enter-start="opacity-0 -translate-y-1"
+                                             x-transition:enter-end="opacity-100 translate-y-0"
+                                             x-transition:leave="transition ease-in duration-100"
+                                             x-transition:leave-start="opacity-100"
+                                             x-transition:leave-end="opacity-0"
+                                             class="mt-2 space-y-3">
+                                            <!-- Meta info -->
+                                            <div class="flex flex-wrap gap-2 text-xs">
+                                                <span x-show="evt.detail.model"
+                                                      class="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 font-mono"
+                                                      x-text="'Model: ' + evt.detail.model"></span>
+                                                <span x-show="evt.detail.tokens"
+                                                      class="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 font-mono"
+                                                      x-text="'Tokens: ' + evt.detail.tokens"></span>
+                                                <span x-show="evt.detail.user_id"
+                                                      class="px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 font-mono"
+                                                      x-text="'User: ' + evt.detail.user_id"></span>
+                                            </div>
+                                            <!-- Request context -->
+                                            <div x-show="evt.detail.request">
+                                                <div class="text-xs font-medium text-gray-500 mb-1"
+                                                     x-text="t('events.sent_to_llm')"></div>
+                                                <div class="rounded border border-gray-100 bg-gray-50 divide-y divide-gray-100">
+                                                    <template x-for="(msg, mi) in formatMessages(evt.detail.request)" :key="mi">
+                                                        <div class="p-2">
+                                                            <span class="text-[10px] font-bold uppercase px-1 py-0.5 rounded mr-1"
+                                                                  :class="{
+                                                                      'bg-blue-100 text-blue-600': msg.role === 'user',
+                                                                      'bg-green-100 text-green-600': msg.role === 'assistant',
+                                                                      'bg-yellow-100 text-yellow-600': msg.role === 'system',
+                                                                      'bg-gray-100 text-gray-500': !['user','assistant','system'].includes(msg.role)
+                                                                  }"
+                                                                  x-text="msg.role"></span>
+                                                            <pre class="text-xs text-gray-600 whitespace-pre-wrap break-words inline align-top"
+                                                                 x-text="msg.content"></pre>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                            <!-- Response -->
+                                            <div x-show="evt.detail.response">
+                                                <div class="text-xs font-medium text-gray-500 mb-1"
+                                                     x-text="t('events.llm_response')"></div>
+                                                <pre class="text-xs text-gray-600 whitespace-pre-wrap break-words p-2 rounded border border-gray-100 bg-green-50/50"
+                                                     x-text="evt.detail.response"></pre>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+                                <!-- Non-LLM events: raw JSON fallback -->
+                                <div x-show="evt.detail && !isLlmEvent(evt)"
+                                     class="text-xs text-gray-400 font-mono">
+                                    <span x-text="evt.detail ? JSON.stringify(evt.detail) : ''"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+                <div x-show="events.length === 0" class="text-center text-gray-400 py-8"
+                     x-text="t('events.empty')">
+                    暂无事件
+                </div>
+            </div>
+
+            <div class="p-3 border-t text-xs text-gray-400 flex justify-between">
+                <span x-text="t('events.total').replace('{n}', events.length)"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Conversations Tab -->
+    <div x-show="activeTab === 'conversations'" class="space-y-4">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <!-- Conversation List -->
+            <div class="bg-white rounded-xl shadow-sm">
+                <div class="p-4 border-b font-semibold" x-text="t('conv.title')">Conversations</div>
+                <div class="divide-y max-h-[600px] overflow-y-auto">
+                    <template x-for="conv in conversations" :key="conv.user_id">
+                        <div @click="selectConversation(conv.user_id)"
+                             class="p-3 cursor-pointer hover:bg-gray-50 transition-colors"
+                             :class="{'bg-blue-50': selectedUser === conv.user_id}">
+                            <div class="font-medium text-sm truncate" x-text="conv.user_id"></div>
+                            <div class="text-xs text-gray-400 mt-1" x-text="conv.message_count + ' ' + t('conv.messages')"></div>
+                            <div class="text-xs text-gray-500 mt-1 truncate" x-text="conv.last_message || ''"></div>
+                        </div>
+                    </template>
+                    <div x-show="conversations.length === 0" class="p-4 text-gray-400 text-sm text-center"
+                         x-text="t('conv.no_conversations')">
+                        No conversations yet
+                    </div>
+                </div>
+            </div>
+
+            <!-- Message Detail -->
+            <div class="lg:col-span-2 bg-white rounded-xl shadow-sm flex flex-col" x-show="selectedUser">
+                <div class="p-4 border-b flex items-center justify-between">
+                    <span class="font-semibold" x-text="selectedUser"></span>
+                    <button @click="clearConversation(selectedUser)"
+                            class="text-xs px-3 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200"
+                            x-text="t('conv.clear_history')">
+                        Clear History
+                    </button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-4 space-y-3 max-h-[500px]" id="msg-container">
+                    <template x-for="msg in selectedMessages" :key="msg.id">
+                        <div class="rounded-lg p-3 max-w-[80%]"
+                             :class="{
+                                 'msg-user ml-auto': msg.role === 'user',
+                                 'msg-assistant': msg.role === 'assistant',
+                                 'msg-system mx-auto text-center text-xs': msg.role === 'system',
+                                 'msg-preprocess mx-auto text-xs': msg.role === 'preprocess',
+                             }">
+                            <div class="text-sm whitespace-pre-wrap" x-text="msg.content"></div>
+                            <div class="text-xs text-gray-400 mt-1 flex justify-between">
+                                <span x-text="msg.role"></span>
+                                <span x-text="msg.tokens_used ? msg.tokens_used + ' ' + t('conv.tokens') : ''"></span>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <div x-show="!selectedUser" class="lg:col-span-2 bg-white rounded-xl shadow-sm p-8 text-center text-gray-400"
+                 x-text="t('conv.select_hint')">
+                Select a conversation to view messages
+            </div>
+        </div>
+    </div>
+
+    <!-- Prompts Tab -->
+    <div x-show="activeTab === 'prompts'" class="space-y-4">
+        <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold" x-text="t('prompts.title')">System Prompts</h2>
+            <button @click="showPromptForm = !showPromptForm"
+                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                    x-text="t('prompts.new')">
+                + New Prompt
+            </button>
+        </div>
+
+        <!-- Create/Edit Form -->
+        <div x-show="showPromptForm" class="bg-white rounded-xl shadow-sm p-6 space-y-4">
+            <div>
+                <label class="block text-sm font-medium mb-1" x-text="t('prompts.name')">Name</label>
+                <input x-model="promptForm.name" type="text"
+                       class="w-full border rounded-lg px-3 py-2 text-sm" :placeholder="t('prompts.name_placeholder')" placeholder="Prompt name">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1" x-text="t('prompts.content')">Content</label>
+                <textarea x-model="promptForm.content" rows="4"
+                          class="w-full border rounded-lg px-3 py-2 text-sm" :placeholder="t('prompts.content_placeholder')" placeholder="System prompt content..."></textarea>
+            </div>
+            <div class="flex items-center gap-2">
+                <input x-model="promptForm.is_default" type="checkbox" id="is-default" class="rounded">
+                <label for="is-default" class="text-sm" x-text="t('prompts.set_default')">Set as default</label>
+            </div>
+            <div class="flex gap-2">
+                <button @click="savePrompt()"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                    <span x-text="promptForm.id ? t('prompts.update') : t('prompts.create')"></span>
+                </button>
+                <button @click="resetPromptForm()"
+                        class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm"
+                        x-text="t('prompts.cancel')">
+                    Cancel
+                </button>
+            </div>
+        </div>
+
+        <!-- Prompt List -->
+        <div class="space-y-3">
+            <template x-for="prompt in prompts" :key="prompt.id">
+                <div class="bg-white rounded-xl shadow-sm p-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium" x-text="prompt.name"></span>
+                            <span x-show="prompt.is_default"
+                                  class="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full"
+                                  x-text="t('prompts.default_badge')">default</span>
+                        </div>
+                        <div class="flex gap-1">
+                            <button @click="editPrompt(prompt)"
+                                    class="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200"
+                                    x-text="t('prompts.edit')">Edit</button>
+                            <button @click="setDefaultPrompt(prompt.id)"
+                                    x-show="!prompt.is_default"
+                                    class="text-xs px-2 py-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200"
+                                    x-text="t('prompts.set_default_btn')">Set Default</button>
+                            <button @click="deletePrompt(prompt.id)"
+                                    class="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200"
+                                    x-text="t('prompts.delete')">Delete</button>
+                        </div>
+                    </div>
+                    <div class="text-sm text-gray-600 whitespace-pre-wrap" x-text="prompt.content"></div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Models Tab -->
+    <div x-show="activeTab === 'models'" class="space-y-4">
+        <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold" x-text="t('models.title')">Model Management</h2>
+            <button @click="showModelForm = !showModelForm; resetModelForm()"
+                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                    x-text="t('models.add')">
+                + Add Model
+            </button>
+        </div>
+
+        <!-- Add/Edit Model Form -->
+        <div x-show="showModelForm" class="bg-white rounded-xl shadow-sm p-6 space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1" x-text="t('models.display_name')">Display Name</label>
+                    <input x-model="modelForm.name" type="text"
+                           class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="e.g. DeepSeek V3">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1" x-text="t('models.select_provider')">Provider</label>
+                    <select x-model.number="modelForm.provider_id"
+                            class="w-full border rounded-lg px-3 py-2 text-sm">
+                        <option :value="null" disabled x-text="t('models.select_provider')">Select a provider...</option>
+                        <template x-for="p in providers.filter(p => p.is_enabled)" :key="p.id">
+                            <option :value="p.id" x-text="p.name + ' (' + p.provider_type + ')'"></option>
+                        </template>
+                    </select>
+                    <template x-if="modelForm.provider_id">
+                        <div class="mt-1 text-xs text-gray-500">
+                            <span x-text="providers.find(p => p.id === modelForm.provider_id)?.base_url || ''"></span>
+                        </div>
+                    </template>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1" x-text="t('models.model_id')">Model ID</label>
+                    <input x-model="modelForm.model" type="text"
+                           class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="gpt-4o-mini">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1" x-text="t('models.max_tokens')">Max Tokens</label>
+                    <input x-model.number="modelForm.max_tokens" type="number"
+                           class="w-full border rounded-lg px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1" x-text="t('models.temperature')">Temperature</label>
+                    <input x-model.number="modelForm.temperature" type="number" step="0.1" min="0" max="2"
+                           class="w-full border rounded-lg px-3 py-2 text-sm">
+                </div>
+            </div>
+
+            <!-- Capabilities -->
+            <div class="border-t pt-4 mt-2">
+                <label class="block text-sm font-medium mb-2" x-text="t('models.capabilities')">Capabilities</label>
+                <div class="flex gap-6">
+                    <label class="flex items-center gap-2 text-sm">
+                        <input x-model="modelForm.capability_text" type="checkbox" class="rounded">
+                        <span x-text="t('models.cap_text')">Text</span>
+                    </label>
+                    <label class="flex items-center gap-2 text-sm">
+                        <input x-model="modelForm.capability_audio" type="checkbox" class="rounded">
+                        <span x-text="t('models.cap_audio')">Audio</span>
+                    </label>
+                    <label class="flex items-center gap-2 text-sm">
+                        <input x-model="modelForm.capability_image" type="checkbox" class="rounded">
+                        <span x-text="t('models.cap_image')">Image</span>
+                    </label>
+                    <label class="flex items-center gap-2 text-sm">
+                        <input x-model="modelForm.supports_tools" type="checkbox" class="rounded">
+                        <span x-text="t('models.supports_tools')">Tools</span>
+                        <span class="text-gray-400 text-xs" x-text="t('models.supports_tools_hint')"></span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Preprocessing -->
+            <div class="border-t pt-4">
+                <label class="block text-sm font-medium mb-2" x-text="t('models.preprocess')">Preprocessing</label>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Voice preprocessing -->
+                    <div class="bg-gray-50 rounded-lg p-3 space-y-2">
+                        <label class="flex items-center gap-2 text-sm font-medium">
+                            <input x-model="modelForm.preprocess_voice" type="checkbox" class="rounded">
+                            <span x-text="t('models.preprocess_voice')">Preprocess voice</span>
+                        </label>
+                        <select x-model.number="modelForm.preprocess_voice_model_id"
+                                :disabled="!modelForm.preprocess_voice"
+                                class="w-full border rounded-lg px-3 py-2 text-sm disabled:opacity-50">
+                            <option :value="null" x-text="t('models.none')">None</option>
+                            <template x-for="m in models.filter(m => m.id !== modelForm.id)" :key="m.id">
+                                <option :value="m.id" x-text="m.name + ' (' + m.model + ')'"></option>
+                            </template>
+                        </select>
+                        <!-- Voice method selector -->
+                        <div x-show="modelForm.preprocess_voice && modelForm.preprocess_voice_model_id"
+                             class="flex gap-1 bg-gray-200 rounded-md p-0.5">
+                            <button type="button" @click="modelForm.voice_method = 'llm'"
+                                    class="flex-1 px-2 py-1 text-xs font-medium rounded transition-colors"
+                                    :class="modelForm.voice_method === 'llm' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+                                    x-text="t('models.voice_method_llm')">
+                                LLM
+                            </button>
+                            <button type="button" @click="modelForm.voice_method = 'asr'"
+                                    class="flex-1 px-2 py-1 text-xs font-medium rounded transition-colors"
+                                    :class="modelForm.voice_method === 'asr' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+                                    x-text="t('models.voice_method_asr')">
+                                ASR
+                            </button>
+                        </div>
+                        <!-- ASR language hint -->
+                        <div x-show="modelForm.preprocess_voice && modelForm.preprocess_voice_model_id && modelForm.voice_method === 'asr'">
+                            <input x-model="modelForm.asr_language" type="text"
+                                   class="w-full border rounded-lg px-3 py-2 text-sm"
+                                   :placeholder="t('models.asr_language_hint')"
+                                   style="font-size: 12px;">
+                        </div>
+                    </div>
+                    <!-- Image preprocessing -->
+                    <div class="bg-gray-50 rounded-lg p-3 space-y-2">
+                        <label class="flex items-center gap-2 text-sm font-medium">
+                            <input x-model="modelForm.preprocess_image" type="checkbox" class="rounded">
+                            <span x-text="t('models.preprocess_image')">Preprocess image</span>
+                        </label>
+                        <select x-model.number="modelForm.preprocess_image_model_id"
+                                :disabled="!modelForm.preprocess_image"
+                                class="w-full border rounded-lg px-3 py-2 text-sm disabled:opacity-50">
+                            <option :value="null" x-text="t('models.none')">None</option>
+                            <template x-for="m in models.filter(m => m.id !== modelForm.id)" :key="m.id">
+                                <option :value="m.id" x-text="m.name + ' (' + m.model + ')'"></option>
+                            </template>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <input x-model="modelForm.is_active" type="checkbox" id="model-active" class="rounded">
+                <label for="model-active" class="text-sm" x-text="t('models.activate_now')">Activate immediately</label>
+            </div>
+            <div class="flex gap-2">
+                <button @click="saveModel()"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                    <span x-text="modelForm.id ? t('models.update') : t('models.add_model')"></span>
+                </button>
+                <button @click="showModelForm = false; resetModelForm()"
+                        class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm"
+                        x-text="t('prompts.cancel')">
+                    Cancel
+                </button>
+            </div>
+        </div>
+
+        <!-- Model List -->
+        <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('cli.name')">Name</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('models.provider')">Provider</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('status.model')">Model</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('models.capabilities')">Capabilities</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('users.status')">Status</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('users.actions')">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y">
+                    <template x-for="m in models" :key="m.id">
+                        <tr :class="{'bg-blue-50': m.is_active}">
+                            <td class="px-4 py-3 font-medium" x-text="m.name"></td>
+                            <td class="px-4 py-3 text-gray-600" x-text="m.provider_name || m.provider"></td>
+                            <td class="px-4 py-3 font-mono text-xs" x-text="m.model"></td>
+                            <td class="px-4 py-3">
+                                <div class="flex gap-1">
+                                    <span x-show="m.capability_text" class="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-600" x-text="t('models.cap_text')">
+                                    </span>
+                                    <span x-show="m.capability_audio" class="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-600">
+                                        <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+                                    </span>
+                                    <span x-show="m.capability_image" class="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-orange-100 text-orange-600">
+                                        <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                                    </span>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="text-xs px-2 py-1 rounded-full"
+                                      :class="m.is_active ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'"
+                                      x-text="m.is_active ? t('models.active') : t('models.inactive')">
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 flex gap-1">
+                                <button @click="activateModel(m.id)" x-show="!m.is_active"
+                                        class="text-xs px-2 py-1 bg-green-100 text-green-600 rounded hover:bg-green-200"
+                                        x-text="t('models.activate')">
+                                    Activate
+                                </button>
+                                <button @click="editModel(m)"
+                                        class="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200"
+                                        x-text="t('models.edit')">Edit</button>
+                                <button @click="deleteModel(m.id, m.name)" x-show="!m.is_active"
+                                        class="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200"
+                                        x-text="t('models.delete')">
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="models.length === 0">
+                        <td colspan="6" class="px-4 py-6 text-center text-gray-400"
+                            x-text="t('models.empty')">
+                            No models configured. Click "Add Model" to get started.
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Users Tab -->
+    <div x-show="activeTab === 'users'" class="space-y-4">
+        <h2 class="text-lg font-semibold" x-text="t('users.title')">User Management</h2>
+        <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('users.user_id')">User ID</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('users.nickname')">Nickname</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('users.actions')">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y">
+                    <template x-for="user in users" :key="user.user_id">
+                        <tr x-data="{ editing: false, editNickname: '' }">
+                            <td class="px-4 py-3 font-mono text-xs truncate max-w-[200px]" x-text="user.user_id"></td>
+                            <td class="px-4 py-3">
+                                <template x-if="!editing">
+                                    <span x-text="user.nickname || '—'"></span>
+                                </template>
+                                <template x-if="editing">
+                                    <div class="flex items-center gap-1">
+                                        <input type="text" x-model="editNickname"
+                                               @keyup.enter="saveNickname(user, editNickname); editing = false"
+                                               @keyup.escape="editing = false"
+                                               class="px-2 py-1 border border-gray-300 rounded text-xs w-32"
+                                               :placeholder="t('users.nickname')">
+                                        <button @click="saveNickname(user, editNickname); editing = false"
+                                                class="text-xs text-green-600 hover:text-green-800"
+                                                x-text="t('memory.detail.save')"></button>
+                                        <button @click="editing = false"
+                                                class="text-xs text-gray-400 hover:text-gray-600">&times;</button>
+                                    </div>
+                                </template>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="flex gap-1">
+                                    <button @click="editing = true; editNickname = user.nickname || ''"
+                                            class="text-xs px-3 py-1 rounded bg-blue-100 text-blue-600 hover:bg-blue-200"
+                                            x-text="t('users.edit_nickname')">
+                                    </button>
+                                    <button @click="deleteUser(user)"
+                                            class="text-xs px-3 py-1 rounded bg-red-100 text-red-600 hover:bg-red-200"
+                                            x-text="t('users.delete')">
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="users.length === 0">
+                        <td colspan="3" class="px-4 py-6 text-center text-gray-400" x-text="t('users.empty')">No users yet</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Characters Tab -->
+    <div x-show="activeTab === 'characters'" class="space-y-4">
+        <!-- Header -->
+        <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold" x-text="t('chars.title')">Character Cards</h2>
+            <div class="flex gap-2">
+                <label class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm cursor-pointer">
+                    <span x-text="t('chars.import')">Import</span>
+                    <input type="file" accept=".json,.png" class="hidden"
+                           @change="importCharacter($event)">
+                </label>
+                <button @click="openCharacterForm()"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                        x-text="t('chars.new')">
+                    + New
+                </button>
+            </div>
+        </div>
+
+        <!-- Card Wall -->
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <template x-for="card in characters" :key="card.id">
+                <div @click="openCharacterEdit(card)"
+                     class="bg-white rounded-xl shadow-sm p-4 cursor-pointer hover:shadow-md transition-shadow border-2"
+                     :class="card.is_active ? 'border-blue-500' : 'border-transparent'">
+                    <div class="flex flex-col items-center text-center">
+                        <div class="w-16 h-16 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white text-xl font-bold mb-3"
+                             :class="{'ring-2 ring-blue-500 ring-offset-2': card.is_active}">
+                            <img x-show="card.avatar_path" :src="'/' + card.avatar_path"
+                                 class="w-16 h-16 rounded-full object-cover" alt="">
+                            <span x-show="!card.avatar_path" x-text="card.name.charAt(0).toUpperCase()"></span>
+                        </div>
+                        <div class="font-medium text-sm" x-text="card.name"></div>
+                        <div class="text-xs text-gray-500 mt-1 line-clamp-2" x-text="card.description || t('chars.no_description')"></div>
+                        <span x-show="card.is_active"
+                              class="mt-2 text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full"
+                              x-text="t('chars.active_badge')">Active</span>
+                    </div>
+                </div>
+            </template>
+            <div x-show="characters.length === 0"
+                 class="col-span-full bg-white rounded-xl shadow-sm p-8 text-center text-gray-400"
+                 x-text="t('chars.empty')">
+                No character cards yet. Click "New" or "Import" to get started.
+            </div>
+        </div>
+
+        <!-- Side Editor Panel -->
+
+        <!-- Character Card Edit Modal -->
+        <div x-show="showCharForm" x-cloak
+             class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+             @keydown.escape.window="showCharForm = false"
+             @click.self="showCharForm = false">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+                <!-- Header -->
+                <div class="flex items-center justify-between px-6 py-4 border-b">
+                    <h3 class="text-base font-semibold" x-text="charForm.id ? t('chars.edit_title') : t('chars.new_title')"></h3>
+                    <button @click="showCharForm = false" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+                </div>
+                <!-- Body -->
+                <div class="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1" x-text="t('prompts.name')">Name</label>
+                        <input x-model="charForm.name" type="text"
+                               class="w-full border rounded-lg px-3 py-2 text-sm" :placeholder="t('chars.name_placeholder')" placeholder="Character name">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Description</label>
+                        <textarea x-model="charForm.description" rows="3"
+                                  class="w-full border rounded-lg px-3 py-2 text-sm" :placeholder="t('chars.desc_placeholder')" placeholder="Character description..."></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Personality</label>
+                        <textarea x-model="charForm.personality" rows="2"
+                                  class="w-full border rounded-lg px-3 py-2 text-sm" :placeholder="t('chars.personality_placeholder')" placeholder="Personality traits..."></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Scenario</label>
+                        <textarea x-model="charForm.scenario" rows="2"
+                                  class="w-full border rounded-lg px-3 py-2 text-sm" :placeholder="t('chars.scenario_placeholder')" placeholder="Scenario / setting..."></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1"><span x-text="t('chars.first_mes')">First Message</span> <span class="text-gray-400" x-text="t('chars.optional')">(optional)</span></label>
+                        <textarea x-model="charForm.first_mes" rows="2"
+                                  class="w-full border rounded-lg px-3 py-2 text-sm" :placeholder="t('chars.first_mes_placeholder')" placeholder="Opening message..."></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1"><span x-text="t('chars.example_dialog')">Example Dialog</span> <span class="text-gray-400" x-text="t('chars.optional')">(optional)</span></label>
+                        <textarea x-model="charForm.mes_example" rows="3"
+                                  class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="{{char}}: ...&#10;{{user}}: ..."></textarea>
+                    </div>
+
+                    <!-- Prompt Preview -->
+                    <div>
+                        <label class="block text-sm font-medium mb-1" x-text="t('chars.prompt_preview')">Prompt Preview</label>
+                        <pre class="bg-gray-50 border rounded-lg p-3 text-xs text-gray-600 overflow-auto max-h-40 whitespace-pre-wrap"
+                             x-text="charPromptPreview"></pre>
+                    </div>
+
+                    <!-- Avatar Upload -->
+                    <div x-show="charForm.id">
+                        <label class="block text-sm font-medium mb-1" x-text="t('chars.avatar')">Avatar</label>
+                        <label class="inline-block px-3 py-1 bg-gray-100 rounded cursor-pointer hover:bg-gray-200 text-sm">
+                            <span x-text="t('chars.upload_avatar')">Upload Avatar</span>
+                            <input type="file" accept="image/*" class="hidden"
+                                   @change="uploadAvatar($event)">
+                        </label>
+                    </div>
+                </div>
+                <!-- Footer -->
+                <div class="flex items-center gap-2 px-6 py-4 border-t">
+                    <button @click="saveCharacter()"
+                            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                        <span x-text="charForm.id ? t('chars.save') : t('chars.create')"></span>
+                    </button>
+                    <button x-show="charForm.id && !charForm.is_active" @click="activateCharacter(charForm.id)"
+                            class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
+                            x-text="t('chars.activate')">
+                        Activate
+                    </button>
+                    <button x-show="charForm.id && charForm.is_active" @click="deactivateCharacter()"
+                            class="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 text-sm"
+                            x-text="t('chars.deactivate')">
+                        Deactivate
+                    </button>
+                    <button x-show="charForm.id" @click="deleteCharacter(charForm.id)"
+                            class="px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 text-sm"
+                            x-text="t('chars.delete')">
+                        Delete
+                    </button>
+                    <div x-show="charForm.id" class="relative" x-data="{ open: false }">
+                        <button @click="open = !open"
+                                class="px-4 py-2 bg-purple-100 text-purple-600 rounded-lg hover:bg-purple-200 text-sm"
+                                x-text="t('chars.export')">
+                            Export
+                        </button>
+                        <div x-show="open" @click.away="open = false"
+                             class="absolute bottom-full mb-1 left-0 bg-white border rounded-lg shadow-lg py-1 min-w-[100px] z-10">
+                            <button @click="exportCharacter('json'); open = false"
+                                    class="block w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100">JSON</button>
+                            <button @click="exportCharacter('png'); open = false"
+                                    class="block w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100">PNG</button>
+                        </div>
+                    </div>
+                    <button @click="showCharForm = false"
+                            class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm ml-auto"
+                            x-text="t('prompts.cancel')">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- QR Code Modal -->
+    <div x-show="botStatus.login_url" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+         @keydown.escape.window="botStatus.login_url = null">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 flex flex-col items-center gap-5 max-w-sm w-full mx-4">
+            <h2 class="text-xl font-bold" x-text="t('status.qr_title')">Scan QR to Login</h2>
+            <canvas id="qr-canvas" class="rounded-xl border border-gray-200"
+                    x-effect="if (botStatus.login_url) { $nextTick(() => renderQrCode(botStatus.login_url)) }"></canvas>
+            <p class="text-sm text-gray-500 text-center" x-text="t('status.qr_hint')">Use WeChat to scan the QR code above.</p>
+        </div>
+    </div>
+
+    <!-- Providers Tab -->
+    <div x-show="activeTab === 'providers'" class="space-y-4">
+        <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold" x-text="t('providers.title')">Provider Management</h2>
+            <button @click="showProviderForm = !showProviderForm; if(!showProviderForm) resetProviderForm();"
+                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                    x-text="t('providers.add')">
+                + Add Provider
+            </button>
+        </div>
+
+        <!-- Add/Edit Form -->
+        <div x-show="showProviderForm" class="bg-white rounded-xl shadow-sm p-6 space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1" x-text="t('providers.name')">Name</label>
+                    <input x-model="providerForm.name" type="text"
+                           class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="My Provider">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1" x-text="t('providers.type')">Type</label>
+                    <select x-model="providerForm.provider_type" class="w-full border rounded-lg px-3 py-2 text-sm">
+                        <option value="custom">Custom</option>
+                        <option value="openai">OpenAI</option>
+                        <option value="deepseek">DeepSeek</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1" x-text="t('providers.base_url')">Base URL</label>
+                    <input x-model="providerForm.base_url" type="text"
+                           class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="https://api.openai.com/v1">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1" x-text="t('providers.api_key')">API Key</label>
+                    <input x-model="providerForm.api_key" type="password"
+                           class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="sk-...">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-medium mb-1" x-text="t('providers.description')">Description</label>
+                    <input x-model="providerForm.description" type="text"
+                           class="w-full border rounded-lg px-3 py-2 text-sm">
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <input x-model="providerForm.is_enabled" type="checkbox" id="provider-enabled" class="rounded">
+                <label for="provider-enabled" class="text-sm" x-text="t('providers.enabled')">Enabled</label>
+            </div>
+            <div class="flex gap-2">
+                <button @click="saveProvider()"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                    <span x-text="providerForm.id ? t('models.update') : t('providers.add')"></span>
+                </button>
+                <button @click="resetProviderForm()"
+                        class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm"
+                        x-text="t('prompts.cancel')">
+                    Cancel
+                </button>
+            </div>
+        </div>
+
+        <!-- Provider List -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <template x-for="p in providers" :key="p.id">
+                <div class="bg-white rounded-xl shadow-sm p-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium" x-text="p.name"></span>
+                            <span x-show="p.is_enabled" class="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full" x-text="t('providers.enabled')">Enabled</span>
+                            <span x-show="!p.is_enabled" class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full" x-text="t('models.inactive')">Disabled</span>
+                        </div>
+                        <span class="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-600" x-text="p.provider_type"></span>
+                    </div>
+                    <div class="text-sm text-gray-500 mb-1" x-text="p.base_url"></div>
+                    <div class="text-xs text-gray-400 mb-3" x-text="p.description || ''"></div>
+                    <div class="flex gap-1">
+                        <button @click="editProvider(p)"
+                                class="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200"
+                                x-text="t('models.edit')">Edit</button>
+                        <button @click="deleteProvider(p.id, p.name)"
+                                class="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200"
+                                x-text="t('models.delete')">Delete</button>
+                    </div>
+                </div>
+            </template>
+            <div x-show="providers.length === 0" class="col-span-full bg-white rounded-xl shadow-sm p-8 text-center text-gray-400">
+                No providers configured
+            </div>
+        </div>
+    </div>
+
+    <!-- ST Presets Tab -->
+    <div x-show="activeTab === 'st-presets'" class="space-y-4">
+        <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold" x-text="t('st_presets.title')">SillyTavern Presets</h2>
+            <div class="flex gap-2">
+                <label class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm cursor-pointer">
+                    <span x-text="t('st_presets.import')">Import</span>
+                    <input type="file" accept=".json" class="hidden" @change="importSTPreset($event)">
+                </label>
+                <button @click="showSTPresetForm = !showSTPresetForm; if(!showSTPresetForm) resetSTPresetForm();"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                        x-text="t('st_presets.add')">
+                    + Add Preset
+                </button>
+            </div>
+        </div>
+
+        <!-- Add/Edit Form -->
+        <div x-show="showSTPresetForm" class="bg-white rounded-xl shadow-sm p-6 space-y-4">
+            <div>
+                <label class="block text-sm font-medium mb-1" x-text="t('st_presets.name')">Name</label>
+                <input x-model="stPresetForm.name" type="text"
+                       class="w-full border rounded-lg px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1" x-text="t('st_presets.raw_json')">Raw JSON</label>
+                <textarea x-model="stPresetForm.raw_json" rows="6"
+                          class="w-full border rounded-lg px-3 py-2 text-sm font-mono"></textarea>
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1" x-text="t('st_presets.system_prompt')">System Prompt</label>
+                <textarea x-model="stPresetForm.system_prompt" rows="2"
+                          class="w-full border rounded-lg px-3 py-2 text-sm"></textarea>
+            </div>
+            <div class="flex gap-2">
+                <button @click="saveSTPreset()"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                    <span x-text="stPresetForm.id ? t('models.update') : t('st_presets.add')"></span>
+                </button>
+                <button @click="resetSTPresetForm()"
+                        class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm"
+                        x-text="t('prompts.cancel')">
+                    Cancel
+                </button>
+            </div>
+        </div>
+
+        <!-- Preset List -->
+        <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('st_presets.name')">Name</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('st_presets.system_prompt')">System Prompt</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('users.status')">Status</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('users.actions')">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y">
+                    <template x-for="p in stPresets" :key="p.id">
+                        <tr :class="{'bg-blue-50': p.is_active}">
+                            <td class="px-4 py-3 font-medium" x-text="p.name"></td>
+                            <td class="px-4 py-3 text-gray-600 truncate max-w-xs" x-text="p.system_prompt || '—'"></td>
+                            <td class="px-4 py-3">
+                                <span class="text-xs px-2 py-1 rounded-full"
+                                      :class="p.is_active ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'"
+                                      x-text="p.is_active ? t('st_presets.active') : t('models.inactive')">
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 flex gap-1">
+                                <button @click="viewSTPresetEntries(p)"
+                                        class="text-xs px-2 py-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200"
+                                        x-text="t('st_presets.view_entries')">View</button>
+                                <button @click="activateSTPreset(p.id)" x-show="!p.is_active"
+                                        class="text-xs px-2 py-1 bg-green-100 text-green-600 rounded hover:bg-green-200"
+                                        x-text="t('st_presets.activate')">Activate</button>
+                                <button @click="deactivateSTPreset()" x-show="p.is_active"
+                                        class="text-xs px-2 py-1 bg-yellow-100 text-yellow-600 rounded hover:bg-yellow-200"
+                                        x-text="t('st_presets.deactivate')">Deactivate</button>
+                                <button @click="exportSTPreset(p.id, p.name)"
+                                        class="text-xs px-2 py-1 bg-purple-100 text-purple-600 rounded hover:bg-purple-200"
+                                        x-text="t('st_presets.export')">Export</button>
+                                <button @click="deleteSTPreset(p.id, p.name)"
+                                        class="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200"
+                                        x-text="t('models.delete')">Delete</button>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="stPresets.length === 0">
+                        <td colspan="4" class="px-4 py-6 text-center text-gray-400">No presets configured</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ST Preset Prompt Manager Modal -->
+    <div x-show="showSTPresetEntriesModal" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+         @keydown.escape.window="closeSTPresetEntriesModal()"
+         @click.self="closeSTPresetEntriesModal()">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col">
+            <!-- Header -->
+            <div class="flex items-center justify-between px-6 py-4 border-b">
+                <h3 class="text-base font-semibold">
+                    <span x-text="t('st_presets.entries_title')"></span>
+                    <span class="text-gray-400 font-normal ml-2" x-text="stPresetEntriesPresetName"></span>
+                </h3>
+                <div class="flex items-center gap-2">
+                    <button @click="addSTEntry()"
+                            class="text-xs px-3 py-1.5 bg-green-500 text-white rounded hover:bg-green-600">
+                        + <span x-text="t('st_presets.add_entry')">Add Entry</span>
+                    </button>
+                    <button @click="closeSTPresetEntriesModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+                </div>
+            </div>
+            <!-- Entries List -->
+            <div class="flex-1 overflow-y-auto px-6 py-4 space-y-2">
+                <template x-for="(entry, idx) in stPresetEntries" :key="entry.identifier + '-' + idx">
+                    <div class="st-entry-card border rounded-lg text-sm transition-all"
+                         :class="{ 'border-blue-400 bg-blue-50/50': stExpandedEntry === idx, 'border-gray-200 hover:border-gray-300': stExpandedEntry !== idx }"
+                         draggable="true"
+                         @dragstart="stDragStart(idx, $event)"
+                         @dragover.prevent="stDragOver(idx, $event)"
+                         @drop="stDrop(idx, $event)">
+                        <!-- Collapsed Header -->
+                        <div class="flex items-center gap-2 px-3 py-2.5 cursor-pointer select-none"
+                             @click="expandSTEntry(idx)">
+                            <!-- Drag handle -->
+                            <span class="text-gray-300 hover:text-gray-500 cursor-grab text-lg leading-none" title="Drag to reorder">&#9776;</span>
+                            <!-- Toggle -->
+                            <label class="flex-shrink-0 cursor-pointer" @click.stop>
+                                <input type="checkbox" :checked="entry.enabled"
+                                       @change="toggleSTPresetEntry(stPresetEntriesPresetId, entry.index, entry.enabled)"
+                                       class="rounded border-gray-300">
+                            </label>
+                            <!-- Name -->
+                            <span class="font-medium text-gray-700 flex-1 truncate" x-text="entry.name || 'Entry ' + entry.index"></span>
+                            <!-- Role badge -->
+                            <span class="text-xs px-1.5 py-0.5 rounded font-mono"
+                                  :class="{
+                                      'bg-blue-100 text-blue-600': entry.role === 'system',
+                                      'bg-green-100 text-green-600': entry.role === 'user',
+                                      'bg-purple-100 text-purple-600': entry.role === 'assistant'
+                                  }"
+                                  x-text="entry.role"></span>
+                            <!-- Arrow -->
+                            <svg class="w-4 h-4 text-gray-400 transition-transform" :class="{'rotate-180': stExpandedEntry === idx}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </div>
+                        <!-- Expanded Content -->
+                        <div x-show="stExpandedEntry === idx"
+                             x-transition:enter="transition ease-out duration-200"
+                             x-transition:enter-start="opacity-0 -translate-y-1"
+                             x-transition:enter-end="opacity-100 translate-y-0"
+                             x-transition:leave="transition ease-in duration-150"
+                             x-transition:leave-start="opacity-100"
+                             x-transition:leave-end="opacity-0"
+                             class="border-t px-3 py-3 space-y-3 bg-gray-50/50">
+                            <!-- Name -->
+                            <div class="flex items-center gap-2">
+                                <label class="text-xs text-gray-500 w-14 shrink-0" x-text="t('st_presets.entry_name')"></label>
+                                <input type="text" :value="entry.name"
+                                       @input="stEntryEditIndex === idx && (stEntryForm.name = $event.target.value)"
+                                       @focus="editSTEntry(entry, idx)"
+                                       class="flex-1 border rounded px-2 py-1.5 text-sm" placeholder="Entry name">
+                            </div>
+                            <!-- Role + Injection -->
+                            <div class="flex items-center gap-3 flex-wrap">
+                                <div class="flex items-center gap-2">
+                                    <label class="text-xs text-gray-500 w-14 shrink-0" x-text="t('st_presets.entry_role')"></label>
+                                    <select :value="entry.role"
+                                            @change="stEntryEditIndex === idx && (stEntryForm.role = $event.target.value)"
+                                            @focus="editSTEntry(entry, idx)"
+                                            class="border rounded px-2 py-1.5 text-sm bg-white">
+                                        <option value="system">system</option>
+                                        <option value="user">user</option>
+                                        <option value="assistant">assistant</option>
+                                    </select>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <label class="text-xs text-gray-500" x-text="t('st_presets.entry_position')"></label>
+                                    <select :value="entry.injection_position"
+                                            @change="stEntryEditIndex === idx && (stEntryForm.injection_position = parseInt($event.target.value))"
+                                            @focus="editSTEntry(entry, idx)"
+                                            class="border rounded px-2 py-1.5 text-sm bg-white">
+                                        <option value="0" x-text="t('st_presets.pos_before')"></option>
+                                        <option value="1" x-text="t('st_presets.pos_after')"></option>
+                                    </select>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <label class="text-xs text-gray-500" x-text="t('st_presets.entry_depth')"></label>
+                                    <input type="number" min="0" max="100"
+                                           :value="entry.injection_depth"
+                                           @input="stEntryEditIndex === idx && (stEntryForm.injection_depth = parseInt($event.target.value) || 0)"
+                                           @focus="editSTEntry(entry, idx)"
+                                           class="w-16 border rounded px-2 py-1.5 text-sm">
+                                </div>
+                            </div>
+                            <!-- Content -->
+                            <div>
+                                <label class="text-xs text-gray-500 mb-1 block" x-text="t('st_presets.entry_content')"></label>
+                                <textarea :value="entry.content" rows="5"
+                                          @input="stEntryEditIndex === idx && (stEntryForm.content = $event.target.value)"
+                                          @focus="editSTEntry(entry, idx)"
+                                          class="w-full border rounded px-3 py-2 text-sm font-mono resize-y"
+                                          placeholder="Entry content..."></textarea>
+                            </div>
+                            <!-- Actions -->
+                            <div class="flex items-center justify-between pt-1">
+                                <div class="flex gap-1">
+                                    <button @click="moveSTEntry(idx, -1)" :disabled="idx === 0"
+                                            class="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200 disabled:opacity-30"
+                                            title="Move up">&#9650;</button>
+                                    <button @click="moveSTEntry(idx, 1)" :disabled="idx === stPresetEntries.length - 1"
+                                            class="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200 disabled:opacity-30"
+                                            title="Move down">&#9660;</button>
+                                </div>
+                                <div class="flex gap-1">
+                                    <button @click="saveSTEntry()"
+                                            x-show="stEntryEditIndex === idx"
+                                            class="text-xs px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">
+                                        <span x-text="t('st_presets.save_entry')"></span>
+                                    </button>
+                                    <button @click="deleteSTEntry(idx)"
+                                            class="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200">
+                                        <span x-text="t('st_presets.delete_entry')"></span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+                <div x-show="stPresetEntries.length === 0" class="text-gray-400 text-center py-8" x-text="t('st_presets.no_entries')"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- World Books Tab -->
+    <div x-show="activeTab === 'world-books'" class="space-y-4">
+        <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold" x-text="t('world_books.title')">World Books</h2>
+            <div class="flex gap-2">
+                <label class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm cursor-pointer">
+                    <span x-text="t('world_books.import')">Import</span>
+                    <input type="file" accept=".json" class="hidden" @change="importWorldBook($event)">
+                </label>
+                <button @click="showWorldBookForm = !showWorldBookForm; if(!showWorldBookForm) resetWorldBookForm();"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                        x-text="t('world_books.add')">
+                    + Add World Book
+                </button>
+            </div>
+        </div>
+
+        <!-- Add/Edit Form -->
+        <div x-show="showWorldBookForm" class="bg-white rounded-xl shadow-sm p-6 space-y-4">
+            <div>
+                <label class="block text-sm font-medium mb-1" x-text="t('world_books.name')">Name</label>
+                <input x-model="worldBookForm.name" type="text"
+                       class="w-full border rounded-lg px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1" x-text="t('world_books.description')">Description</label>
+                <input x-model="worldBookForm.description" type="text"
+                       class="w-full border rounded-lg px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1" x-text="t('st_presets.raw_json')">Raw JSON</label>
+                <textarea x-model="worldBookForm.raw_json" rows="6"
+                          class="w-full border rounded-lg px-3 py-2 text-sm font-mono"></textarea>
+            </div>
+            <div class="flex gap-2">
+                <button @click="saveWorldBook()"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                    <span x-text="worldBookForm.id ? t('models.update') : t('world_books.add')"></span>
+                </button>
+                <button @click="resetWorldBookForm()"
+                        class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm"
+                        x-text="t('prompts.cancel')">
+                    Cancel
+                </button>
+            </div>
+        </div>
+
+        <!-- World Book List -->
+        <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('world_books.name')">Name</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('world_books.description')">Description</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('users.status')">Status</th>
+                        <th class="text-left px-4 py-3 font-medium" x-text="t('users.actions')">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y">
+                    <template x-for="wb in worldBooks" :key="wb.id">
+                        <tr :class="{'bg-blue-50': wb.is_active}">
+                            <td class="px-4 py-3 font-medium" x-text="wb.name"></td>
+                            <td class="px-4 py-3 text-gray-600 truncate max-w-xs" x-text="wb.description || '—'"></td>
+                            <td class="px-4 py-3">
+                                <span class="text-xs px-2 py-1 rounded-full"
+                                      :class="wb.is_active ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'"
+                                      x-text="wb.is_active ? t('world_books.active') : t('models.inactive')">
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 flex gap-1">
+                                <button @click="viewWorldBookEntries(wb)"
+                                        class="text-xs px-2 py-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200"
+                                        x-text="t('world_books.view_entries')">View Entries</button>
+                                <button @click="activateWorldBook(wb.id)" x-show="!wb.is_active"
+                                        class="text-xs px-2 py-1 bg-green-100 text-green-600 rounded hover:bg-green-200"
+                                        x-text="t('world_books.activate')">Activate</button>
+                                <button @click="deactivateWorldBook()" x-show="wb.is_active"
+                                        class="text-xs px-2 py-1 bg-yellow-100 text-yellow-600 rounded hover:bg-yellow-200"
+                                        x-text="t('world_books.deactivate')">Deactivate</button>
+                                <button @click="exportWorldBook(wb.id, wb.name)"
+                                        class="text-xs px-2 py-1 bg-purple-100 text-purple-600 rounded hover:bg-purple-200"
+                                        x-text="t('world_books.export')">Export</button>
+                                <button @click="deleteWorldBook(wb.id, wb.name)"
+                                        class="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200"
+                                        x-text="t('models.delete')">Delete</button>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="worldBooks.length === 0">
+                        <td colspan="4" class="px-4 py-6 text-center text-gray-400">No world books configured</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- World Book Prompt Manager Modal -->
+    <div x-show="showWBEntriesModal" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+         @keydown.escape.window="closeWBEntriesModal()"
+         @click.self="closeWBEntriesModal()">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col">
+            <!-- Header -->
+            <div class="flex items-center justify-between px-6 py-4 border-b">
+                <h3 class="text-base font-semibold">
+                    <span x-text="t('world_books.entries_manager')">World Book Entries</span>
+                    <span class="text-gray-400 font-normal ml-2" x-text="wbEntriesBookName"></span>
+                    <span class="text-xs text-gray-400 font-normal ml-2" x-text="t('world_books.entry_count').replace('{count}', wbEntries.length)"></span>
+                </h3>
+                <div class="flex items-center gap-2">
+                    <button @click="addWBEntry()"
+                            class="text-xs px-3 py-1.5 bg-green-500 text-white rounded hover:bg-green-600">
+                        + <span x-text="t('world_books.add_entry')">Add Entry</span>
+                    </button>
+                    <button @click="closeWBEntriesModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+                </div>
+            </div>
+            <!-- Entries List -->
+            <div class="flex-1 overflow-y-auto px-6 py-4 space-y-2">
+                <template x-for="entry in wbEntries" :key="entry.id">
+                    <div class="wb-entry-card border rounded-lg text-sm transition-all"
+                         :class="{ 'border-blue-400 bg-blue-50/50': wbExpandedEntry === entry.id, 'border-gray-200 hover:border-gray-300': wbExpandedEntry !== entry.id }"
+                         draggable="true"
+                         @dragstart="wbDragStart(entry.id, $event)"
+                         @dragover.prevent="wbDragOver(entry.id, $event)"
+                         @drop="wbDrop(entry.id, $event)">
+                        <!-- Collapsed Header -->
+                        <div class="flex items-center gap-2 px-3 py-2.5 cursor-pointer select-none"
+                             @click="expandWBEntry(entry.id)">
+                            <span class="text-gray-300 hover:text-gray-500 cursor-grab text-lg leading-none" title="Drag">&#9776;</span>
+                            <label class="flex-shrink-0 cursor-pointer" @click.stop>
+                                <input type="checkbox" :checked="entry.enabled"
+                                       @change="saveWBEntryDirect(entry.id, {enabled: $event.target.checked})"
+                                       class="rounded border-gray-300">
+                            </label>
+                            <!-- Comment or key as title -->
+                            <span class="font-medium text-gray-700 flex-1 truncate" x-text="entry.comment || entry.key_primary || '(no key)'"></span>
+                            <!-- Position badge -->
+                            <span class="text-xs px-1.5 py-0.5 rounded font-mono"
+                                  :class="entry.position === 'before_char' ? 'bg-blue-100 text-blue-600' : 'bg-orange-100 text-orange-600'"
+                                  x-text="entry.position === 'before_char' ? 'before' : 'after'"></span>
+                            <!-- Constant badge -->
+                            <span x-show="entry.constant" class="text-xs px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700">const</span>
+                            <!-- Order -->
+                            <span class="text-xs text-gray-400" x-text="'#' + entry.insertion_order"></span>
+                            <svg class="w-4 h-4 text-gray-400 transition-transform" :class="{'rotate-180': wbExpandedEntry === entry.id}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </div>
+                        <!-- Expanded Content -->
+                        <div x-show="wbExpandedEntry === entry.id"
+                             x-transition:enter="transition ease-out duration-200"
+                             x-transition:enter-start="opacity-0 -translate-y-1"
+                             x-transition:enter-end="opacity-100 translate-y-0"
+                             x-transition:leave="transition ease-in duration-150"
+                             x-transition:leave-start="opacity-100"
+                             x-transition:leave-end="opacity-0"
+                             class="border-t px-3 py-3 space-y-3 bg-gray-50/50">
+                            <!-- Comment -->
+                            <div class="flex items-center gap-2">
+                                <label class="text-xs text-gray-500 w-16 shrink-0" x-text="t('world_books.comment')"></label>
+                                <input type="text" :value="entry.comment || ''"
+                                       @input="wbEntryEditId === entry.id && (wbEntryForm.comment = $event.target.value)"
+                                       @focus="editWBEntry(entry)"
+                                       class="flex-1 border rounded px-2 py-1.5 text-sm" :placeholder="t('world_books.comment_hint')">
+                            </div>
+                            <!-- Primary Key -->
+                            <div class="flex items-center gap-2">
+                                <label class="text-xs text-gray-500 w-16 shrink-0" x-text="t('world_books.key_primary')"></label>
+                                <input type="text" :value="entry.key_primary"
+                                       @input="wbEntryEditId === entry.id && (wbEntryForm.key_primary = $event.target.value)"
+                                       @focus="editWBEntry(entry)"
+                                       class="flex-1 border rounded px-2 py-1.5 text-sm font-mono" placeholder="keyword1,keyword2,...">
+                            </div>
+                            <!-- Secondary Key (selective) -->
+                            <div x-show="entry.selective" class="flex items-center gap-2">
+                                <label class="text-xs text-gray-500 w-16 shrink-0" x-text="t('world_books.key_secondary')"></label>
+                                <input type="text" :value="entry.key_secondary || ''"
+                                       @input="wbEntryEditId === entry.id && (wbEntryForm.key_secondary = $event.target.value)"
+                                       @focus="editWBEntry(entry)"
+                                       class="flex-1 border rounded px-2 py-1.5 text-sm font-mono" placeholder="secondary1,secondary2,...">
+                            </div>
+                            <!-- Content -->
+                            <div>
+                                <label class="text-xs text-gray-500 mb-1 block" x-text="t('world_books.content')"></label>
+                                <textarea :value="entry.content" rows="5"
+                                          @input="wbEntryEditId === entry.id && (wbEntryForm.content = $event.target.value)"
+                                          @focus="editWBEntry(entry)"
+                                          class="w-full border rounded px-3 py-2 text-sm font-mono resize-y"
+                                          placeholder="Lore text..."></textarea>
+                            </div>
+                            <!-- Settings row -->
+                            <div class="flex items-center gap-3 flex-wrap text-xs">
+                                <label class="flex items-center gap-1.5 cursor-pointer">
+                                    <input type="checkbox" :checked="entry.enabled"
+                                           @change="wbEntryEditId === entry.id && (wbEntryForm.enabled = $event.target.checked) || editWBEntry(entry)"
+                                           @focus="editWBEntry(entry)"
+                                           class="rounded border-gray-300">
+                                    <span x-text="t('world_books.enabled')"></span>
+                                </label>
+                                <label class="flex items-center gap-1.5 cursor-pointer">
+                                    <input type="checkbox" :checked="entry.constant"
+                                           @change="wbEntryEditId === entry.id && (wbEntryForm.constant = $event.target.checked) || editWBEntry(entry)"
+                                           @focus="editWBEntry(entry)"
+                                           class="rounded border-gray-300">
+                                    <span x-text="t('world_books.constant')"></span>
+                                </label>
+                                <label class="flex items-center gap-1.5 cursor-pointer">
+                                    <input type="checkbox" :checked="entry.selective"
+                                           @change="wbEntryEditId === entry.id && (wbEntryForm.selective = $event.target.checked) || editWBEntry(entry)"
+                                           @focus="editWBEntry(entry)"
+                                           class="rounded border-gray-300">
+                                    <span x-text="t('world_books.selective')"></span>
+                                </label>
+                                <label class="flex items-center gap-1.5 cursor-pointer">
+                                    <input type="checkbox" :checked="entry.case_sensitive"
+                                           @change="wbEntryEditId === entry.id && (wbEntryForm.case_sensitive = $event.target.checked) || editWBEntry(entry)"
+                                           @focus="editWBEntry(entry)"
+                                           class="rounded border-gray-300">
+                                    <span x-text="t('world_books.case_sensitive')"></span>
+                                </label>
+                            </div>
+                            <!-- Numeric settings -->
+                            <div class="flex items-center gap-4 flex-wrap">
+                                <div class="flex items-center gap-2">
+                                    <label class="text-xs text-gray-500" x-text="t('world_books.position')"></label>
+                                    <select :value="entry.position"
+                                            @change="wbEntryEditId === entry.id && (wbEntryForm.position = $event.target.value)"
+                                            @focus="editWBEntry(entry)"
+                                            class="border rounded px-2 py-1.5 text-xs bg-white">
+                                        <option value="before_char" x-text="t('world_books.pos_before_char')"></option>
+                                        <option value="after_char" x-text="t('world_books.pos_after_char')"></option>
+                                    </select>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <label class="text-xs text-gray-500" x-text="t('world_books.insertion_order')"></label>
+                                    <input type="number" min="0"
+                                           :value="entry.insertion_order"
+                                           @input="wbEntryEditId === entry.id && (wbEntryForm.insertion_order = parseInt($event.target.value) || 0)"
+                                           @focus="editWBEntry(entry)"
+                                           class="w-20 border rounded px-2 py-1.5 text-xs">
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <label class="text-xs text-gray-500" x-text="t('world_books.priority')"></label>
+                                    <input type="number" min="0"
+                                           :value="entry.priority"
+                                           @input="wbEntryEditId === entry.id && (wbEntryForm.priority = parseInt($event.target.value) || 0)"
+                                           @focus="editWBEntry(entry)"
+                                           class="w-16 border rounded px-2 py-1.5 text-xs">
+                                </div>
+                            </div>
+                            <!-- Actions -->
+                            <div class="flex items-center justify-between pt-1">
+                                <div class="flex gap-1">
+                                    <button @click="moveWBEntry(entry.id, -1)" :disabled="wbEntries[0]?.id === entry.id"
+                                            class="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200 disabled:opacity-30">&#9650;</button>
+                                    <button @click="moveWBEntry(entry.id, 1)" :disabled="wbEntries[wbEntries.length-1]?.id === entry.id"
+                                            class="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200 disabled:opacity-30">&#9660;</button>
+                                </div>
+                                <div class="flex gap-1">
+                                    <button @click="saveWBEntry()"
+                                            x-show="wbEntryEditId === entry.id"
+                                            class="text-xs px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">
+                                        <span x-text="t('world_books.save_entry')"></span>
+                                    </button>
+                                    <button @click="deleteWBEntry(entry.id)"
+                                            class="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200">
+                                        <span x-text="t('world_books.delete_entry')"></span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+                <div x-show="wbEntries.length === 0" class="text-gray-400 text-center py-8" x-text="t('world_books.no_entries')"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sticker Packs Tab -->
+    <div x-show="activeTab === 'stickers'" class="space-y-4">
+        <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold" x-text="t('stickers.title')">Sticker Packs</h2>
+            <div class="flex gap-2">
+                <label class="px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-sm cursor-pointer">
+                    <span x-text="t('stickers.import_archive')">Import Archive</span>
+                    <input type="file" accept=".zip,.7z,.rar" class="hidden"
+                           @change="importStickerArchive($event)">
+                </label>
+                <button @click="openPackForm()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                    <span x-text="t('stickers.add_pack')">New Pack</span>
+                </button>
+            </div>
+        </div>
+        <p class="text-xs text-gray-400" x-text="t('stickers.import_hint')"></p>
+
+        <!-- Scan Local Path -->
+        <div class="flex gap-2 items-center">
+            <input x-model="scanPath" type="text" class="flex-1 border rounded-lg px-3 py-2 text-sm"
+                   :placeholder="t('stickers.scan_placeholder')">
+            <button @click="scanStickerPath()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm whitespace-nowrap">
+                <span x-text="t('stickers.scan_path')">Scan</span>
+            </button>
+        </div>
+
+        <!-- Pack Form Modal -->
+        <div x-show="showPackForm" x-transition class="fixed inset-0 bg-black/40 flex items-center justify-center z-50" @click.self="showPackForm = false">
+            <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+                <h3 class="text-lg font-semibold mb-4" x-text="packForm.id ? t('stickers.pack_name') : t('stickers.add_pack')"></h3>
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-sm font-medium mb-1" x-text="t('stickers.pack_name')"></label>
+                        <input x-model="packForm.name" type="text" class="w-full border rounded px-3 py-2"
+                               :placeholder="t('stickers.pack_name_placeholder')">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1" x-text="t('stickers.description')"></label>
+                        <textarea x-model="packForm.description" rows="2" class="w-full border rounded px-3 py-2"
+                                  :placeholder="t('stickers.description_placeholder')"></textarea>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2 mt-4">
+                    <button @click="showPackForm = false" class="px-4 py-2 bg-gray-100 rounded hover:bg-gray-200 text-sm">Cancel</button>
+                    <button @click="savePack()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sticker Detail Modal -->
+        <div x-show="showStickerDetail" x-transition class="fixed inset-0 bg-black/40 flex items-center justify-center z-50" @click.self="showStickerDetail = false">
+            <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold" x-text="selectedPack?.name"></h3>
+                    <div class="flex gap-2">
+                        <label class="px-3 py-1.5 bg-blue-600 text-white rounded cursor-pointer hover:bg-blue-700 text-sm">
+                            <span x-text="t('stickers.add_sticker')"></span>
+                            <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="hidden"
+                                   @change="addSticker($event)">
+                        </label>
+                        <button @click="deletePackFromDetail()" class="px-3 py-1.5 bg-red-500 text-white rounded hover:bg-red-600 text-sm">
+                            <span x-text="t('stickers.delete_pack')">Delete Pack</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-4 gap-3 max-h-96 overflow-y-auto">
+                    <template x-for="s in selectedPackStickers" :key="s.id">
+                        <div class="relative group border rounded p-1">
+                            <img :src="'/api/sticker-packs/stickers/' + s.id + '/file'" class="w-full h-20 object-contain rounded">
+                            <input type="text" :value="s.text_description"
+                                   @change="updateStickerDesc(s.id, $event.target.value)"
+                                   class="w-full text-xs border-t mt-1 px-1 py-0.5"
+                                   :placeholder="t('stickers.text_description_placeholder')">
+                            <button @click="deleteSticker(s.id)"
+                                    class="absolute top-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 text-xs hidden group-hover:flex items-center justify-center">&times;</button>
+                        </div>
+                    </template>
+                </div>
+                <div x-show="selectedPackStickers.length === 0" class="text-center text-gray-400 py-8" x-text="t('stickers.no_stickers')"></div>
+                <div class="flex justify-end mt-4">
+                    <button @click="showStickerDetail = false" class="px-4 py-2 bg-gray-100 rounded hover:bg-gray-200 text-sm">Close</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pack Grid -->
+        <div x-show="stickerPacks.length > 0" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <template x-for="pack in stickerPacks" :key="pack.id">
+                <div class="border rounded-lg p-3 hover:shadow-md transition-shadow cursor-pointer"
+                     @click="openPackDetail(pack)">
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="font-medium text-sm truncate" x-text="pack.name"></h4>
+                        <div class="flex gap-2">
+                            <button @click.stop="editPack(pack)" class="text-blue-500 hover:text-blue-700 text-xl px-3 py-1.5 rounded hover:bg-blue-50" title="Edit">&#9998;</button>
+                            <button @click.stop="deletePack(pack.id)" class="text-red-500 hover:text-red-700 text-xl px-3 py-1.5 rounded hover:bg-red-50" title="Delete">&times;</button>
+                        </div>
+                    </div>
+                    <div class="h-20 bg-gray-50 rounded flex items-center justify-center mb-2 overflow-hidden">
+                        <img x-show="pack.cover_sticker_id" :src="'/api/sticker-packs/stickers/' + pack.cover_sticker_id + '/file'" class="h-full object-contain">
+                        <span x-show="!pack.cover_sticker_id" class="text-gray-300 text-2xl">+</span>
+                    </div>
+                    <p class="text-xs text-gray-500" x-text="pack.sticker_count + ' ' + t('stickers.sticker_count')"></p>
+                </div>
+            </template>
+        </div>
+        <div x-show="stickerPacks.length === 0" class="text-center text-gray-400 py-12" x-text="t('stickers.no_packs')"></div>
+    </div>
+
+    <!-- Settings Tab -->
+    <div x-show="activeTab === 'settings'" class="space-y-4">
+        <h2 class="text-lg font-semibold" x-text="t('settings.title')">System Settings</h2>
+
+        <div class="bg-white rounded-xl shadow-sm p-6 space-y-4" x-show="settingsLoaded || true">
+            <h3 class="font-medium" x-text="t('settings.server')">Server Settings</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1" x-text="t('settings.port')">Listen Port</label>
+                    <input x-model.number="settingsForm.server_port" type="number"
+                           class="w-full border rounded-lg px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1" x-text="t('settings.language')">Language</label>
+                    <select x-model="settingsForm.language" class="w-full border rounded-lg px-3 py-2 text-sm">
+                        <option value="zh-CN">中文</option>
+                        <option value="en">English</option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <input x-model="settingsForm.listen_lan" type="checkbox" id="listen-lan" class="rounded">
+                <label for="listen-lan" class="text-sm">
+                    <span x-text="t('settings.listen_lan')">Listen on LAN</span>
+                    <span class="text-gray-500 text-xs ml-1" x-text="t('settings.listen_lan_hint')"></span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Prompt Settings -->
+        <div class="bg-white rounded-xl shadow-sm p-6 space-y-4">
+            <h3 class="font-medium" x-text="t('settings.prompt')">Prompt Settings</h3>
+            <p class="text-sm text-gray-500" x-text="t('settings.prompt_hint')">When enabled, the base system prompt will be disabled if the corresponding feature is active.</p>
+            <div class="space-y-3">
+                <div class="flex items-center gap-2">
+                    <input x-model="settingsForm.disable_base_prompt_on_char" type="checkbox" id="disable-char" class="rounded">
+                    <label for="disable-char" class="text-sm" x-text="t('settings.disable_on_char')">Disable base prompt when character card is active</label>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input x-model="settingsForm.disable_base_prompt_on_preset" type="checkbox" id="disable-preset" class="rounded">
+                    <label for="disable-preset" class="text-sm" x-text="t('settings.disable_on_preset')">Disable base prompt when ST preset is active</label>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input x-model="settingsForm.disable_base_prompt_on_worldbook" type="checkbox" id="disable-worldbook" class="rounded">
+                    <label for="disable-worldbook" class="text-sm" x-text="t('settings.disable_on_worldbook')">Disable base prompt when world book entries match</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex gap-2 items-center">
+            <button @click="saveSettings()"
+                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                    x-text="t('settings.save')">
+                Save Settings
+            </button>
+            <span class="text-sm text-gray-500" x-text="t('settings.restart_hint')"></span>
+        </div>
+    </div>
+
+                            <!-- Memories Tab -->
+                            <div x-show="activeTab === 'memories'" x-cloak>
+                                <div x-data="memoriesPanel()" x-init="init()">
+                                    <!-- Status + Config -->
+                                    <div class="mb-6" x-show="statusLoaded">
+                                        <!-- Status bar -->
+                                        <div class="p-4 bg-gray-50 rounded-lg">
+                                            <div class="flex items-center justify-between mb-2">
+                                                <div class="flex items-center gap-3">
+                                                    <span class="text-sm font-medium text-gray-700" x-text="t('memory.status.embedding_model')"></span>
+                                                    <span class="text-sm text-gray-500" x-text="status.available ? status.embedding_model || 'configured' : t('memory.status.disabled')"></span>
+                                                    <span :class="status.available ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'" class="px-2 py-0.5 rounded-full text-xs font-medium" x-text="status.available ? t('memory.status.enabled') : t('memory.status.disabled')"></span>
+                                                </div>
+                                                <button @click="showConfig = !showConfig" class="text-xs text-blue-500 hover:text-blue-700" x-text="showConfig ? t('memory.config.hide') : t('memory.config.show')"></button>
+                                            </div>
+                                             <template x-if="status.available">
+                                                <div class="flex flex-wrap gap-6 text-sm text-gray-600">
+                                                     <span><span x-text="t('memory.status.total')"></span>: <strong x-text="totalMemories"></strong></span>
+                                                     <span><span x-text="t('memory.status.users')"></span>: <strong x-text="users.length"></strong></span>
+                                                     <span><span x-text="t('memory.status.vector')"></span>: <strong x-text="status.vector_count ?? '—'"></strong></span>
+                                                     <span><span x-text="t('memory.status.onnx')"></span>: <strong x-text="status.onnx_loaded === null ? '—' : (status.onnx_loaded ? t('memory.status.onnx_loaded') : t('memory.status.onnx_lazy'))"></strong></span>
+                                                 </div>
+                                             </template>
+                                             <template x-if="status.init_error">
+                                                 <p class="text-sm text-amber-600 mt-1" x-text="status.init_error"></p>
+                                             </template>
+                                            <template x-if="!status.available && !showConfig">
+                                                <p class="text-sm text-amber-600 mt-1" x-text="t('memory.status.not_configured')"></p>
+                                            </template>
+                                        </div>
+
+                                        <!-- Config form -->
+                                        <div x-show="showConfig" class="mt-3 p-4 bg-white border border-gray-200 rounded-lg">
+                                            <!-- Embedding section -->
+                                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2" x-text="t('memory.config.embedding_title')"></p>
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label class="block text-xs font-medium text-gray-600 mb-1" x-text="t('memory.config.provider')"></label>
+                                                    <select x-model="configForm.embedding_provider" @change="onEmbeddingProviderChange()"
+                                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
+                                                        <option value="openai" x-text="t('memory.config.openai_compat')"></option>
+                                                        <option value="modelscope-local" x-text="t('memory.config.modelscope_local')"></option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="block text-xs font-medium text-gray-600 mb-1"><span x-text="t('memory.config.model')"></span> *</label>
+                                                    <input type="text" x-model="configForm.embedding_model"
+                                                           placeholder="text-embedding-3-small"
+                                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
+                                                </div>
+                                                <div x-show="configForm.embedding_provider !== 'modelscope-local'">
+                                                    <label class="block text-xs font-medium text-gray-600 mb-1"><span x-text="t('memory.config.base_url')"></span> <span class="text-gray-400" x-text="t('memory.config.fallback_hint')"></span></label>
+                                                    <input type="text" x-model="configForm.embedding_base_url"
+                                                           placeholder="https://api.openai.com/v1"
+                                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
+                                                </div>
+                                                <div x-show="configForm.embedding_provider !== 'modelscope-local'">
+                                                    <label class="block text-xs font-medium text-gray-600 mb-1"><span x-text="t('memory.config.api_key')"></span> <span class="text-gray-400" x-text="t('memory.config.fallback_hint')"></span></label>
+                                                    <input type="password" x-model="configForm.embedding_api_key"
+                                                           :placeholder="configForm.embedding_api_key_set ? '••••••••' : 'sk-...'"
+                                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
+                                                </div>
+                                                <div x-show="configForm.embedding_provider === 'modelscope-local'">
+                                                    <label class="block text-xs font-medium text-gray-600 mb-1" x-text="t('memory.config.modelscope_model_id')"></label>
+                                                    <input type="text" x-model="configForm.embedding_modelscope_model_id"
+                                                           placeholder="Xenova/bge-small-zh-v1.5"
+                                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
+                                                </div>
+                                                <div x-show="configForm.embedding_provider === 'modelscope-local'">
+                                                    <label class="block text-xs font-medium text-gray-600 mb-1" x-text="t('memory.config.local_model_dir')"></label>
+                                                    <input type="text" x-model="configForm.embedding_local_path"
+                                                           placeholder="./data/models/bge-small-zh-v1.5"
+                                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
+                                                </div>
+                                                <div x-show="configForm.embedding_provider === 'modelscope-local'" class="md:col-span-2">
+                                                    <label class="block text-xs font-medium text-gray-600 mb-1" x-text="t('memory.config.onnx_quant_model')"></label>
+                                                    <select x-model="configForm.embedding_onnx_model_file" @change="onEmbeddingOnnxModelChange()"
+                                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
+                                                        <option value="onnx/model_fp16.onnx" x-text="t('memory.config.onnx_fp16')"></option>
+                                                        <option value="onnx/model_quantized.onnx" x-text="t('memory.config.onnx_quantized')"></option>
+                                                        <option value="onnx/model_int8.onnx" x-text="t('memory.config.onnx_int8')"></option>
+                                                        <option value="onnx/model_uint8.onnx" x-text="t('memory.config.onnx_uint8')"></option>
+                                                        <option value="onnx/model_q4f16.onnx" x-text="t('memory.config.onnx_q4f16')"></option>
+                                                        <option value="onnx/model_q4.onnx" x-text="t('memory.config.onnx_q4')"></option>
+                                                        <option value="onnx/model_bnb4.onnx" x-text="t('memory.config.onnx_bnb4')"></option>
+                                                        <option value="onnx/model.onnx" x-text="t('memory.config.onnx_fp32')"></option>
+                                                    </select>
+                                                </div>
+                                                <div x-show="isLocalEmbeddingProvider" class="md:col-span-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+                                                    <p class="font-medium" x-text="t('memory.config.onnx_init_notice')"></p>
+                                                    <p class="mt-1" x-text="localEmbeddingBusyText"></p>
+                                                    <div x-show="isLocalEmbeddingBusy" class="mt-2 flex items-center gap-2 text-blue-700" aria-live="polite">
+                                                        <span class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-blue-300 border-t-blue-700"></span>
+                                                        <span x-text="t('memory.config.onnx_busy_msg')"></span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- LLM section for memory extraction -->
+                                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-5 mb-2" x-text="t('memory.config.llm_title')"></p>
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label class="block text-xs font-medium text-gray-600 mb-1" x-text="t('memory.config.provider')"></label>
+                                                    <select x-model.number="configForm.llm_provider_id"
+                                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
+                                                        <option :value="0" x-text="t('memory.config.use_main_model')"></option>
+                                                        <template x-for="p in providers.filter(p => p.is_enabled)" :key="p.id">
+                                                            <option :value="p.id" x-text="p.name + ' (' + p.provider_type + ')'"></option>
+                                                        </template>
+                                                    </select>
+                                                    <template x-if="configForm.llm_provider_id > 0">
+                                                        <div class="mt-1 text-xs text-gray-500" x-text="providers.find(p => p.id === configForm.llm_provider_id)?.base_url || ''"></div>
+                                                    </template>
+                                                </div>
+                                                <div>
+                                                    <label class="block text-xs font-medium text-gray-600 mb-1"><span x-text="t('memory.config.model')"></span> <span class="text-gray-400" x-text="t('memory.config.fallback_hint')"></span></label>
+                                                    <input type="text" x-model="configForm.llm_model"
+                                                           placeholder="gpt-4o-mini"
+                                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
+                                                </div>
+                                                <div x-show="configForm.llm_provider_id === 0">
+                                                    <label class="block text-xs font-medium text-gray-600 mb-1"><span x-text="t('memory.config.base_url')"></span> <span class="text-gray-400" x-text="t('memory.config.fallback_hint')"></span></label>
+                                                    <input type="text" x-model="configForm.llm_base_url"
+                                                           placeholder="https://api.openai.com/v1"
+                                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
+                                                </div>
+                                                <div x-show="configForm.llm_provider_id === 0">
+                                                    <label class="block text-xs font-medium text-gray-600 mb-1"><span x-text="t('memory.config.api_key')"></span> <span class="text-gray-400" x-text="t('memory.config.fallback_hint')"></span></label>
+                                                    <input type="password" x-model="configForm.llm_api_key"
+                                                           :placeholder="configForm.llm_api_key_set ? '••••••••' : 'sk-...'"
+                                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
+                                                </div>
+                                            </div>
+
+                                             <!-- Retrieval tuning -->
+                                             <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-5 mb-2" x-text="t('memory.config.retrieval_tuning')"></p>
+                                             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                 <label class="block">
+                                                     <span class="block text-xs font-medium text-gray-600 mb-1" x-text="t('memory.config.top_k')"></span>
+                                                     <input type="number" x-model.number="configForm.top_k" min="1" max="100"
+                                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
+                                                 </label>
+                                                 <label class="block">
+                                                     <span class="block text-xs font-medium text-gray-600 mb-1" x-text="t('memory.config.min_score')"></span>
+                                                     <input type="number" x-model.number="configForm.min_score" min="0" max="1" step="0.05"
+                                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
+                                                 </label>
+                                                 <label class="block">
+                                                     <span class="block text-xs font-medium text-gray-600 mb-1" x-text="t('memory.config.max_context_chars')"></span>
+                                                     <input type="number" x-model.number="configForm.max_context_chars" min="100" max="100000"
+                                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
+                                                 </label>
+                                             </div>
+
+                                             <label x-show="isLocalEmbeddingProvider" class="mt-4 flex items-center gap-2 text-sm text-gray-700">
+                                                 <input type="checkbox" x-model="configForm.preload_onnx" class="rounded">
+                                                 <span x-text="t('memory.config.preload_onnx')"></span>
+                                             </label>
+
+                                             <!-- Advanced HNSW tuning -->
+                                             <details class="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                                                 <summary class="cursor-pointer text-sm font-medium text-gray-700" x-text="t('memory.config.hnsw_title')"></summary>
+                                                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-3">
+                                                     <label class="block">
+                                                         <span class="block text-xs font-medium text-gray-600 mb-1" x-text="t('memory.config.hnsw_space')"></span>
+                                                         <select x-model="configForm.hnsw_space" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                                                             <option value="cosine">cosine</option>
+                                                             <option value="l2">l2</option>
+                                                             <option value="ip">ip</option>
+                                                         </select>
+                                                     </label>
+                                                     <label class="block">
+                                                         <span class="block text-xs font-medium text-gray-600 mb-1" x-text="t('memory.config.hnsw_m')"></span>
+                                                         <input type="number" x-model.number="configForm.hnsw_m" min="1" max="1000" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                                                     </label>
+                                                     <label class="block">
+                                                         <span class="block text-xs font-medium text-gray-600 mb-1" x-text="t('memory.config.hnsw_construction_ef')"></span>
+                                                         <input type="number" x-model.number="configForm.hnsw_construction_ef" min="1" max="1000" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                                                     </label>
+                                                     <label class="block">
+                                                         <span class="block text-xs font-medium text-gray-600 mb-1" x-text="t('memory.config.hnsw_search_ef')"></span>
+                                                         <input type="number" x-model.number="configForm.hnsw_search_ef" min="1" max="1000" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                                                     </label>
+                                                 </div>
+                                                 <p class="mt-2 text-xs text-amber-600" x-text="t('memory.config.hnsw_warning')"></p>
+                                             </details>
+
+                                             <details class="mt-4">
+                                                 <summary class="cursor-pointer text-sm font-medium text-gray-700" x-text="t('memory.config.buffer_title')"></summary>
+                                                 <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mt-2">
+                                                     <label class="block">
+                                                         <span class="block text-xs font-medium text-gray-600 mb-1" x-text="t('memory.config.turn_threshold')"></span>
+                                                         <input type="number" x-model.number="configForm.turn_threshold" min="1" max="100" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                                                     </label>
+                                                     <label class="block">
+                                                         <span class="block text-xs font-medium text-gray-600 mb-1" x-text="t('memory.config.timeout')"></span>
+                                                         <input type="number" x-model.number="configForm.timeout_minutes" min="1" max="1440" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                                                     </label>
+                                                     <label class="block">
+                                                         <span class="block text-xs font-medium text-gray-600 mb-1" x-text="t('memory.config.time_decay')"></span>
+                                                         <input type="number" x-model.number="configForm.time_decay_days" min="1" max="365" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                                                     </label>
+                                                     <label class="block">
+                                                         <span class="block text-xs font-medium text-gray-600 mb-1" x-text="t('memory.config.rerank_weight')"></span>
+                                                         <input type="number" x-model.number="configForm.rerank_weight" min="0" max="1" step="0.05" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                                                     </label>
+                                                     <label class="block">
+                                                         <span class="block text-xs font-medium text-gray-600 mb-1" x-text="t('memory.config.exact_sim_weight')"></span>
+                                                         <input type="number" x-model.number="configForm.exact_sim_weight" min="0" max="1" step="0.05" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                                                     </label>
+                                                     <label class="block">
+                                                         <span class="block text-xs font-medium text-gray-600 mb-1" x-text="t('memory.config.expand_factor')"></span>
+                                                         <input type="number" x-model.number="configForm.expand_factor" min="1" max="10" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                                                     </label>
+                                                 </div>
+                                             </details>
+
+                                             <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mt-4">
+                                                 <button @click="exportMemories()" :disabled="!status.available"
+                                                         class="px-3 py-1.5 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                         x-text="t('memory.config.export_json')">
+                                                 </button>
+                                                 <div class="flex gap-2">
+                                                    <button @click="showConfig = false" class="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800" x-text="t('memory.config.cancel')"></button>
+                                                    <button @click="testConnection()" :disabled="testing" class="px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                                                        <span x-show="!testing" x-text="t('memory.config.test_connection')"></span>
+                                                        <span x-show="testing && !isLocalEmbeddingProvider" x-text="t('memory.config.testing')"></span>
+                                                        <span x-show="testing && isLocalEmbeddingProvider" x-text="t('memory.config.testing_local')"></span>
+                                                    </button>
+                                                    <button @click="saveConfig()" :disabled="saving" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed">
+                                                        <span x-show="!saving" x-text="t('memory.config.save')"></span>
+                                                        <span x-show="saving && !isLocalEmbeddingProvider" x-text="t('memory.config.saving')"></span>
+                                                        <span x-show="saving && isLocalEmbeddingProvider" x-text="t('memory.config.saving_local')"></span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Memory browser -->
+                                    <template x-if="status.available">
+                                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                            <!-- User list -->
+                                            <div class="md:col-span-1">
+                                                <h3 class="text-sm font-medium text-gray-700 mb-3" x-text="t('memory.users.title')"></h3>
+                                                <div class="space-y-1">
+                                                    <template x-if="users.length === 0">
+                                                        <p class="text-sm text-gray-400" x-text="t('memory.users.no_users')"></p>
+                                                    </template>
+                                                    <template x-for="u in users" :key="u.user_id">
+                                                        <button @click="selectUser(u.user_id)"
+                                                                :class="selectedUser === u.user_id ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'"
+                                                                class="w-full text-left px-3 py-2 border rounded-lg text-sm flex justify-between items-center">
+                                                            <span x-text="u.nickname || u.user_id"></span>
+                                                            <span class="text-xs text-gray-400" x-text="'(' + u.count + ')'"></span>
+                                                        </button>
+                                                    </template>
+                                                </div>
+                                            </div>
+
+                                            <!-- Memory detail -->
+                                            <div class="md:col-span-2">
+                                                <template x-if="!selectedUser">
+                                                    <p class="text-sm text-gray-400 py-8 text-center" x-text="t('memory.detail.select_user')"></p>
+                                                </template>
+                                                <template x-if="selectedUser">
+                                                    <div>
+                                                        <div class="flex items-center justify-between mb-4">
+                                                            <h3 class="text-sm font-medium text-gray-700">
+                                                                <span x-text="t('memory.detail.title')"></span>: <span x-text="selectedUserNickname || selectedUser"></span>
+                                                            </h3>
+                                                            <button @click="clearAllMemories()" class="text-xs text-red-500 hover:text-red-700" x-text="t('memory.detail.clear_all')"></button>
+                                                        </div>
+
+                                                        <!-- Search -->
+                                                        <div class="mb-4">
+                                                            <input type="text" x-model="searchQuery" @keyup.enter="searchMemories()"
+                                                                   :placeholder="t('memory.detail.search')"
+                                                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
+                                                        </div>
+
+                                                        <!-- Memory list -->
+                                                        <div class="space-y-2">
+                                                            <template x-if="displayedMemories.length === 0">
+                                                                <p class="text-sm text-gray-400 py-4 text-center" x-text="t('memory.detail.no_memories')"></p>
+                                                            </template>
+                                                            <template x-for="mem in displayedMemories" :key="mem.id">
+                                                                <div class="flex items-start gap-2 p-3 bg-white border border-gray-200 rounded-lg group">
+                                                                    <template x-if="editingId !== mem.id">
+                                                                        <div class="flex-1 flex items-start justify-between">
+                                                                            <p class="text-sm text-gray-700 flex-1" x-text="mem.memory || mem.text"></p>
+                                                                            <div x-show="!mem._isSearchResult" class="flex gap-1 opacity-0 group-hover:opacity-100 ml-2 shrink-0">
+                                                                                <button @click="startEdit(mem)" class="text-xs text-blue-500 hover:text-blue-700" x-text="t('memory.detail.edit')"></button>
+                                                                                <button @click="deleteMemory(mem.id)" class="text-xs text-red-500 hover:text-red-700">×</button>
+                                                                            </div>
+                                                                        </div>
+                                                                    </template>
+                                                                    <template x-if="editingId === mem.id">
+                                                                        <div class="flex-1 flex gap-2">
+                                                                            <input type="text" x-model="editText" @keyup.enter="saveEdit(mem.id)" @keyup.escape="cancelEdit()"
+                                                                                   class="flex-1 px-2 py-1 border border-gray-300 rounded text-sm">
+                                                                            <button @click="saveEdit(mem.id)" class="text-xs text-green-600" x-text="t('memory.detail.save')"></button>
+                                                                            <button @click="cancelEdit()" class="text-xs text-gray-400" x-text="t('memory.detail.cancel')"></button>
+                                                                        </div>
+                                                                    </template>
+                                                                </div>
+                                                            </template>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+
+    <!-- Agent Config Tab -->
+    <div x-show="activeTab === 'agent'" class="space-y-4">
+        <!-- Sub-tab navigation -->
+        <nav class="flex gap-1 border-b border-gray-200">
+            <button @click="agentSubTab = 'tools'"
+                    class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors"
+                    :class="agentSubTab === 'tools'
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    x-text="t('agent.subtab_tools')">
+            </button>
+            <button @click="agentSubTab = 'skills'"
+                    class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors"
+                    :class="agentSubTab === 'skills'
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    x-text="t('agent.subtab_skills')">
+            </button>
+            <button @click="agentSubTab = 'mcp'"
+                    class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors"
+                    :class="agentSubTab === 'mcp'
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    x-text="t('agent.subtab_mcp')">
+            </button>
+            <button @click="agentSubTab = 'workspace'; refreshWorkspaceConfig(); refreshWorkspaceFiles()"
+                    class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors"
+                    :class="agentSubTab === 'workspace'
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    x-text="t('agent.subtab_workspace')">
+            </button>
+        </nav>
+
+        <!-- Agent Settings (sub-tab: tools) -->
+        <div x-show="agentSubTab === 'tools'" class="bg-white rounded-xl shadow-sm p-6 space-y-6">
+            <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wide" x-text="t('agent.settings_title')"></h3>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1" x-text="t('agent.max_rounds')"></label>
+                <div class="flex items-center gap-3">
+                    <input x-model.number="agentConfig.max_tool_rounds" type="number" min="1" max="20"
+                           class="w-24 border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <span class="text-gray-500 text-xs" x-text="t('agent.max_rounds_hint')"></span>
+                </div>
+            </div>
+
+            <!-- Context & Performance Settings -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                <!-- Token Context Budget -->
+                <div class="bg-gray-50 rounded-lg p-4 space-y-1">
+                    <label class="block text-sm font-medium text-gray-700" x-text="t('agent.max_context_tokens')"></label>
+                    <input x-model.number="agentConfig.max_context_tokens" type="number" min="0" max="200000" step="1000"
+                           class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <p class="text-xs text-gray-500" x-text="t('agent.max_context_tokens_hint')"></p>
+                </div>
+
+                <!-- Concurrent Requests -->
+                <div class="bg-gray-50 rounded-lg p-4 space-y-1">
+                    <label class="block text-sm font-medium text-gray-700" x-text="t('agent.max_concurrent')"></label>
+                    <input x-model.number="agentConfig.max_concurrent_requests" type="number" min="1" max="20"
+                           class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <p class="text-xs text-gray-500" x-text="t('agent.max_concurrent_hint')"></p>
+                </div>
+
+                <!-- Consolidation Threshold -->
+                <div class="bg-gray-50 rounded-lg p-4 space-y-1">
+                    <label class="block text-sm font-medium text-gray-700" x-text="t('agent.consolidation_threshold')"></label>
+                    <input x-model.number="agentConfig.consolidation_threshold" type="number" min="5" max="200"
+                           class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <p class="text-xs text-gray-500" x-text="t('agent.consolidation_threshold_hint')"></p>
+                </div>
+
+                <!-- Consolidation Ratio -->
+                <div class="bg-gray-50 rounded-lg p-4 space-y-1">
+                    <label class="block text-sm font-medium text-gray-700" x-text="t('agent.consolidation_ratio')"></label>
+                    <input x-model.number="agentConfig.consolidation_ratio" type="number" min="0.1" max="0.9" step="0.05"
+                           class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <p class="text-xs text-gray-500" x-text="t('agent.consolidation_ratio_hint')"></p>
+                </div>
+            </div>
+
+            <!-- Tool Prompt Injection Toggle -->
+            <label class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer">
+                <input type="checkbox" x-model="agentConfig.tool_prompt_injection"
+                       class="rounded text-blue-600">
+                <div>
+                    <span class="text-sm font-medium text-gray-800" x-text="t('agent.tool_prompt_injection')"></span>
+                    <p class="text-xs text-gray-500" x-text="t('agent.tool_prompt_injection_hint')"></p>
+                </div>
+            </label>
+
+            <!-- Enabled Tools -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-3" x-text="t('agent.enabled_tools')"></label>
+                <div class="space-y-2">
+                    <template x-for="tool in agentConfig.available_tools.filter(t => !t.startsWith('workspace_'))" :key="tool">
+                        <label class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer">
+                            <input type="checkbox" :checked="agentConfig.enabled_tools.includes(tool)"
+                                   @change="toggleAgentTool(tool)" class="rounded text-blue-600">
+                            <div>
+                                <span class="text-sm font-medium text-gray-800" x-text="tool"></span>
+                                <span class="text-xs text-gray-500 ml-2" x-text="t('agent.tool_desc.' + tool)"></span>
+                            </div>
+                        </label>
+                    </template>
+                    <p x-show="!agentConfig.available_tools.length" class="text-gray-400 text-sm" x-text="t('agent.no_tools')"></p>
+                </div>
+            </div>
+
+            <!-- Collapsible Advanced Sections -->
+            <div class="space-y-3 pt-2 border-t">
+                <!-- Tool Advanced Settings -->
+                <details class="group">
+                    <summary class="flex items-center justify-between cursor-pointer p-3 bg-gray-50 rounded-lg hover:bg-gray-100">
+                        <span class="text-sm font-medium text-gray-700" x-text="t('agent.tool_advanced')"></span>
+                        <svg class="w-4 h-4 text-gray-500 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </summary>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3 px-1">
+                        <div class="space-y-1">
+                            <label class="block text-sm font-medium text-gray-700" x-text="t('agent.tool_timeout')"></label>
+                            <input x-model.number="agentConfig.tool_timeout_seconds" type="number" min="1" max="300"
+                                   class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500" x-text="t('agent.tool_timeout_hint')"></p>
+                        </div>
+                        <div class="space-y-1">
+                            <label class="block text-sm font-medium text-gray-700" x-text="t('agent.max_result_chars')"></label>
+                            <input x-model.number="agentConfig.max_tool_result_chars" type="number" min="1000" max="200000"
+                                   class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500" x-text="t('agent.max_result_chars_hint')"></p>
+                        </div>
+                        <div class="space-y-1">
+                            <label class="block text-sm font-medium text-gray-700" x-text="t('agent.fail_limit')"></label>
+                            <input x-model.number="agentConfig.consecutive_fail_limit" type="number" min="1" max="20"
+                                   class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500" x-text="t('agent.fail_limit_hint')"></p>
+                        </div>
+                    </div>
+                </details>
+
+                <!-- Browser Settings -->
+                <details class="group">
+                    <summary class="flex items-center justify-between cursor-pointer p-3 bg-gray-50 rounded-lg hover:bg-gray-100">
+                        <span class="text-sm font-medium text-gray-700" x-text="t('agent.browser_settings')"></span>
+                        <svg class="w-4 h-4 text-gray-500 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </summary>
+                    <div class="mt-3 px-1 space-y-4">
+                        <label class="flex items-center gap-2 p-3 bg-white border rounded-lg cursor-pointer hover:bg-gray-50">
+                            <input type="checkbox" x-model="agentConfig.browser_stealth" class="rounded text-blue-600">
+                            <span class="text-sm font-medium text-gray-700" x-text="t('agent.browser_stealth')"></span>
+                        </label>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="space-y-1">
+                                <label class="block text-sm font-medium text-gray-700" x-text="t('agent.browser_timeout')"></label>
+                                <input x-model.number="agentConfig.browser_default_timeout" type="number" min="5" max="120"
+                                       class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="block text-sm font-medium text-gray-700" x-text="t('agent.browser_port')"></label>
+                                <input x-model.number="agentConfig.browser_serve_port" type="number" min="1024" max="65535"
+                                       class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                        </div>
+                    </div>
+                </details>
+            </div>
+
+            <button @click="saveAgentConfig()"
+                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                    x-text="t('agent.save')">
+            </button>
+        </div>
+
+        <!-- Skills (sub-tab: skills) -->
+        <div x-show="agentSubTab === 'skills'" class="bg-white rounded-xl shadow-sm p-6 space-y-4">
+            <div class="flex items-center justify-between">
+                <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wide" x-text="t('agent.skills_title')"></h3>
+                <div class="flex gap-2">
+                    <label class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer">
+                        <span x-text="t('agent.import_skill')"></span>
+                        <input type="file" accept=".md,.zip" class="hidden" @change="importSkills($event)">
+                    </label>
+                    <button @click="showSkillForm = !showSkillForm"
+                            class="px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700"
+                            x-text="t('agent.add_skill')">
+                    </button>
+                </div>
+            </div>
+
+            <!-- Skill create form -->
+            <div x-show="showSkillForm" class="border border-green-200 rounded-lg p-4 space-y-3 bg-green-50">
+                <input x-model="skillForm.name" :placeholder="t('agent.skill_name_placeholder')"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                <input x-model="skillForm.description" :placeholder="t('agent.skill_desc_placeholder')"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                <textarea x-model="skillForm.content" rows="4"
+                          :placeholder="t('agent.skill_content_placeholder')"
+                          class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono"></textarea>
+                <div class="flex gap-2">
+                    <button @click="createSkill()" class="px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700"
+                            x-text="t('agent.save')"></button>
+                    <button @click="showSkillForm = false" class="px-3 py-1.5 text-xs bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                            x-text="t('agent.cancel')"></button>
+                </div>
+            </div>
+
+            <!-- Skill list -->
+            <div class="space-y-2">
+                <template x-for="skill in skills.items" :key="skill.name">
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div class="flex items-center gap-3">
+                            <input type="checkbox" :checked="skill.enabled"
+                                   @change="toggleSkill(skill.name)" class="rounded text-blue-600">
+                            <div>
+                                <span class="text-sm font-medium text-gray-800" x-text="skill.name"></span>
+                                <span class="text-xs text-gray-500 ml-2" x-text="skill.description"></span>
+                            </div>
+                        </div>
+                        <button @click="deleteSkill(skill.name)" class="text-xs text-red-500 hover:text-red-700 px-2 py-1"
+                                x-text="t('agent.delete')"></button>
+                    </div>
+                </template>
+                <p x-show="!skills.items.length && skills.loaded" class="text-gray-400 text-sm" x-text="t('agent.no_skills')"></p>
+            </div>
+        </div>
+
+        <!-- MCP Servers (sub-tab: mcp) -->
+        <div x-show="agentSubTab === 'mcp'" class="bg-white rounded-xl shadow-sm p-6 space-y-4">
+            <div class="flex items-center justify-between">
+                <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wide" x-text="t('agent.mcp_title')"></h3>
+                <button @click="showMcpForm = !showMcpForm"
+                        class="px-3 py-1.5 text-xs bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                        x-text="t('agent.add_mcp')">
+                </button>
+            </div>
+
+            <!-- MCP create form -->
+            <div x-show="showMcpForm" class="border border-purple-200 rounded-lg p-4 space-y-3 bg-purple-50">
+                <div class="grid grid-cols-2 gap-3">
+                    <input x-model="mcpForm.name" :placeholder="t('agent.mcp_name_placeholder')"
+                           class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                    <select x-model="mcpForm.transport"
+                            class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                        <option value="stdio">stdio</option>
+                        <option value="sse">SSE</option>
+                        <option value="streamableHttp">Streamable HTTP</option>
+                    </select>
+                </div>
+                <template x-if="mcpForm.transport === 'stdio'">
+                    <div class="space-y-3">
+                        <input x-model="mcpForm.command" :placeholder="t('agent.mcp_cmd_placeholder')"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono">
+                        <input x-model="mcpForm.argsStr" :placeholder="t('agent.mcp_args_placeholder')"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono">
+                        <input x-model="mcpForm.envStr" :placeholder="t('agent.mcp_env_placeholder')"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono">
+                    </div>
+                </template>
+                <template x-if="mcpForm.transport === 'sse'">
+                    <input x-model="mcpForm.url" placeholder="http://localhost:8080/sse"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono">
+                </template>
+                <template x-if="mcpForm.transport === 'streamableHttp'">
+                    <input x-model="mcpForm.url" placeholder="http://localhost:8080/mcp/"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono">
+                </template>
+                <div class="flex gap-2">
+                    <button @click="createMcpServer()" class="px-3 py-1.5 text-xs bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                            x-text="t('agent.save')"></button>
+                    <button @click="showMcpForm = false" class="px-3 py-1.5 text-xs bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                            x-text="t('agent.cancel')"></button>
+                </div>
+            </div>
+
+            <!-- MCP server list -->
+            <div class="space-y-2">
+                <template x-for="srv in mcpServers.items" :key="srv.id">
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div class="flex items-center gap-3">
+                            <span class="w-2 h-2 rounded-full"
+                                  :class="srv.status === 'connected' ? 'bg-green-500' : srv.status === 'error' ? 'bg-red-500' : 'bg-gray-400'"></span>
+                            <div>
+                                <span class="text-sm font-medium text-gray-800" x-text="srv.name"></span>
+                                <span class="text-xs text-gray-500 ml-2" x-text="srv.transport"></span>
+                                <span class="text-xs text-gray-400 ml-2"
+                                      x-text="srv.transport === 'stdio' ? srv.command : (srv.url || '')"></span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" :checked="srv.enabled"
+                                   @change="toggleMcpEnabled(srv)" class="rounded text-blue-600">
+                            <button @click="reconnectMcpServer(srv.id)" class="text-xs text-blue-500 hover:text-blue-700 px-2 py-1"
+                                    x-text="t('agent.reconnect')"></button>
+                            <button @click="deleteMcpServer(srv.id)" class="text-xs text-red-500 hover:text-red-700 px-2 py-1"
+                                    x-text="t('agent.delete')"></button>
+                        </div>
+                    </div>
+                </template>
+                <p x-show="!mcpServers.items.length && mcpServers.loaded" class="text-gray-400 text-sm" x-text="t('agent.no_mcp')"></p>
+            </div>
+        </div>
+
+        <!-- Workspace (sub-tab: workspace) -->
+        <div x-show="agentSubTab === 'workspace'" class="space-y-4">
+            <!-- Workspace Config Card -->
+            <div class="bg-white rounded-xl shadow-sm p-6 space-y-4">
+                <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wide" x-text="t('agent.workspace.title')"></h3>
+                <div class="flex items-center justify-between">
+                    <label class="text-sm font-medium text-gray-700" x-text="t('agent.workspace.enabled')"></label>
+                    <button @click="toggleWorkspace()"
+                            :class="workspaceConfig.enabled ? 'bg-green-500' : 'bg-gray-300'"
+                            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none">
+                        <span :class="workspaceConfig.enabled ? 'translate-x-6' : 'translate-x-1'"
+                              class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"></span>
+                    </button>
+                </div>
+                <div x-show="workspaceConfig.enabled" class="space-y-3 pt-2 border-t border-gray-100">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" x-text="t('agent.workspace.root')"></label>
+                        <input x-model="workspaceConfig.root" @change="saveWorkspaceConfig()"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono"
+                               placeholder="/path/to/workspace">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2" x-text="t('agent.workspace.tools')"></label>
+                        <div class="space-y-2">
+                            <template x-for="tool in ['workspace_read', 'workspace_list', 'workspace_grep', 'workspace_write', 'workspace_edit']" :key="tool">
+                                <label class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer">
+                                    <input type="checkbox"
+                                           :checked="(workspaceConfig.enabled_workspace_tools || []).includes(tool)"
+                                           @change="toggleWorkspaceTool(tool)"
+                                           class="rounded text-blue-600">
+                                    <div>
+                                        <span class="text-sm font-medium text-gray-800" x-text="tool"></span>
+                                        <span class="text-xs text-gray-500 ml-2" x-text="t('agent.tool_desc.' + tool)"></span>
+                                    </div>
+                                </label>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Workspace Advanced Settings -->
+                    <details class="group pt-2">
+                        <summary class="flex items-center justify-between cursor-pointer p-3 bg-gray-50 rounded-lg hover:bg-gray-100">
+                            <span class="text-sm font-medium text-gray-700" x-text="t('agent.workspace.advanced')"></span>
+                            <svg class="w-4 h-4 text-gray-500 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </summary>
+                        <div class="mt-3 space-y-4">
+                            <div class="space-y-1">
+                                <label class="block text-sm font-medium text-gray-700" x-text="t('agent.workspace.blocked_ext')"></label>
+                                <input x-model="workspaceBlockedExtInput" @change="updateWorkspaceBlockedExtensions()"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono"
+                                       :placeholder="t('agent.workspace.blocked_ext_hint')">
+                                <p class="text-xs text-gray-500" x-text="t('agent.workspace.blocked_ext_desc')"></p>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="space-y-1">
+                                    <label class="block text-sm font-medium text-gray-700" x-text="t('agent.workspace.read_max')"></label>
+                                    <input x-model.number="agentConfig.workspace_read_max_size" type="number" min="1024" max="10485760"
+                                           class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <p class="text-xs text-gray-500" x-text="t('agent.workspace.read_max_hint')"></p>
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="block text-sm font-medium text-gray-700" x-text="t('agent.workspace.write_max')"></label>
+                                    <input x-model.number="agentConfig.workspace_write_max_size" type="number" min="1024" max="5242880"
+                                           class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <p class="text-xs text-gray-500" x-text="t('agent.workspace.write_max_hint')"></p>
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="block text-sm font-medium text-gray-700" x-text="t('agent.workspace.list_max')"></label>
+                                    <input x-model.number="agentConfig.workspace_list_max_entries" type="number" min="10" max="10000"
+                                           class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="block text-sm font-medium text-gray-700" x-text="t('agent.workspace.grep_max')"></label>
+                                    <input x-model.number="agentConfig.workspace_grep_max_results" type="number" min="10" max="1000"
+                                           class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                            </div>
+                            <button @click="saveAgentConfig()"
+                                    class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                                    x-text="t('agent.save')">
+                            </button>
+                        </div>
+                    </details>
+                </div>
+            </div>
+
+            <!-- File Browser Card -->
+            <div x-show="workspaceConfig.enabled" class="bg-white rounded-xl shadow-sm p-6 space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wide" x-text="t('agent.workspace.fileBrowser')"></h3>
+                    <div class="flex items-center gap-2">
+                        <input x-model="workspaceFileFilter" @input.debounce.400ms="refreshWorkspaceFiles()"
+                               class="px-3 py-1.5 border border-gray-300 rounded-lg text-xs w-40"
+                               placeholder="*.py, *.md">
+                        <label class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer">
+                            <span x-text="t('agent.workspace.upload')"></span>
+                            <input type="file" class="hidden" @change="uploadWorkspaceFile($event)">
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Breadcrumb / current path -->
+                <div class="flex items-center gap-1 text-xs text-gray-500">
+                    <button @click="workspaceCurrentPath = ''; refreshWorkspaceFiles()"
+                            class="hover:text-blue-600 underline" x-text="t('agent.workspace.root')"></button>
+                    <template x-for="(seg, i) in workspaceCurrentPath.split('/').filter(Boolean)" :key="i">
+                        <span class="flex items-center gap-1">
+                            <span>/</span>
+                            <button @click="workspaceCurrentPath = workspaceCurrentPath.split('/').filter(Boolean).slice(0, i + 1).join('/'); refreshWorkspaceFiles()"
+                                    class="hover:text-blue-600 underline" x-text="seg"></button>
+                        </span>
+                    </template>
+                </div>
+
+                <!-- File list -->
+                <div class="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-64 overflow-y-auto">
+                    <template x-for="file in workspaceFiles" :key="file.path">
+                        <div class="flex items-center justify-between px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm"
+                             @click="file.is_dir ? (workspaceCurrentPath = file.path, refreshWorkspaceFiles()) : viewWorkspaceFile(file.path)">
+                            <div class="flex items-center gap-2">
+                                <span x-show="file.is_dir" class="text-yellow-500">&#128193;</span>
+                                <span x-show="!file.is_dir" class="text-gray-400">&#128196;</span>
+                                <span class="text-gray-800" x-text="file.name"></span>
+                            </div>
+                            <span x-show="!file.is_dir && file.size != null" class="text-xs text-gray-400" x-text="formatFileSize(file.size)"></span>
+                        </div>
+                    </template>
+                    <p x-show="!workspaceFiles.length && workspaceLoaded" class="text-gray-400 text-sm text-center py-4" x-text="t('agent.workspace.noFiles')"></p>
+                </div>
+
+                <!-- File content viewer -->
+                <div x-show="workspaceFileContent !== null" class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-mono text-gray-600" x-text="workspaceFilePath"></span>
+                        <button @click="workspaceFileContent = null" class="text-xs text-gray-500 hover:text-gray-700">&times;</button>
+                    </div>
+                    <pre class="text-xs text-gray-800 whitespace-pre-wrap max-h-60 overflow-y-auto font-mono" x-text="workspaceFileContent"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- About Tab -->
+    <div x-show="activeTab === 'about'" class="max-w-2xl mx-auto space-y-6">
+        <div class="bg-white rounded-xl shadow-sm p-8 text-center">
+            <img src="/static/logo.svg" alt="WeiLinkBot" class="w-20 h-20 mx-auto mb-4">
+            <h2 class="text-2xl font-bold text-gray-800">WeiLinkBot</h2>
+            <p class="text-gray-500 mt-1" x-text="'v' + botVersion"></p>
+            <p class="text-gray-600 mt-3" x-text="t('about.description')">AI Chatbot Platform powered by WeChat iLink Bot SDK</p>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm p-6">
+            <h3 class="font-semibold text-gray-800 mb-4" x-text="t('about.author')">Author</h3>
+            <div class="flex items-center gap-3">
+                <img src="/static/LingyeSoul.png" alt="LingyeSoul"
+                     class="w-10 h-10 rounded-full bg-gray-200"
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <div class="w-10 h-10 bg-gradient-to-br from-green-400 to-blue-500 rounded-full items-center justify-center text-white font-bold hidden">L</div>
+                <div>
+                    <div class="font-medium text-gray-800">泠夜Soul</div>
+                    <div class="text-sm text-gray-500">LingyeSoul</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm p-6 space-y-3">
+            <h3 class="font-semibold text-gray-800 mb-4">Links</h3>
+            <a href="https://weilinkbot.lingyesoul.top/" target="_blank"
+               class="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors">
+                <img src="/static/logo.svg" alt="WeiLinkBot" class="w-5 h-5">
+                <div>
+                    <div class="text-sm font-medium text-gray-800" x-text="t('about.website')">Official Website</div>
+                    <div class="text-xs text-gray-500">weilinkbot.lingyesoul.top</div>
+                </div>
+            </a>
+            <a href="https://github.com/LingyeSoul/WeiLinkBot" target="_blank"
+               class="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors">
+                <svg class="w-5 h-5 text-gray-700" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+                </svg>
+                <div>
+                    <div class="text-sm font-medium text-gray-800" x-text="t('about.github')">GitHub Repository</div>
+                    <div class="text-xs text-gray-500">github.com/LingyeSoul/WeiLinkBot</div>
+                </div>
+            </a>
+            <a href="https://space.bilibili.com/298721157" target="_blank"
+               class="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors">
+                <svg class="w-5 h-5 text-pink-500" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M17.813 4.653h.854c1.51.054 2.769.578 3.773 1.574 1.004.995 1.524 2.249 1.56 3.76v7.36c-.036 1.51-.556 2.769-1.56 3.773s-2.262 1.524-3.773 1.56H5.333c-1.51-.036-2.769-.556-3.773-1.56S.036 18.858 0 17.347v-7.36c.036-1.511.556-2.765 1.56-3.76 1.004-.996 2.262-1.52 3.773-1.574h.774l-1.174-1.12a1.234 1.234 0 0 1-.373-.906c0-.356.124-.658.373-.907l.027-.027c.267-.249.573-.373.92-.373.347 0 .653.124.92.373L9.653 4.44c.071.071.134.142.187.213h4.267a.836.836 0 0 1 .16-.213l2.853-2.747c.267-.249.573-.373.92-.373.347 0 .662.151.929.4.267.249.391.551.391.907 0 .355-.124.657-.373.906L17.813 4.653zM5.333 7.24c-.746.018-1.373.276-1.88.773-.506.498-.769 1.13-.786 1.894v7.52c.017.764.28 1.395.786 1.893.507.498 1.134.756 1.88.773h13.334c.746-.017 1.373-.275 1.88-.773.506-.498.769-1.129.786-1.893v-7.52c-.017-.765-.28-1.396-.786-1.894-.507-.497-1.134-.755-1.88-.773H5.333zm4 5.093c.373 0 .684.124.933.373.25.249.383.569.4.96v1.173c-.017.391-.15.711-.4.96-.249.25-.56.374-.933.374s-.684-.125-.933-.374c-.25-.249-.383-.569-.4-.96V13.66c.017-.391.15-.711.4-.96.249-.249.56-.373.933-.373zm5.334 0c.373 0 .684.124.933.373.25.249.383.569.4.96v1.173c-.017.391-.15.711-.4.96-.249.25-.56.374-.933.374s-.684-.125-.933-.374c-.25-.249-.383-.569-.4-.96V13.66c.017-.391.15-.711.4-.96.249-.249.56-.373.933-.373z"/>
+                </svg>
+                <div>
+                    <div class="text-sm font-medium text-gray-800" x-text="t('about.bilibili')">Bilibili</div>
+                    <div class="text-xs text-gray-500">space.bilibili.com/298721157</div>
+                </div>
+            </a>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm p-6">
+            <h3 class="font-semibold text-gray-800 mb-3" x-text="t('about.tech_stack')">Tech Stack</h3>
+            <div class="flex flex-wrap gap-2">
+                <span class="px-3 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">Python</span>
+                <span class="px-3 py-1 bg-green-100 text-green-700 text-xs rounded-full">FastAPI</span>
+                <span class="px-3 py-1 bg-purple-100 text-purple-700 text-xs rounded-full">SQLAlchemy</span>
+                <span class="px-3 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-full">Alpine.js</span>
+                <span class="px-3 py-1 bg-cyan-100 text-cyan-700 text-xs rounded-full">Tailwind CSS</span>
+                <span class="px-3 py-1 bg-red-100 text-red-700 text-xs rounded-full">WeChat iLink SDK</span>
+            </div>
+        </div>
+
+        <div class="text-center text-xs text-gray-400 py-4"
+             x-text="t('about.license')">
+            Licensed under AGPL-3.0
+        </div>
+    </div>
+
+</main>
+
+<!-- Toast Notification -->
+<div x-show="toast.show" x-transition
+     class="fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg text-sm z-50"
+     :class="{
+         'bg-green-600 text-white': toast.type === 'success',
+         'bg-red-600 text-white': toast.type === 'error',
+         'bg-blue-600 text-white': toast.type === 'info',
+     }"
+     x-text="toast.message">
+</div>
+
+<script src="/static/i18n.js"></script>
+<script src="/static/qrcode.min.js"></script>
+<script src="/static/app.js?v=20260502-ws-uptime"></script>
+</body>
+</html>
