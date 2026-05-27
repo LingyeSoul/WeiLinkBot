@@ -27,15 +27,7 @@ from ..services.character_service import (
     export_st_png,
 )
 from ..services.ws_service import get_ws_service
-
-
-def _content_disposition(filename: str) -> str:
-    """Build Content-Disposition header with RFC 5987 encoding for non-ASCII filenames."""
-    ascii_name = filename.encode("ascii", "ignore").decode("ascii")
-    if ascii_name == filename:
-        return f'attachment; filename="{filename}"'
-    encoded = quote(filename)
-    return f"attachment; filename=\"{ascii_name or 'file'}\"; filename*=UTF-8''{encoded}"
+from ._utils import content_disposition as _content_disposition, read_upload_with_limit as _read_upload_with_limit
 
 
 router = APIRouter()
@@ -231,16 +223,7 @@ async def upload_avatar(
     return MessageAction(message=t("api.avatar_uploaded"))
 
 
-_MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
-
-
 async def _read_upload_with_limit(file: UploadFile) -> bytes:
     """Read uploaded file with a size limit to prevent memory exhaustion."""
-    chunks: list[bytes] = []
-    total = 0
-    while chunk := await file.read(8192):
-        total += len(chunk)
-        if total > _MAX_UPLOAD_SIZE:
-            raise HTTPException(status_code=413, detail=t("api.file_too_large"))
-        chunks.append(chunk)
-    return b"".join(chunks)
+    from ._utils import read_upload_with_limit as _rul
+    return await _rul(file)

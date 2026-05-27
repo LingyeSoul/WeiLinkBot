@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -65,7 +66,7 @@ async def lifespan(app: FastAPI):
             if row:
                 saved_lang = row
     except Exception:
-        pass
+        logger.debug("Could not read saved language from DB", exc_info=True)
     i18n.init(lang=saved_lang)
     logger.info("i18n initialized (lang=%s)", i18n.get_lang())
 
@@ -253,6 +254,11 @@ async def lifespan(app: FastAPI):
     # Shutdown: stop bot if running
     if bot_service.state.value == "running":
         await bot_service.stop()
+
+    # Dispose config sync engine
+    from ..config import dispose_config_engine
+    dispose_config_engine()
+
     logger.info("Shutdown complete")
 
 
@@ -266,6 +272,15 @@ def create_app() -> FastAPI:
         version=__version__,
         lifespan=lifespan,
     )
+
+    # Security headers middleware
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        return response
 
     # Mount static files
     if _STATIC_DIR.exists():
@@ -284,8 +299,12 @@ def create_app() -> FastAPI:
     from ..i18n import LOCALES_DIR
     import json as _json
 
+    _LANG_RE = re.compile(r"^[a-z]{2}(-[A-Z]{2})?$")
+
     @app.get("/locales/{lang}.json", include_in_schema=False)
     async def serve_locale(lang: str):
+        if not _LANG_RE.match(lang):
+            raise HTTPException(status_code=400, detail="Invalid language code")
         locale_file = LOCALES_DIR / f"{lang}.json"
         if not locale_file.exists():
             raise HTTPException(status_code=404, detail="Locale not found")
@@ -361,8 +380,12 @@ def create_app() -> FastAPI:
             _s.commit()
         return {"lang": i18n.get_lang()}
 
-    # GitHub avatar proxy (cached locally)
-    _avatar_cache: dict[str, tuple[float, bytes]] = {}
+    # GitHub avatar proxy (LRU-bounded cache)
+    from collections import OrderedDict as _OD
+    _AVATAR_CACHE_MAX = 256
+    _AVATAR_CACHE_TTL = 3600
+    _avatar_cache: _OD[str, tuple[float, bytes]] = _OD()
+    _GITHUB_USER_RE = re.compile(r"^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$")
 
     @app.get("/api/avatar/github/{username}", include_in_schema=False)
     async def github_avatar(username: str):
@@ -370,12 +393,16 @@ def create_app() -> FastAPI:
         import asyncio
         import urllib.request
 
-        cache_ttl = 3600  # 1 hour
+        if not _GITHUB_USER_RE.match(username):
+            raise HTTPException(status_code=400, detail="Invalid username")
+
         now = time.time()
 
-        if username in _avatar_cache:
-            ts, data = _avatar_cache[username]
-            if now - ts < cache_ttl:
+        entry = _avatar_cache.get(username)
+        if entry:
+            ts, data = entry
+            if now - ts < _AVATAR_CACHE_TTL:
+                _avatar_cache.move_to_end(username)
                 return Response(content=data, media_type="image/png")
 
         def _fetch():
@@ -383,15 +410,21 @@ def create_app() -> FastAPI:
                 f"https://github.com/{username}.png?size=80",
                 headers={"User-Agent": "WeiLinkBot"},
             )
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                return resp.read()
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                data = resp.read()
+                if len(data) > 1_048_576:
+                    raise ValueError("Avatar response too large")
+                return data
 
         try:
             data = await asyncio.to_thread(_fetch)
             _avatar_cache[username] = (now, data)
+            _avatar_cache.move_to_end(username)
+            while len(_avatar_cache) > _AVATAR_CACHE_MAX:
+                _avatar_cache.popitem(last=False)
             return Response(content=data, media_type="image/png")
         except Exception:
-            pass
+            logger.debug("Failed to fetch GitHub avatar for %s", username, exc_info=True)
 
         # Fallback: 1x1 transparent PNG
         fallback = (

@@ -35,7 +35,7 @@ class WorkspaceGrepTool(Tool):
         self._ws = workspace_service
 
     async def execute(self, *, query: str, path: str = "", regex: bool = False, **kwargs) -> str:
-        matches = self._ws.grep_files(query, rel_path=path, use_regex=regex)
+        matches = await self._ws.grep_files(query, rel_path=path, use_regex=regex)
         if not matches:
             return "No matches found."
         lines = []

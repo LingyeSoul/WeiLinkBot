@@ -376,6 +376,14 @@ async def create_mcp_server(data: MCPServerCreate):
     from ..database import get_session_factory
     from ..services.mcp_server_service import MCPServerService
 
+    # Defense-in-depth: validate MCP stdio config at API layer
+    if data.transport == "stdio":
+        from ..services.mcp_service import _validate_mcp_stdio
+        try:
+            _validate_mcp_stdio(data.command or "", data.args or [], data.env or {})
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
     async with get_session_factory()() as db:
         server = await MCPServerService(db).create(data.model_dump())
     return MCPServerResponse(
@@ -555,7 +563,7 @@ async def read_workspace_file(path: str, offset: int = 0, limit: int | None = No
     if not ws:
         raise HTTPException(503, "Workspace not available")
     try:
-        content = ws.read_file(path, offset=offset, limit=limit)
+        content = await ws.read_file(path, offset=offset, limit=limit)
         return {"path": path, "content": content}
     except Exception as e:
         raise HTTPException(400, str(e))
@@ -570,7 +578,16 @@ async def upload_workspace_file(file: UploadFile = File(...), path: str = ""):
         raise HTTPException(503, "Workspace not available")
 
     target = f"{path}/{file.filename}" if path else file.filename
-    content = await file.read()
+    # Chunked read with size limit to prevent memory exhaustion
+    _WORKSPACE_UPLOAD_LIMIT = 5 * 1024 * 1024
+    chunks: list[bytes] = []
+    total = 0
+    while chunk := await file.read(8192):
+        total += len(chunk)
+        if total > _WORKSPACE_UPLOAD_LIMIT:
+            raise HTTPException(status_code=413, detail="File too large (max 5MB)")
+        chunks.append(chunk)
+    content = b"".join(chunks)
     text = content.decode("utf-8", errors="replace")
     try:
         written = ws.write_file(target, text)

@@ -56,7 +56,7 @@ async def update_llm_config(data: LLMConfigUpdate):
 
     logger.info("Config update request: provider=%s model=%s base_url=%s api_key=%s",
                 data.provider, data.model, data.base_url,
-                "***" + data.api_key[-4:] if data.api_key else None)
+                "***" if data.api_key else None)
 
     if data.provider is not None:
         llm.apply_preset(data.provider, config.llm)

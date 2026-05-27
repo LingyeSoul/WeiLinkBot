@@ -43,25 +43,33 @@ class ConversationService:
         return conv
 
     async def list_conversations(self) -> list[dict]:
-        """List all conversations with last message preview."""
+        """List all conversations with last message preview (efficient subquery)."""
+        # Subquery: get the max message ID per conversation
+        last_msg_subq = (
+            select(
+                Message.conversation_id,
+                func.max(Message.id).label("last_msg_id"),
+            )
+            .group_by(Message.conversation_id)
+            .subquery()
+        )
+
         stmt = (
-            select(Conversation)
-            .options(selectinload(Conversation.messages))
+            select(Conversation, Message.content)
+            .outerjoin(last_msg_subq, Conversation.id == last_msg_subq.c.conversation_id)
+            .outerjoin(Message, Message.id == last_msg_subq.c.last_msg_id)
             .order_by(Conversation.updated_at.desc())
         )
         result = await self._db.execute(stmt)
-        conversations = result.scalars().all()
-
         items = []
-        for conv in conversations:
-            last_msg = conv.messages[-1].content[:100] if conv.messages else None
+        for conv, last_content in result.all():
             items.append({
                 "id": conv.id,
                 "user_id": conv.user_id,
                 "created_at": conv.created_at,
                 "updated_at": conv.updated_at,
                 "message_count": conv.message_count,
-                "last_message": last_msg,
+                "last_message": (last_content or "")[:100],
             })
         return items
 
@@ -98,46 +106,39 @@ class ConversationService:
         self, user_id: str, limit: int = 50, offset: int = 0,
         exclude_consolidated: bool = True,
     ) -> list[Message]:
-        """Get messages for a user's conversation.
+        """Get messages for a user's conversation using SQL-level pagination.
 
         Args:
             exclude_consolidated: If True (default), skip messages that have been
                 compressed by the Consolidator. Their summaries are already
                 injected as MemorySummary entries in context.
         """
-        stmt = (
-            select(Conversation)
-            .where(Conversation.user_id == user_id)
-            .options(selectinload(Conversation.messages))
-        )
-        result = await self._db.execute(stmt)
-        conv = result.scalar_one_or_none()
-
-        if conv is None:
+        # Get conversation ID first
+        conv_id_stmt = select(Conversation.id).where(Conversation.user_id == user_id)
+        conv_id = (await self._db.execute(conv_id_stmt)).scalar_one_or_none()
+        if conv_id is None:
             return []
 
-        # Return messages in chronological order with pagination
-        all_msgs = conv.messages
+        stmt = select(Message).where(Message.conversation_id == conv_id)
         if exclude_consolidated:
-            all_msgs = [m for m in all_msgs if not m.is_consolidated]
-        return all_msgs[offset: offset + limit]
+            stmt = stmt.where(Message.is_consolidated == False)
+        stmt = stmt.order_by(Message.created_at.asc()).offset(offset).limit(limit)
+        result = await self._db.execute(stmt)
+        return list(result.scalars().all())
 
     async def clear_messages(self, user_id: str) -> bool:
-        """Delete all messages in a user's conversation."""
-        stmt = (
-            select(Conversation)
-            .where(Conversation.user_id == user_id)
-            .options(selectinload(Conversation.messages))
-        )
-        result = await self._db.execute(stmt)
+        """Delete all messages in a user's conversation (bulk delete)."""
+        conv_stmt = select(Conversation).where(Conversation.user_id == user_id)
+        result = await self._db.execute(conv_stmt)
         conv = result.scalar_one_or_none()
 
         if conv is None:
             return False
 
-        for msg in conv.messages:
-            await self._db.delete(msg)
-
+        from sqlalchemy import delete as sql_delete
+        await self._db.execute(
+            sql_delete(Message).where(Message.conversation_id == conv.id)
+        )
         conv.message_count = 0
         await self._db.flush()
         logger.info("Cleared conversation for user %s", user_id)

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -17,6 +18,20 @@ from ..config import AppConfig
 from .local_embedding_service import LOCAL_EMBEDDING_PROVIDER, LocalOnnxEmbeddingService
 
 logger = logging.getLogger(__name__)
+
+# Pre-compiled regex patterns for rule-based fact extraction
+_PREFERENCE_RE = re.compile(
+    r"喜欢|讨厌|偏好|不喜欢|最爱|最烦|prefer|like|dislike|favorite|hate|love",
+    re.IGNORECASE,
+)
+_EMOTIONAL_RE = re.compile(
+    r"心情|开心|难过|伤心|生气|焦虑|压力|高兴|委屈|feeling|happy|sad|angry|anxious|stressed|upset",
+    re.IGNORECASE,
+)
+_PERSONALITY_RE = re.compile(
+    r"性格|我是|我一直|我从来|我总是|I am|I always|I never|I'm",
+    re.IGNORECASE,
+)
 
 MEMORY_CATEGORIES = ("user_preferences", "personality", "emotional", "general")
 DEFAULT_CATEGORY = "general"
@@ -732,26 +747,11 @@ class MemoryService:
             return []
 
         # Keyword-based category detection
-        import re
-
-        preference_pattern = re.compile(
-            r"喜欢|讨厌|偏好|不喜欢|最爱|最烦|prefer|like|dislike|favorite|hate|love",
-            re.IGNORECASE,
-        )
-        emotional_pattern = re.compile(
-            r"心情|开心|难过|伤心|生气|焦虑|压力|高兴|委屈|feeling|happy|sad|angry|anxious|stressed|upset",
-            re.IGNORECASE,
-        )
-        personality_pattern = re.compile(
-            r"性格|我是|我一直|我从来|我总是|I am|I always|I never|I'm",
-            re.IGNORECASE,
-        )
-
-        if preference_pattern.search(text):
+        if _PREFERENCE_RE.search(text):
             category = "user_preferences"
-        elif emotional_pattern.search(text):
+        elif _EMOTIONAL_RE.search(text):
             category = "emotional"
-        elif personality_pattern.search(text):
+        elif _PERSONALITY_RE.search(text):
             category = "personality"
         else:
             category = DEFAULT_CATEGORY

@@ -8,10 +8,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections import defaultdict
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# Idle timeout for per-user locks/queues cleanup (1 hour)
+_IDLE_CLEANUP_SECONDS = 3600.0
 
 
 class MessageQueue:
@@ -28,6 +32,10 @@ class MessageQueue:
         self._user_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._user_queues: dict[str, asyncio.Queue] = defaultdict(asyncio.Queue)
         self._active_tasks: dict[str, asyncio.Task] = {}
+        self._user_last_access: dict[str, float] = {}
+
+    def _touch(self, user_id: str) -> None:
+        self._user_last_access[user_id] = time.monotonic()
 
     async def acquire(self) -> None:
         """Acquire a slot from the global concurrency semaphore."""
@@ -39,10 +47,12 @@ class MessageQueue:
 
     def get_user_lock(self, user_id: str) -> asyncio.Lock:
         """Get the per-user lock for serializing message processing."""
+        self._touch(user_id)
         return self._user_locks[user_id]
 
     def enqueue(self, user_id: str, msg: Any) -> None:
         """Enqueue a message for a user who already has an active task."""
+        self._touch(user_id)
         self._user_queues[user_id].put_nowait(msg)
         logger.debug("Enqueued message for user %s", user_id)
 
@@ -60,6 +70,7 @@ class MessageQueue:
 
     def set_active_task(self, user_id: str, task: asyncio.Task) -> None:
         """Track the active processing task for a user."""
+        self._touch(user_id)
         self._active_tasks[user_id] = task
 
     def clear_active_task(self, user_id: str) -> None:
@@ -99,3 +110,23 @@ class MessageQueue:
         logger.info(
             "Updated global concurrency limit %d → %d", old, max_concurrent,
         )
+
+    def cleanup_idle(self, max_idle: float = _IDLE_CLEANUP_SECONDS) -> int:
+        """Remove locks/queues for users idle longer than max_idle seconds. Returns count removed."""
+        now = time.monotonic()
+        idle_users = [
+            uid for uid, last in self._user_last_access.items()
+            if now - last > max_idle and uid not in self._active_tasks
+        ]
+        for uid in idle_users:
+            self._user_locks.pop(uid, None)
+            q = self._user_queues.pop(uid, None)
+            self._user_last_access.pop(uid, None)
+            if q and not q.empty():
+                # Re-create if messages still pending (edge case)
+                self._user_queues[uid] = q
+                self._user_last_access[uid] = now
+        removed = len(idle_users)
+        if removed:
+            logger.debug("Cleaned up %d idle user entries from message queue", removed)
+        return removed

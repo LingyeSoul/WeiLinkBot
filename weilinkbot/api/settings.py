@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session as _Session
@@ -12,6 +12,7 @@ from ..config import _get_sync_engine, get_config, save_config
 from ..models import SystemSetting
 from ..schemas import SettingsResponse, SettingsUpdate, MessageAction
 from ..services.ws_service import get_ws_service
+from fastapi import HTTPException
 
 
 router = APIRouter()
@@ -120,8 +121,12 @@ async def update_settings(data: SettingsUpdate, db: AsyncSession = Depends(get_d
 
 
 @router.post("/restart-server", response_model=MessageAction)
-async def restart_server():
-    """Restart the server."""
+async def restart_server(request: Request):
+    """Restart the server (localhost only)."""
+    client_host = request.client.host if request.client else ""
+    if client_host not in ("127.0.0.1", "::1", "localhost"):
+        raise HTTPException(status_code=403, detail="Server restart is only allowed from localhost")
+
     import os
     import sys
     import subprocess

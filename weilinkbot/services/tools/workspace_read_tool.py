@@ -36,4 +36,4 @@ class WorkspaceReadTool(Tool):
         self._ws = workspace_service
 
     async def execute(self, *, path: str, offset: int = 0, limit: int | None = None, **kwargs) -> str:
-        return self._ws.read_file(path, offset=offset, limit=limit)
+        return await self._ws.read_file(path, offset=offset, limit=limit)

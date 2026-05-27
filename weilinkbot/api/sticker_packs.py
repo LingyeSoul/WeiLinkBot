@@ -29,15 +29,7 @@ _MAX_UPLOAD_SIZE = 128 * 1024 * 1024  # 128 MB per single sticker
 _MAX_ARCHIVE_SIZE = 128 * 1024 * 1024  # 128 MB for archives
 
 
-async def _read_upload_with_limit(file: UploadFile, limit: int) -> bytes:
-    chunks: list[bytes] = []
-    total = 0
-    while chunk := await file.read(8192):
-        total += len(chunk)
-        if total > limit:
-            raise HTTPException(status_code=413, detail=t("api.file_too_large"))
-        chunks.append(chunk)
-    return b"".join(chunks)
+from ._utils import read_upload_with_limit as _read_upload_with_limit
 
 
 async def _broadcast_packs(db):

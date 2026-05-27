@@ -50,7 +50,7 @@ class WorkspaceEditTool(Tool):
         replace_all: bool = False, **kwargs,
     ) -> str:
         try:
-            content = self._ws.read_file(path)
+            content = await self._ws.read_file(path)
         except Exception as e:
             return f"Error: Cannot read file '{path}': {e}"
 

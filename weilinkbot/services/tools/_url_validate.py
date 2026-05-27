@@ -31,9 +31,10 @@ _PRIVATE_NETWORKS = (
 )
 
 
-def validate_url(url: str) -> None:
+def validate_url(url: str) -> str:
     """Validate a URL is safe to fetch, blocking private/internal addresses.
 
+    Returns the resolved IP address string for callers to pin connections.
     Raises ToolExecutionError if the URL targets a private, loopback, or
     link-local address, or uses a disallowed scheme.
     """
@@ -55,6 +56,7 @@ def validate_url(url: str) -> None:
         raise ToolExecutionError(f"Access to internal host '{hostname}' is not allowed")
 
     # Try to resolve hostname and check if it points to a private IP
+    resolved_ip = None
     try:
         # Use getaddrinfo to resolve, preferring IPv4
         infos = socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP)
@@ -65,6 +67,8 @@ def validate_url(url: str) -> None:
                     raise ToolExecutionError(
                         f"Access to internal/private address {ip} is not allowed"
                     )
+            if resolved_ip is None:
+                resolved_ip = str(ip)
     except ToolExecutionError:
         raise
     except socket.gaierror:
@@ -72,3 +76,5 @@ def validate_url(url: str) -> None:
         logger.debug("DNS resolution failed for %s, proceeding with request", hostname)
     except Exception as e:
         logger.debug("IP check failed for %s: %s", hostname, e)
+
+    return resolved_ip or hostname

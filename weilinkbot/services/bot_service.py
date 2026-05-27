@@ -437,7 +437,7 @@ class BotService:
         Normal messages (preprocessing + LLM, potentially slow) are fire-and-forget.
         """
         text = msg.text.strip()
-        await get_event_log().push("info", "message", "message.received", f"Message from {msg.user_id}: {text[:50]}...", {"user_id": msg.user_id, "msg_type": msg.type, "text_preview": text[:100]})
+        await get_event_log().push("info", "message", "message.received", f"Message from {msg.user_id}: {text[:20]}...", {"user_id": msg.user_id, "msg_type": msg.type})
 
         # Fast path — commands are handled inline (no external API calls)
         if text.startswith("/"):
@@ -677,17 +677,9 @@ class BotService:
                     "user_id": user_id,
                     "model": model_name,
                     "tokens": tokens,
-                    "request": _normalize_context(context),
-                    "response": response_text,
                 }
                 await get_event_log().push("info", "llm", "llm.response", f"LLM response for user {user_id} ({tokens} tokens)", llm_detail)
                 await self._bot.reply(msg, response_text)
-                await get_event_log().push("info", "message", "message.replied", f"Replied to user {user_id} ({tokens} tokens)", {
-                    "user_id": user_id,
-                    "tokens": tokens,
-                    "request": _normalize_context(context),
-                    "response": response_text,
-                })
                 await get_ws_service().broadcast("token_stats", self.session_token_stats)
                 await get_ws_service().broadcast("conversations_updated", {"user_id": user_id})
                 logger.info("Replied to user %s (%d tokens)", user_id, tokens)
@@ -891,7 +883,15 @@ class BotService:
 
     @staticmethod
     async def _collect_memory_stats() -> dict | None:
-        """Gather memory status + user counts for WebSocket broadcast."""
+        """Gather memory status + user counts for WebSocket broadcast (cached 30s)."""
+        import time as _time
+        if not hasattr(BotService._collect_memory_stats, "_cache"):
+            BotService._collect_memory_stats._cache = (0.0, None)
+        now = _time.monotonic()
+        cached_ts, cached_val = BotService._collect_memory_stats._cache
+        if now - cached_ts < 30 and cached_val is not None:
+            return cached_val
+
         from ..api.deps import get_memory_service
         from ..database import get_session_factory
         from ..models import Conversation
@@ -928,6 +928,7 @@ class BotService:
         except Exception:
             logger.debug("Failed to collect memory user stats", exc_info=True)
 
+        BotService._collect_memory_stats._cache = (_time.monotonic(), stats)
         return stats
 
     # ── Command Router ───────────────────────────────────────────
@@ -985,8 +986,10 @@ class BotService:
         session_factory = get_session_factory()
         async with session_factory() as db:
             from ..models import Conversation
-            conv_result = await db.execute(select(Conversation))
-            conv_count = len(conv_result.scalars().all())
+            from sqlalchemy import func
+            conv_count = (await db.execute(
+                select(func.count()).select_from(Conversation)
+            )).scalar()
 
             conv_service = ConversationService(db)
             history_stats = await conv_service.get_token_stats()

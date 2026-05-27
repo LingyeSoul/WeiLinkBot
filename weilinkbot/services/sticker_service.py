@@ -109,15 +109,13 @@ class StickerService:
         if ext not in IMAGE_EXTENSIONS:
             return None
 
-        # Dedup: check if same file content already exists in this pack
+        # Dedup: check if same file content already exists in this pack (by hash)
         file_hash = self._file_hash(file_data)
-        stmt = select(Sticker).where(Sticker.pack_id == pack_id)
+        stmt = select(Sticker).where(Sticker.pack_id == pack_id, Sticker.file_hash == file_hash)
         result = await self.db.execute(stmt)
-        for existing in result.scalars().all():
-            if existing.file_path:
-                existing_file = STICKERS_DIR / existing.file_path
-                if existing_file.exists() and self._file_hash(existing_file.read_bytes()) == file_hash:
-                    return existing  # Already exists, return existing sticker
+        existing = result.scalar_one_or_none()
+        if existing:
+            return existing
 
         stmt = select(func.coalesce(func.max(Sticker.sort_order), 0)).where(Sticker.pack_id == pack_id)
         result = await self.db.execute(stmt)
@@ -148,6 +146,7 @@ class StickerService:
         final_path = pack_dir / f"{sticker.id}{ext}"
         tmp_path.rename(final_path)
         sticker.file_path = f"{pack_id}/{sticker.id}{ext}"
+        sticker.file_hash = file_hash
 
         if not pack.cover_path:
             pack.cover_path = sticker.file_path
@@ -198,7 +197,8 @@ class StickerService:
 
             pack = await self.create_pack(pack_name)
             for img_path in extracted:
-                img_data = img_path.read_bytes()
+                import asyncio
+                img_data = await asyncio.to_thread(img_path.read_bytes)
                 await self.add_sticker(pack.id, img_data, img_path.name)
 
             return pack

@@ -13,6 +13,38 @@ from .tools.mcp_tool import MCPToolAdapter, MCPResourceAdapter, MCPPromptAdapter
 
 logger = logging.getLogger(__name__)
 
+# Allowed commands for MCP stdio transport (defense against arbitrary command execution)
+_ALLOWED_MCP_COMMANDS = frozenset({
+    "npx", "node", "python", "python3", "uvx", "uv", "pnpm", "yarn",
+})
+
+# Environment variables that could be used for privilege escalation or injection
+_BLOCKED_MCP_ENV_KEYS = frozenset({
+    "LD_PRELOAD", "LD_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES", "DYLD_LIBRARY_PATH",
+    "PATH", "PYTHONPATH", "NODE_OPTIONS", "NODE_PATH", "BASH_ENV", "ENV",
+})
+
+
+def _validate_mcp_stdio(command: str, args: list[str], env: dict[str, str]) -> dict[str, str]:
+    """Validate MCP stdio config and sanitize env. Returns sanitized env dict."""
+    import shlex
+    base_cmd = shlex.split(command)[0] if command else ""
+    if base_cmd not in _ALLOWED_MCP_COMMANDS:
+        raise ValueError(
+            f"MCP command '{base_cmd}' is not allowed. "
+            f"Allowed: {', '.join(sorted(_ALLOWED_MCP_COMMANDS))}"
+        )
+    sanitized = {}
+    for k, v in (env or {}).items():
+        if k.upper() in _BLOCKED_MCP_ENV_KEYS:
+            logger.warning("Blocked MCP env var: %s", k)
+            continue
+        if ".." in k or "/" in k or "\\" in k:
+            logger.warning("Blocked MCP env var with path chars: %s", k)
+            continue
+        sanitized[k] = v
+    return sanitized
+
 # Transient connection errors that warrant a retry
 _TRANSIENT_EXC_NAMES: frozenset[str] = frozenset((
     "ClosedResourceError", "BrokenResourceError", "EndOfStream",
@@ -111,6 +143,7 @@ class MCPService:
                 cmd = config.get("command", "")
                 args = config.get("args", [])
                 env = config.get("env", {})
+                env = _validate_mcp_stdio(cmd, args, env)
                 params = StdioServerParameters(
                     command=cmd, args=args, env=env or None
                 )

@@ -9,6 +9,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -273,6 +274,10 @@ class Message(Base):
 
     conversation: Mapped["Conversation"] = relationship(back_populates="messages")
 
+    __table_args__ = (
+        Index("idx_messages_conversation_active", "conversation_id", "is_consolidated", "role"),
+    )
+
     def __repr__(self) -> str:
         return f"<Message id={self.id} role={self.role!r} conv={self.conversation_id}>"
 
@@ -368,6 +373,7 @@ class Sticker(Base):
         Integer, ForeignKey("sticker_packs.id", ondelete="CASCADE"), nullable=False, index=True
     )
     file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    file_hash: Mapped[Optional[str]] = mapped_column(String(32), nullable=True, index=True)
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     text_description: Mapped[str] = mapped_column(String(500), nullable=False, default="")
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

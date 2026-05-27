@@ -51,7 +51,7 @@ class DatabaseConfig(BaseModel):
 
 
 class ServerConfig(BaseModel):
-    host: str = "0.0.0.0"
+    host: str = "127.0.0.1"
     port: int = 5292
 
 
@@ -187,11 +187,7 @@ def _set_nested(data: dict[str, Any], key: str, value: Any) -> None:
             try:
                 value = json.loads(stripped)
             except (json.JSONDecodeError, ValueError):
-                try:
-                    import ast
-                    value = ast.literal_eval(stripped)
-                except (ValueError, SyntaxError):
-                    pass
+                pass
     parts = key.split(".")
     d = data
     for part in parts[:-1]:
@@ -280,23 +276,34 @@ def save_config() -> None:
 
     from .crypto import encrypt
     from .models import SystemSetting
+    from sqlalchemy import select
     from sqlalchemy.orm import Session
 
     flat = _flatten_dict(_config.model_dump())
     engine = _get_sync_engine()
 
     with Session(engine) as session:
+        # Load all existing settings in one query
+        existing = {row.key: row for row in session.execute(select(SystemSetting)).scalars().all()}
+
         for key, value in flat.items():
             encrypted = key in _ENCRYPTED_KEYS
             stored = encrypt(str(value)) if encrypted and value else str(value) if value is not None else ""
 
-            existing = session.get(SystemSetting, key)
-            if existing:
-                existing.value = stored
-                existing.is_encrypted = encrypted
+            if key in existing:
+                existing[key].value = stored
+                existing[key].is_encrypted = encrypted
             else:
                 session.add(SystemSetting(key=key, value=stored, is_encrypted=encrypted))
         session.commit()
+
+
+def dispose_config_engine() -> None:
+    """Dispose the sync config engine. Call on app shutdown."""
+    global _sync_engine
+    if _sync_engine is not None:
+        _sync_engine.dispose()
+        _sync_engine = None
 
 
 # Singleton config instance

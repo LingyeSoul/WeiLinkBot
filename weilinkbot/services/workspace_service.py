@@ -6,6 +6,7 @@ that enforce all sandbox constraints before touching the filesystem.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from dataclasses import dataclass
@@ -57,7 +58,7 @@ class WorkspaceService:
     # read_file
     # ------------------------------------------------------------------
 
-    def read_file(
+    async def read_file(
         self,
         rel_path: str,
         offset: int = 0,
@@ -90,7 +91,7 @@ class WorkspaceService:
         self.sandbox.check_extension(abs_path)
         self.sandbox.check_read_size(abs_path.stat().st_size)
 
-        text = abs_path.read_text(encoding="utf-8", errors="replace")
+        text = await asyncio.to_thread(abs_path.read_text, encoding="utf-8", errors="replace")
         lines = text.splitlines()
 
         if limit is not None:
@@ -204,7 +205,7 @@ class WorkspaceService:
     # grep_files
     # ------------------------------------------------------------------
 
-    def grep_files(
+    async def grep_files(
         self,
         query: str,
         rel_path: str = "",
@@ -263,7 +264,7 @@ class WorkspaceService:
             rel = file_path.relative_to(self.sandbox.root).as_posix()
 
             try:
-                text = file_path.read_text(encoding="utf-8", errors="replace")
+                text = await asyncio.to_thread(file_path.read_text, encoding="utf-8", errors="replace")
             except OSError:
                 continue
 

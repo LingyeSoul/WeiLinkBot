@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import io
 import logging
+from collections import OrderedDict
 from typing import Any, Optional
 
 from openai import AsyncOpenAI, APIConnectionError, APITimeoutError, RateLimitError
@@ -19,6 +20,32 @@ logger = logging.getLogger(__name__)
 MAX_RETRIES = 3
 RETRY_BASE_DELAY = 1.0
 DEFAULT_USER_AGENT = f"WeiLinkBot/{__version__}"
+
+# LRU cache for AsyncOpenAI clients keyed by (api_key, base_url)
+_CLIENT_CACHE_MAX = 16
+_client_cache: OrderedDict[tuple[str, str], AsyncOpenAI] = OrderedDict()
+
+
+def _get_or_create_client(api_key: str, base_url: str) -> AsyncOpenAI:
+    """Get a cached AsyncOpenAI client or create a new one (LRU-bounded)."""
+    cache_key = (api_key, base_url)
+    client = _client_cache.get(cache_key)
+    if client is not None:
+        _client_cache.move_to_end(cache_key)
+        return client
+    client = AsyncOpenAI(
+        api_key=api_key or "not-set",
+        base_url=base_url,
+        default_headers={"User-Agent": DEFAULT_USER_AGENT},
+    )
+    _client_cache[cache_key] = client
+    if len(_client_cache) > _CLIENT_CACHE_MAX:
+        old_key, old_client = _client_cache.popitem(last=False)
+        try:
+            old_client.close()
+        except Exception:
+            pass
+    return client
 
 
 class LLMService:
@@ -165,11 +192,7 @@ class LLMService:
             logger.error("Preprocess LLM api_key is empty (model=%s, base_url=%s)", config.model, config.base_url)
             return "", 0, True
 
-        client = AsyncOpenAI(
-            api_key=config.api_key.strip() or "not-set",
-            base_url=config.base_url,
-            default_headers={"User-Agent": DEFAULT_USER_AGENT},
-        )
+        client = _get_or_create_client(config.api_key.strip(), config.base_url)
 
         kwargs = {
             "model": config.model,
@@ -232,11 +255,7 @@ class LLMService:
             logger.error("ASR api_key is empty (model=%s, base_url=%s)", config.model, config.base_url)
             return "", 0, True
 
-        client = AsyncOpenAI(
-            api_key=config.api_key.strip() or "not-set",
-            base_url=config.base_url,
-            default_headers={"User-Agent": DEFAULT_USER_AGENT},
-        )
+        client = _get_or_create_client(config.api_key.strip(), config.base_url)
 
         mime_map = {
             "ogg": "audio/ogg", "mp3": "audio/mpeg", "wav": "audio/wav",

@@ -203,49 +203,17 @@ class AgentLoop:
             return await self._execute_native(ctx)
         return await self._execute_prompt(ctx)
 
-    async def _execute_native(self, ctx: AgentContext) -> AgentState:
-        """Execute one round of native function calling."""
-        text, tokens, tool_calls, reasoning = await self._llm.chat(
-            ctx.messages, tools=ctx.tool_defs,
-        )
-        ctx.total_tokens += tokens
-        ctx.last_text = text
-        ctx.last_reasoning_content = reasoning
-
-        if not tool_calls:
-            # Silent AI detection
-            if not text.strip() and ctx.round > 0:
-                ctx.messages.append({
-                    "role": "system",
-                    "content": (
-                        "工具执行已完成。请根据工具返回的结果，"
-                        "给用户一个最终回复。不要返回空内容。"
-                    ),
-                })
-                text, tokens, _, reasoning = await self._llm.chat(ctx.messages)
-                ctx.total_tokens += tokens
-                ctx.last_text = text
-                ctx.last_reasoning_content = reasoning
-            return AgentState.DONE
-
-        # Append assistant message with tool_calls
-        assistant_msg: dict[str, Any] = {"role": "assistant", "tool_calls": tool_calls}
-        if text:
-            assistant_msg["content"] = text
-        ctx.messages.append(assistant_msg)
-
-        # Execute each tool
+    async def _execute_tool_calls(self, ctx: AgentContext, tool_calls: list[dict]) -> AgentState | None:
+        """Execute tool calls with failure tracking. Returns AgentState if early exit, None to continue."""
         for tc in tool_calls:
             result = await self._execute_tool(
                 tc["id"], tc["function"]["name"], tc["function"]["arguments"],
             )
             ctx.messages.append(result.to_tool_message())
-
             if not result.success:
                 ctx.consecutive_failures += 1
             else:
                 ctx.consecutive_failures = 0
-
             if ctx.consecutive_failures >= ctx.fail_limit:
                 ctx.messages.append({
                     "role": "system",
@@ -256,6 +224,48 @@ class AgentLoop:
                     ),
                 })
                 return AgentState.FINALIZE
+        return None
+
+    async def _handle_silent_ai(self, ctx: AgentContext) -> None:
+        """If LLM returned empty text after tool rounds, nudge it to respond."""
+        if ctx.last_text.strip() or ctx.round == 0:
+            return
+        ctx.messages.append({
+            "role": "system",
+            "content": (
+                "工具执行已完成。请根据工具返回的结果，"
+                "给用户一个最终回复。不要返回空内容。"
+            ),
+        })
+        text, tokens, _, reasoning = await self._llm.chat(ctx.messages)
+        ctx.total_tokens += tokens
+        ctx.last_text = text
+        ctx.last_reasoning_content = reasoning
+
+    async def _execute_native(self, ctx: AgentContext) -> AgentState:
+        """Execute one round of native function calling."""
+        text, tokens, tool_calls, reasoning = await self._llm.chat(
+            ctx.messages, tools=ctx.tool_defs,
+        )
+        ctx.total_tokens += tokens
+        ctx.last_text = text
+        ctx.last_reasoning_content = reasoning
+
+        if not tool_calls:
+            await self._handle_silent_ai(ctx)
+            if not ctx.last_text.strip() and ctx.round > 0:
+                return AgentState.DONE
+            return AgentState.DONE
+
+        # Append assistant message with tool_calls
+        assistant_msg: dict[str, Any] = {"role": "assistant", "tool_calls": tool_calls}
+        if text:
+            assistant_msg["content"] = text
+        ctx.messages.append(assistant_msg)
+
+        early_exit = await self._execute_tool_calls(ctx, tool_calls)
+        if early_exit:
+            return early_exit
 
         logger.info("Agent round %d: %d tool calls executed", ctx.round + 1, len(tool_calls))
         ctx.round += 1
@@ -288,42 +298,16 @@ class AgentLoop:
 
         tool_calls = ToolRegistry.parse_prompt_tool_calls(text)
         if not tool_calls:
-            if not text.strip() and ctx.round > 0:
-                ctx.messages.append({
-                    "role": "system",
-                    "content": (
-                        "工具执行已完成。请根据工具返回的结果，"
-                        "给用户一个最终回复。不要返回空内容。"
-                    ),
-                })
-                text, tokens, _, reasoning = await self._llm.chat(ctx.messages)
-                ctx.total_tokens += tokens
-                ctx.last_text = text
-                ctx.last_reasoning_content = reasoning
+            await self._handle_silent_ai(ctx)
+            if not ctx.last_text.strip() and ctx.round > 0:
+                return AgentState.DONE
             return AgentState.DONE
 
         ctx.messages.append({"role": "assistant", "content": text})
 
-        for tc in tool_calls:
-            result = await self._execute_tool(
-                tc["id"], tc["function"]["name"], tc["function"]["arguments"],
-            )
-            ctx.messages.append(result.to_tool_message())
-
-            if not result.success:
-                ctx.consecutive_failures += 1
-            else:
-                ctx.consecutive_failures = 0
-
-            if ctx.consecutive_failures >= ctx.fail_limit:
-                ctx.messages.append({
-                    "role": "system",
-                    "content": (
-                        f"工具调用已连续失败 {ctx.consecutive_failures} 次。"
-                        "请停止重复尝试同一工具，改用其他策略。"
-                    ),
-                })
-                return AgentState.FINALIZE
+        early_exit = await self._execute_tool_calls(ctx, tool_calls)
+        if early_exit:
+            return early_exit
 
         logger.info("Agent prompt round %d: %d tool calls", ctx.round + 1, len(tool_calls))
         ctx.round += 1

@@ -84,6 +84,7 @@ _MIGRATIONS: list[tuple[str, str, str]] = [
     ("mcp_servers", "headers", "TEXT NOT NULL DEFAULT '{}'"),
     ("mcp_servers", "tool_timeout", "INTEGER NOT NULL DEFAULT 30"),
     ("mcp_servers", "enabled_tools", "TEXT NOT NULL DEFAULT '[\"*\"]'"),
+    ("stickers", "file_hash", "VARCHAR(32)"),
 ]
 
 
@@ -95,6 +96,12 @@ async def _auto_migrate(conn) -> None:
         if column not in existing:
             await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
             logger.info("Auto-migration: added %s.%s", table, column)
+
+    # Create composite index for message consolidation queries
+    await conn.execute(text(
+        "CREATE INDEX IF NOT EXISTS idx_messages_conversation_active "
+        "ON messages(conversation_id, is_consolidated, role)"
+    ))
 
     # Data migration: copy old preprocess_model_id → both new columns
     result = await conn.execute(text("PRAGMA table_info(llm_presets)"))

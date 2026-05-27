@@ -125,7 +125,7 @@ def _download_binary() -> Path:
                     if Path(name).name == binary_name:
                         # Zip Slip protection: ensure extraction stays within _DATA_DIR
                         target_path = (_DATA_DIR / name).resolve()
-                        if not str(target_path).startswith(str(_DATA_DIR.resolve())):
+                        if not target_path.is_relative_to(_DATA_DIR.resolve()):
                             raise RuntimeError(f"Archive entry '{name}' would extract outside target directory")
                         zf.extract(name, _DATA_DIR)
                         extracted = _DATA_DIR / name
@@ -139,6 +139,10 @@ def _download_binary() -> Path:
             with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:
                 for member in tf.getmembers():
                     if member.name == binary_name:
+                        # Path traversal protection for tar entries
+                        member_path = (_DATA_DIR / binary_name).resolve()
+                        if not member_path.is_relative_to(_DATA_DIR.resolve()):
+                            raise RuntimeError(f"Archive entry '{member.name}' would extract outside target directory")
                         member.name = binary_name
                         tf.extract(member, _DATA_DIR)
                         break
