@@ -187,7 +187,11 @@ def _set_nested(data: dict[str, Any], key: str, value: Any) -> None:
             try:
                 value = json.loads(stripped)
             except (json.JSONDecodeError, ValueError):
-                pass
+                try:
+                    import ast
+                    value = ast.literal_eval(stripped)
+                except (ValueError, SyntaxError):
+                    pass
     parts = key.split(".")
     d = data
     for part in parts[:-1]:
