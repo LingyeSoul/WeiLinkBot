@@ -149,8 +149,8 @@
       </div>
 
       <!-- Error -->
-      <div x-show="botStatus.error" class="bg-red-50 border border-red-200 rounded-xl p-6">
-        <h2 class="text-red-700 font-semibold mb-2" x-text="t('status.error')">Error</h2>
-        <p class="text-red-600 text-sm" x-text="botStatus.error"></p>
+      <div x-show="botStatus.error" style="background:color-mix(in oklab, var(--danger), transparent 95%);box-shadow:0 0 0 1px color-mix(in oklab, var(--danger), transparent 80%);border-radius:var(--radius-md);padding:var(--space-5)">
+        <h2 style="color:var(--danger);font-weight:600;margin-bottom:var(--space-2);font-size:var(--text-sm)" x-text="t('status.error')">Error</h2>
+        <p style="color:color-mix(in oklab, var(--danger), black 20%);font-size:var(--text-sm);font-family:var(--font-mono)" x-text="botStatus.error"></p>
       </div>
     </div>

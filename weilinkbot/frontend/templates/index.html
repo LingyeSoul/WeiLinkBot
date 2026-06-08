@@ -5,9 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WeiLinkBot — Dashboard</title>
     <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/fonts/geist-sans/style.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/fonts/geist-mono/style.min.css">
     <link rel="stylesheet" href="/static/tokens.css">
     <link rel="stylesheet" href="/static/layout.css">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -15,9 +14,9 @@
     tailwind.config = {
         theme: {
             extend: {
-                fontFamily: { sans: ['Inter', '-apple-system', 'system-ui', 'sans-serif'] },
+                fontFamily: { sans: ['"Geist"', '"Geist Sans"', '-apple-system', 'Segoe UI', 'Arial', 'sans-serif'] },
                 colors: {
-                    accent: { DEFAULT: '#2f6feb', hover: '#2563eb' },
+                    accent: { DEFAULT: '#0070f3', hover: '#0060d3' },
                 }
             }
         }
@@ -27,10 +26,10 @@
     <style>
         [x-cloak] { display: none !important; }
         .msg-user { background: color-mix(in oklab, var(--accent), transparent 90%); }
-        .msg-assistant { background: var(--bg); border: 1px solid var(--border); }
+        .msg-assistant { background: var(--surface); box-shadow: var(--elev-ring); }
         .msg-system { background: color-mix(in oklab, var(--warn), transparent 88%); }
         .msg-preprocess { background: color-mix(in oklab, #7c3aed, transparent 90%); opacity: 0.7; }
-        body { font-family: 'Inter', -apple-system, system-ui, sans-serif !important; }
+        body { font-family: 'Geist', 'Geist Sans', -apple-system, 'Segoe UI', Arial, sans-serif !important; }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen" x-data="dashboard()" x-init="init()" x-cloak>
