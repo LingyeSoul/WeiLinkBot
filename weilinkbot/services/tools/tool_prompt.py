@@ -53,17 +53,21 @@ _TOOL_CATEGORIES: dict[str, dict[str, Any]] = {
         "label_en": "Workspace Files",
         "tools": [
             "workspace_read", "workspace_write", "workspace_edit",
-            "workspace_list", "workspace_grep",
+            "workspace_list", "workspace_grep", "workspace_shell",
         ],
         "trigger_zh": (
             "当用户要求读取、搜索、创建或编辑工作区中的文件时，"
             "使用 workspace 系列工具进行文件操作。"
-            "加载技能(skill)完整内容也应使用 workspace_read。"
+            "加载技能(skill)完整内容也应使用 workspace_read。\n"
+            "当用户要求运行代码、安装依赖、执行脚本、使用 git 等开发操作时，"
+            "使用 workspace_shell 执行命令。"
         ),
         "trigger_en": (
             "When the user asks to read, search, create, or edit files "
             "in the workspace, use the workspace_* tools for file operations. "
-            "Loading full skill content should also use workspace_read."
+            "Loading full skill content should also use workspace_read.\n"
+            "When the user asks to run code, install dependencies, execute scripts, "
+            "or use git, use workspace_shell to execute commands."
         ),
     },
     "utility": {

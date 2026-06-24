@@ -122,7 +122,7 @@ class AgentConfig(BaseModel):
     enabled_skills: list[str] = Field(default_factory=list)
     disabled_skills: list[str] = Field(default_factory=list)
     enabled_workspace_tools: list[str] = Field(
-        default_factory=lambda: ["workspace_read", "workspace_list", "workspace_grep", "workspace_write", "workspace_edit", "send_file"]
+        default_factory=lambda: ["workspace_read", "workspace_list", "workspace_grep", "workspace_write", "workspace_edit", "workspace_shell", "send_file"]
     )
     enabled_sticker_tools: list[str] = Field(
         default_factory=lambda: ["search_sticker", "send_sticker", "list_sticker_packs"]
@@ -132,6 +132,15 @@ class AgentConfig(BaseModel):
 
 class StickerConfig(BaseModel):
     enabled: bool = True
+
+
+class SecurityConfig(BaseModel):
+    """Tool-call guard configuration."""
+    enabled: bool = True
+    block_on_critical: bool = True   # block CRITICAL severity findings
+    block_on_high: bool = True       # block HIGH severity findings
+    disabled_rules: list[str] = Field(default_factory=list)
+    custom_sensitive_paths: list[str] = Field(default_factory=list)
 
 
 class WorkspaceConfig(BaseModel):
@@ -169,6 +178,7 @@ class AppConfig(BaseModel):
     browser: BrowserConfig = Field(default_factory=BrowserConfig)
     sticker: StickerConfig = Field(default_factory=StickerConfig)
     workspace: WorkspaceConfig = Field(default_factory=WorkspaceConfig)
+    security: SecurityConfig = Field(default_factory=SecurityConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
 

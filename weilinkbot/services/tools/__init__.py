@@ -70,7 +70,7 @@ def init_default_tools() -> None:
             _log.warning("browser_use disabled: %s", exc)
 
 
-def init_workspace_tools(workspace_service) -> None:
+def init_workspace_tools(workspace_service, shell_sandbox=None) -> None:
     """Register workspace tools into the global registry."""
     from .workspace_read_tool import WorkspaceReadTool
     from .workspace_list_tool import WorkspaceListTool
@@ -84,6 +84,13 @@ def init_workspace_tools(workspace_service) -> None:
     registry.register(WorkspaceGrepTool(workspace_service))
     registry.register(WorkspaceWriteTool(workspace_service))
     registry.register(WorkspaceEditTool(workspace_service))
+
+    # Shell execution tool with security guard
+    if shell_sandbox is not None:
+        from .workspace_shell_tool import WorkspaceShellTool
+        from ...security.tool_guard import ToolGuardEngine
+        guard_engine = ToolGuardEngine()
+        registry.register(WorkspaceShellTool(shell_sandbox, guard_engine=guard_engine))
 
     # browser_download — requires Obscura + websockets + workspace
     _log = logging.getLogger(__name__)

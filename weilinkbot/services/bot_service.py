@@ -111,6 +111,7 @@ class BotService:
         self._task: Optional[asyncio.Task] = None
         self._error: Optional[str] = None
         self._login_url: Optional[str] = None
+        self._qr_scanned: bool = False
         self._credentials: Optional[Credentials] = None
         self._bot: Optional[WeChatBot] = None
         self._start_time: Optional[float] = None
@@ -211,8 +212,8 @@ class BotService:
                 base_url=self._config.bot.base_url,
                 cred_path=cred_path,
                 on_qr_url=self._on_qr_url,
-                on_scanned=lambda: logger.info("QR scanned — confirm in WeChat"),
-                on_expired=lambda: logger.warning("QR expired"),
+                on_scanned=self._on_scanned,
+                on_expired=self._on_expired,
                 on_error=lambda err: logger.error("Bot error: %s", err),
             )
 
@@ -299,9 +300,26 @@ class BotService:
 
     def _on_qr_url(self, url: str) -> None:
         self._login_url = url
+        self._qr_scanned = False
         asyncio.create_task(get_event_log().push("info", "bot", "bot.login_qr", f"QR code URL: {url}", {"url": url}))
         asyncio.create_task(self._broadcast_qr_status())
         logger.info("Scan this QR URL in WeChat: %s", url)
+
+    def _on_scanned(self) -> None:
+        """Called when QR code is scanned — clear login_url and broadcast."""
+        self._qr_scanned = True
+        self._login_url = None
+        asyncio.create_task(get_event_log().push("info", "bot", "bot.qr_scanned", "QR code scanned — confirm in WeChat"))
+        asyncio.create_task(self._broadcast_qr_status())
+        logger.info("QR scanned — cleared login_url, waiting for confirmation")
+
+    def _on_expired(self) -> None:
+        """Called when QR code expires — clear login_url and broadcast."""
+        self._login_url = None
+        self._qr_scanned = False
+        asyncio.create_task(get_event_log().push("warning", "bot", "bot.qr_expired", "QR code expired"))
+        asyncio.create_task(self._broadcast_qr_status())
+        logger.warning("QR expired — cleared login_url")
 
     async def _broadcast_qr_status(self) -> None:
         await get_ws_service().broadcast("bot_status", await _get_bot_status_dict(self))
@@ -1177,13 +1195,13 @@ class BotService:
                     "-" * 30,
                 ]
                 if card.description:
-                    lines.append(f"{t('bot.char.description')} {card.description[:200]}")
+                    lines.append(f"{t('bot.char.description')}\n{card.description}")
                 if card.personality:
-                    lines.append(f"{t('bot.char.personality')} {card.personality[:200]}")
+                    lines.append(f"{t('bot.char.personality')}\n{card.personality}")
                 if card.scenario:
-                    lines.append(f"{t('bot.char.scenario')} {card.scenario[:200]}")
+                    lines.append(f"{t('bot.char.scenario')}\n{card.scenario}")
                 if card.first_mes:
-                    lines.append(f"{t('bot.char.first_mes')} {card.first_mes[:200]}")
+                    lines.append(f"{t('bot.char.first_mes')}\n{card.first_mes}")
                 await self._bot.reply(msg, "\n".join(lines))
 
             elif args.strip() == "off":

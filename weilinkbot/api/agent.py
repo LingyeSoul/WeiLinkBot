@@ -594,3 +594,95 @@ async def upload_workspace_file(file: UploadFile = File(...), path: str = ""):
         return {"path": target, "bytes": written}
     except Exception as e:
         raise HTTPException(400, str(e))
+
+
+# ── Security Guard ────────────────────────────────────────────
+
+@router.get("/security/config")
+async def get_security_config():
+    """Get security guard configuration and rules."""
+    cfg = get_config().security
+    # Get rules from the guard engine
+    rules = []
+    try:
+        from ..security.tool_guard import ToolGuardEngine
+        engine = ToolGuardEngine()
+        rules = engine.get_all_rules()
+    except Exception as e:
+        logger.warning("Failed to load guard rules: %s", e)
+
+    return {
+        "enabled": cfg.enabled,
+        "block_on_critical": cfg.block_on_critical,
+        "block_on_high": cfg.block_on_high,
+        "disabled_rules": list(cfg.disabled_rules),
+        "custom_sensitive_paths": list(cfg.custom_sensitive_paths),
+        "rules": rules,
+    }
+
+
+@router.put("/security/config")
+async def update_security_config(body: dict):
+    """Update security guard configuration."""
+    cfg = get_config().security
+
+    if "enabled" in body:
+        cfg.enabled = bool(body["enabled"])
+    if "block_on_critical" in body:
+        cfg.block_on_critical = bool(body["block_on_critical"])
+    if "block_on_high" in body:
+        cfg.block_on_high = bool(body["block_on_high"])
+    if "disabled_rules" in body:
+        cfg.disabled_rules = list(body["disabled_rules"])
+    if "custom_sensitive_paths" in body:
+        cfg.custom_sensitive_paths = list(body["custom_sensitive_paths"])
+
+    save_config()
+
+    # Reload guard engine config
+    try:
+        from ..security.tool_guard import ToolGuardEngine
+        engine = ToolGuardEngine()
+        engine.reload_config()
+    except Exception:
+        pass
+
+    return {
+        "enabled": cfg.enabled,
+        "block_on_critical": cfg.block_on_critical,
+        "block_on_high": cfg.block_on_high,
+        "disabled_rules": list(cfg.disabled_rules),
+        "custom_sensitive_paths": list(cfg.custom_sensitive_paths),
+    }
+
+
+@router.post("/security/test")
+async def test_security_rule(body: dict):
+    """Test a command against the security guard."""
+    command = body.get("command", "")
+    if not command:
+        raise HTTPException(400, "command is required")
+
+    try:
+        from ..security.tool_guard import ToolGuardEngine
+        engine = ToolGuardEngine()
+        result = engine.guard("workspace_shell", {"command": command})
+        return {
+            "is_safe": result.is_safe,
+            "max_severity": result.max_severity.value,
+            "findings_count": len(result.findings),
+            "findings": [
+                {
+                    "rule_id": f.rule_id,
+                    "severity": f.severity.value,
+                    "category": f.category.value,
+                    "title": f.title,
+                    "description": f.description,
+                    "matched_value": f.matched_value,
+                    "remediation": f.remediation,
+                }
+                for f in result.findings
+            ],
+        }
+    except Exception as e:
+        raise HTTPException(500, str(e))

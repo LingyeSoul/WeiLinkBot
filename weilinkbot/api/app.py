@@ -187,6 +187,7 @@ async def lifespan(app: FastAPI):
     if config.workspace.enabled:
         from ..services.workspace_sandbox import WorkspaceSandbox
         from ..services.workspace_service import WorkspaceService
+        from ..services.workspace_shell import ShellSandbox
         blocked = frozenset(config.workspace.blocked_extensions)
         sandbox = WorkspaceSandbox(
             config.workspace.root,
@@ -199,9 +200,16 @@ async def lifespan(app: FastAPI):
         workspace_service = WorkspaceService(sandbox)
         set_workspace_service(workspace_service)
 
+        # Shell sandbox for command execution
+        shell_sandbox = ShellSandbox(
+            config.workspace.root,
+            timeout=config.agent.tool_timeout_seconds,
+            max_output_chars=config.agent.max_tool_result_chars,
+        )
+
         # Register workspace tools
         from ..services.tools import init_workspace_tools
-        init_workspace_tools(workspace_service)
+        init_workspace_tools(workspace_service, shell_sandbox=shell_sandbox)
         logger.info("Workspace service initialized (root=%s)", config.workspace.root)
 
     # Migrate skills and init Skill service (from workspace/skills/)

@@ -1,0 +1,228 @@
+# Dangerous Shell Command Detection Rules
+# Referenced from QwenPaw security framework
+# https://github.com/agentscope-ai/QwenPaw
+# NOTE: Use single quotes for regex patterns to avoid YAML escape issues
+
+# ── rm: file / directory removal ──────────────────────────────────────
+- id: TOOL_CMD_DANGEROUS_RM
+  tools: [workspace_shell]
+  params: [command]
+  category: command_injection
+  severity: HIGH
+  patterns:
+    - '\brm\b'
+    - '\bdel\b'
+    - '\bRemove-Item\b'
+  exclude_patterns:
+    - '^\s*#'
+  description: "Shell command contains 'rm' which may cause data loss"
+  remediation: "Confirm with the user before removing files or directories"
+
+# ── Filesystem & Block Device Destruction ─────────────────────────────
+- id: TOOL_CMD_FS_DESTRUCTION
+  tools: [workspace_shell]
+  params: [command]
+  category: command_injection
+  severity: CRITICAL
+  patterns:
+    - '\bmkfs(\.[a-zA-Z0-9_]+)?\b'
+    - '\bmke2fs\b'
+    - '\bdd\s+.*of=\/dev\/'
+    - '>\s*\/dev\/(sd[a-z][0-9]*|vd[a-z][0-9]*|nvme\d+n\d+(p\d+)?)'
+  description: "Detects low-level disk formatting or wiping commands"
+  remediation: "Block operation. Agents should not format or overwrite raw block devices."
+
+# ── Denial of Service & Fork Bombs ────────────────────────────────────
+- id: TOOL_CMD_DOS_FORK_BOMB
+  tools: [workspace_shell]
+  params: [command]
+  category: resource_abuse
+  severity: CRITICAL
+  patterns:
+    - ':\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;.*:'
+    - '\bkill\s+-9\s+(-1\b|1\b)'
+  description: "Detects classic Bash fork bombs and mass process termination"
+  remediation: "Block immediately. These commands will crash the host system."
+
+# ── Network Loaders (Pipe to Shell) ───────────────────────────────────
+- id: TOOL_CMD_PIPE_TO_SHELL
+  tools: [workspace_shell]
+  params: [command]
+  category: code_execution
+  severity: CRITICAL
+  patterns:
+    - '\b(curl|wget)\b\s+.*\|.*\b(bash|sh|zsh|ash|dash|powershell|cmd)\b'
+    - '\bInvoke-WebRequest\b.*\|\s*(iex|Invoke-Expression)'
+    - '\bInvoke-RestMethod\b.*\|\s*(iex|Invoke-Expression)'
+  description: "Detects 'curl | bash' patterns used to download and execute remote payloads"
+  remediation: "Confirm with user. Agents should inspect scripts before executing them."
+
+# ── Reverse Shell & Network Tunnels ───────────────────────────────────
+- id: TOOL_CMD_REVERSE_SHELL
+  tools: [workspace_shell]
+  params: [command]
+  category: network_abuse
+  severity: CRITICAL
+  patterns:
+    - '\/dev\/(tcp|udp)\/'
+    - '\bnc\s+.*-e\s*\S+'
+    - '\bncat\s+.*-e\s*\S+'
+    - '\bsocat\s+.*EXEC:'
+    - '\bNew-Object\s+Net\.Sockets\.TCPClient'
+  description: "Detects attempts to establish reverse shells or network tunnels"
+  remediation: "Block operation. Agents do not need to bind shells to network sockets."
+
+# ── Persistence & Privilege Escalation ────────────────────────────────
+- id: TOOL_CMD_SYSTEM_TAMPERING
+  tools: [workspace_shell]
+  params: [command]
+  category: sensitive_file_access
+  severity: HIGH
+  patterns:
+    - '\bcrontab\b'
+    - '\bauthorized_keys\b'
+    - '\/etc\/sudoers'
+    - '\/etc\/crontab'
+    - '\breg\s+(add|delete)\s+HKLM'
+    - '\bSet-MpPreference\b'
+  description: "Detects access to cron jobs, SSH keys, sudo permissions, or Windows registry"
+  remediation: "Confirm with user. Treat any access to credential files as sensitive."
+
+# ── Dangerous Permission Changes ──────────────────────────────────────
+- id: TOOL_CMD_UNSAFE_PERMISSIONS
+  tools: [workspace_shell]
+  params: [command]
+  category: privilege_escalation
+  severity: HIGH
+  patterns:
+    - '\bchmod\s+-[a-zA-Z]*R[a-zA-Z]*\s+(777|a\+rwx)\s+\/'
+    - '\bchattr\s+\+i'
+    - '\bicacls\s+.*\/grant\s+.*\(F\)'
+  description: "Detects global permission downgrades or setting immutable flags"
+  remediation: "Prompt for confirmation. Suggest least-privilege permission models."
+
+# ── Obfuscation & Defense Evasion ─────────────────────────────────────
+- id: TOOL_CMD_OBFUSCATED_EXEC
+  tools: [workspace_shell]
+  params: [command]
+  category: code_execution
+  severity: HIGH
+  patterns:
+    - '\bbase64\s+(-d|--decode)\s*\|\s*\b(bash|sh|zsh)\b'
+    - '-EncodedCommand\s+'
+    - '-enc\s+[A-Za-z0-9+/=]{20,}'
+  description: "Detects execution of base64 encoded strings or PowerShell encoded commands"
+  remediation: "Block execution. Agents should use plain text commands."
+
+# ── System Reboot & Shutdown ──────────────────────────────────────────
+- id: TOOL_CMD_SYSTEM_REBOOT
+  tools: [workspace_shell]
+  params: [command]
+  category: resource_abuse
+  severity: CRITICAL
+  patterns:
+    - '\b(reboot|shutdown|halt|poweroff)\b'
+    - '\binit\s+(0|6)\b'
+    - '\bShutdown-Computer\b'
+    - '\bRestart-Computer\b'
+  description: "Detects system reboot or shutdown commands"
+  remediation: "Block operation. Agents should not restart or shutdown the system."
+
+# ── Service Management ────────────────────────────────────────────────
+- id: TOOL_CMD_SERVICE_RESTART
+  tools: [workspace_shell]
+  params: [command]
+  category: resource_abuse
+  severity: HIGH
+  patterns:
+    - '\bsystemctl\s+(restart|stop|start|reload|kill)\b'
+    - '\bservice\s+\S+\s+(restart|stop|start|reload)\b'
+    - '\b(sc|net)\s+(start|stop|restart)\b'
+    - '\blaunchctl\s+(load|unload|stop|start|kickstart|kill)\b'
+  description: "Detects service management commands that can disrupt system services"
+  remediation: "Confirm with user. Restarting services may cause downtime or data loss."
+
+# ── Process Termination ───────────────────────────────────────────────
+- id: TOOL_CMD_PROCESS_KILL
+  tools: [workspace_shell]
+  params: [command]
+  category: resource_abuse
+  severity: HIGH
+  patterns:
+    - '\b(pkill|killall)\b'
+    - '\bkill\s+(-(9|KILL|15|TERM|1|HUP|2|INT)\s+)?[^-\s]'
+    - '\btaskkill\s+\/F\b'
+    - '\bStop-Process\b.*-Force\b'
+  exclude_patterns:
+    - 'kill\s+\$\$'
+  description: "Detects process termination commands that may kill critical processes"
+  remediation: "Confirm with user. Killing processes may cause data loss."
+
+# ── Privilege Escalation ──────────────────────────────────────────────
+- id: TOOL_CMD_PRIVILEGE_ESCALATION
+  tools: [workspace_shell]
+  params: [command]
+  category: privilege_escalation
+  severity: CRITICAL
+  patterns:
+    - '\bsudo\s+'
+    - '\bsu\b'
+    - '\bdoas\s+'
+    - '\bpkexec\b'
+    - '\brunas\s+\/user:'
+    - '\bStart-Process\s+.*-Verb\s+RunAs'
+  exclude_patterns:
+    - '^\s*#'
+  description: "Detects privilege escalation attempts using sudo, su, doas, pkexec, or runas"
+  remediation: "Block operation. Agents should not execute commands with elevated privileges."
+
+# ── Control Character Injection ───────────────────────────────────────
+- id: TOOL_CMD_CONTROL_CHARS
+  tools: [workspace_shell]
+  params: [command]
+  category: code_execution
+  severity: CRITICAL
+  patterns:
+    - '[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]'
+  description: "Command contains non-printable control characters that could bypass security checks"
+  remediation: "Block commands containing control characters."
+
+# ── IFS Injection ─────────────────────────────────────────────────────
+- id: TOOL_CMD_IFS_INJECTION
+  tools: [workspace_shell]
+  params: [command]
+  category: code_execution
+  severity: HIGH
+  patterns:
+    - '\$IFS(?![A-Za-z0-9_])'
+    - '\$\{[^}]*IFS'
+  exclude_patterns:
+    - '^\s*#'
+  description: "Command uses $IFS variable which could bypass security validation"
+  remediation: "Reject commands containing IFS manipulation."
+
+# ── /proc/environ Access ──────────────────────────────────────────────
+- id: TOOL_CMD_PROC_ENVIRON
+  tools: [workspace_shell]
+  params: [command]
+  category: sensitive_file_access
+  severity: HIGH
+  patterns:
+    - '\/proc\/(?:self|\d+)\/environ(?:\b|$)'
+  exclude_patterns:
+    - '^\s*#'
+  description: "Command accesses /proc/*/environ which could expose sensitive environment variables"
+  remediation: "Block access to process environment files."
+
+# ── jq system() Function ─────────────────────────────────────────────
+- id: TOOL_CMD_JQ_SYSTEM
+  tools: [workspace_shell]
+  params: [command]
+  category: code_execution
+  severity: HIGH
+  patterns:
+    - '\bjq\b.*\bsystem\s*\('
+  exclude_patterns:
+    - '^\s*#'
+  description: "jq command contains system() function which can execute arbitrary shell commands"
+  remediation: "Block jq commands using system()."

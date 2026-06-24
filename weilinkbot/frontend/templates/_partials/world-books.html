@@ -37,31 +37,42 @@
             </div>
         </div>
 
-        <!-- World Book Selector Tabs -->
-        <div class="sub-tabs" style="margin-bottom:0;">
+        <!-- World Book Cards -->
+        <div x-show="worldBooks.length > 0" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));gap:var(--space-4);margin-bottom:var(--space-5);">
             <template x-for="wb in worldBooks" :key="wb.id">
-                <button class="sub-tab" :class="{'active': wb.is_active}" @click="viewWorldBookEntries(wb)">
-                    <span x-text="wb.name"></span>
-                    <span class="badge badge-accent" style="margin-left:var(--space-1);" x-show="wb.is_active" x-text="t('world_books.active')"></span>
-                </button>
-            </template>
-        </div>
-
-        <!-- World book action row -->
-        <div x-show="worldBooks.length > 0" style="display:flex;align-items:center;justify-content:space-between;padding:var(--space-3) 0;margin-bottom:var(--space-4);">
-            <span style="font-size:var(--text-sm);color:var(--muted);">
-                <template x-for="wb in worldBooks" :key="'count-'+wb.id">
-                    <span x-show="wb.is_active" x-text="t('world_books.entry_count').replace('{count}', wb.entries_count || '0')"></span>
-                </template>
-            </span>
-            <div style="display:flex;gap:var(--space-2);">
-                <template x-for="wb in worldBooks" :key="'act-'+wb.id">
-                    <div x-show="wb.is_active" style="display:flex;gap:var(--space-2);">
-                        <button class="btn btn-secondary btn-sm" @click="exportWorldBook(wb.id, wb.name)" x-text="t('world_books.export')">Export</button>
-                        <button class="btn btn-sm btn-danger" @click="deleteWorldBook(wb.id, wb.name)" x-text="t('models.delete')">Delete</button>
+                <div class="card" style="padding:var(--space-4);cursor:pointer;transition:all 150ms ease;"
+                     :style="wb.is_active ? 'border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);' : ''"
+                     @click="viewWorldBookEntries(wb)">
+                    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-3);">
+                        <div style="min-width:0;flex:1;">
+                            <div style="display:flex;align-items:center;gap:var(--space-2);">
+                                <span style="font-weight:600;font-size:var(--text-base);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" x-text="wb.name"></span>
+                                <span class="badge badge-accent" x-show="wb.is_active" style="font-size:10px;flex-shrink:0;" x-text="t('world_books.active')"></span>
+                            </div>
+                            <p x-show="wb.description" style="font-size:var(--text-xs);color:var(--muted);margin-top:var(--space-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" x-text="wb.description"></p>
+                        </div>
+                        <div style="display:flex;gap:var(--space-1);flex-shrink:0;">
+                            <button class="btn btn-secondary btn-sm" style="padding:var(--space-1) var(--space-2);" @click.stop="exportWorldBook(wb.id, wb.name)" :title="t('world_books.export') || 'Export'">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            </button>
+                            <button class="btn btn-danger btn-sm" style="padding:var(--space-1) var(--space-2);" @click.stop="deleteWorldBook(wb.id, wb.name)" :title="t('models.delete') || 'Delete'">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            </button>
+                        </div>
                     </div>
-                </template>
-            </div>
+                    <div style="display:flex;align-items:center;gap:var(--space-4);margin-top:var(--space-3);padding-top:var(--space-3);border-top:1px solid var(--border);">
+                        <div style="display:flex;align-items:center;gap:var(--space-1);font-size:var(--text-xs);color:var(--muted);">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:12px;height:12px;"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+                            <span x-text="(wb.entries_count || 0) + ' ' + t('world_books.entries')"></span>
+                        </div>
+                        <button class="btn btn-sm" style="margin-left:auto;"
+                                :class="wb.is_active ? 'btn-secondary' : 'btn-success'"
+                                @click.stop="wb.is_active ? deactivateWorldBook() : activateWorldBook(wb.id)">
+                            <span x-text="wb.is_active ? (t('world_books.deactivate') || 'Deactivate') : (t('world_books.activate') || 'Activate')"></span>
+                        </button>
+                    </div>
+                </div>
+            </template>
         </div>
 
         <!-- Split layout: entry list + editor -->

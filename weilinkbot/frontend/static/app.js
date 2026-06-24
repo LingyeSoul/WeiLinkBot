@@ -129,6 +129,12 @@ function dashboard() {
         workspaceFilePath: "",
         workspaceBlockedExtInput: "",
 
+        // Security Guard
+        securityConfig: { enabled: true, block_on_critical: true, block_on_high: true, disabled_rules: [], custom_sensitive_paths: [], rules: [] },
+        securitySensitiveInput: "",
+        securityTestCommand: "",
+        securityTestResult: null,
+
         // Token Stats
         tokenStats: { models: [], total_tokens: 0, total_requests: 0 },       // all-time (from API)
         sessionTokenStats: { models: [], total_tokens: 0, total_requests: 0 }, // current session (from bot status)
@@ -1561,6 +1567,62 @@ function dashboard() {
             if (bytes < 1024) return bytes + " B";
             if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
             return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+        },
+
+        // ── Security Guard ───────────────────────────────────────
+        async refreshSecurityConfig() {
+            try {
+                const data = await this.api("/api/agent/security/config");
+                this.securityConfig = data;
+                this.securitySensitiveInput = (data.custom_sensitive_paths || []).join("\n");
+            } catch { /* ignore */ }
+        },
+        async saveSecurityConfig() {
+            try {
+                await this.api("/api/agent/security/config", {
+                    method: "PUT",
+                    body: JSON.stringify({
+                        enabled: this.securityConfig.enabled,
+                        block_on_critical: this.securityConfig.block_on_critical,
+                        block_on_high: this.securityConfig.block_on_high,
+                        disabled_rules: this.securityConfig.disabled_rules,
+                        custom_sensitive_paths: this.securityConfig.custom_sensitive_paths,
+                    }),
+                });
+                this.showToast(t("toast.saved") || "Saved", "success");
+            } catch (e) { this.showToast(e.message, "error"); }
+        },
+        toggleSecurityRule(ruleId) {
+            const disabled = this.securityConfig.disabled_rules || [];
+            const idx = disabled.indexOf(ruleId);
+            if (idx >= 0) {
+                disabled.splice(idx, 1);
+            } else {
+                disabled.push(ruleId);
+            }
+            // Update local state
+            const rules = this.securityConfig.rules || [];
+            const rule = rules.find(r => r.id === ruleId);
+            if (rule) rule.disabled = !rule.disabled;
+            this.saveSecurityConfig();
+        },
+        updateSecuritySensitivePaths() {
+            const paths = this.securitySensitiveInput
+                .split("\n")
+                .map(s => s.trim())
+                .filter(Boolean);
+            this.securityConfig.custom_sensitive_paths = paths;
+            this.saveSecurityConfig();
+        },
+        async testSecurityCommand() {
+            if (!this.securityTestCommand.trim()) return;
+            try {
+                const data = await this.api("/api/agent/security/test", {
+                    method: "POST",
+                    body: JSON.stringify({ command: this.securityTestCommand }),
+                });
+                this.securityTestResult = data;
+            } catch (e) { this.showToast(e.message, "error"); }
         },
 
         connectWs() {

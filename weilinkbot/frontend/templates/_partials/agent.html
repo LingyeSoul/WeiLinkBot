@@ -11,6 +11,9 @@
             <button class="tab-btn" :class="agentSubTab === 'workspace' && 'active'"
                     @click="agentSubTab = 'workspace'; refreshWorkspaceConfig(); refreshWorkspaceFiles()"
                     x-text="t('agent.subtab_workspace') || 'Workspace'"></button>
+            <button class="tab-btn" :class="agentSubTab === 'security' && 'active'"
+                    @click="agentSubTab = 'security'; refreshSecurityConfig()"
+                    x-text="t('agent.subtab_security') || 'Security'"></button>
         </div>
 
         <!-- ═══════════════════════════════════════════════════════════ -->
@@ -461,6 +464,139 @@
                         <button @click="workspaceFileContent = null" style="font-size:var(--text-lg);color:var(--muted);line-height:1;">&times;</button>
                     </div>
                     <pre style="font-size:var(--text-xs);font-family:var(--font-mono);white-space:pre-wrap;max-height:240px;overflow-y:auto;line-height:1.5;" x-text="workspaceFileContent"></pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <!-- Tab 5: Security -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <div x-show="agentSubTab === 'security'" x-cloak>
+
+            <!-- Guard Engine Toggle -->
+            <div class="card" style="margin-bottom:var(--space-6);">
+                <div class="card-header">
+                    <h3 class="card-title" x-text="t('agent.security.title') || 'Tool Guard'"></h3>
+                </div>
+                <div class="form-toggle-row">
+                    <div>
+                        <div class="form-toggle-label" x-text="t('agent.security.enabled') || 'Enable Security Guard'"></div>
+                        <div class="form-toggle-desc" x-text="t('agent.security.enabled_hint') || 'Pre-execution scanning of tool calls for dangerous patterns'"></div>
+                    </div>
+                    <label class="toggle toggle-success">
+                        <input type="checkbox" x-model="securityConfig.enabled" @change="saveSecurityConfig()">
+                        <span class="toggle-track"></span>
+                    </label>
+                </div>
+
+                <div x-show="securityConfig.enabled" style="margin-top:var(--space-4);">
+                    <div class="form-toggle-row">
+                        <div>
+                            <div class="form-toggle-label" x-text="t('agent.security.block_critical') || 'Block CRITICAL'"></div>
+                            <div class="form-toggle-desc" x-text="t('agent.security.block_critical_hint') || 'Block commands with CRITICAL severity findings'"></div>
+                        </div>
+                        <label class="toggle">
+                            <input type="checkbox" x-model="securityConfig.block_on_critical" @change="saveSecurityConfig()">
+                            <span class="toggle-track"></span>
+                        </label>
+                    </div>
+                    <div class="form-toggle-row">
+                        <div>
+                            <div class="form-toggle-label" x-text="t('agent.security.block_high') || 'Block HIGH'"></div>
+                            <div class="form-toggle-desc" x-text="t('agent.security.block_high_hint') || 'Block commands with HIGH severity findings'"></div>
+                        </div>
+                        <label class="toggle">
+                            <input type="checkbox" x-model="securityConfig.block_on_high" @change="saveSecurityConfig()">
+                            <span class="toggle-track"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Custom Sensitive Paths -->
+            <div class="card" style="margin-bottom:var(--space-6);">
+                <div class="card-header">
+                    <h3 class="card-title" x-text="t('agent.security.sensitive_paths') || 'Sensitive Paths'"></h3>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" x-text="t('agent.security.custom_sensitive') || 'Custom Sensitive Paths'"></label>
+                    <textarea x-model="securitySensitiveInput" @change="updateSecuritySensitivePaths()"
+                              rows="3" class="form-input" style="font-family:var(--font-mono);font-size:var(--text-xs);"
+                              placeholder=".env&#10;.ssh&#10;.git&#10;credentials.json"></textarea>
+                    <p class="form-hint" x-text="t('agent.security.custom_sensitive_hint') || 'One path per line. These paths will be blocked from tool access.'"></p>
+                </div>
+            </div>
+
+            <!-- Rules Table -->
+            <div class="card" style="margin-bottom:var(--space-6);">
+                <div class="card-header">
+                    <h3 class="card-title" x-text="t('agent.security.rules') || 'Detection Rules'"></h3>
+                    <span style="font-size:var(--text-xs);color:var(--muted);" x-text="(securityConfig.rules || []).length + ' rules'"></span>
+                </div>
+                <div class="table-wrap" style="border:none;max-height:480px;overflow-y:auto;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th style="width:60px;" x-text="t('agent.security.severity') || 'Severity'"></th>
+                                <th x-text="t('agent.security.rule_id') || 'Rule ID'"></th>
+                                <th x-text="t('agent.security.description') || 'Description'"></th>
+                                <th style="width:80px;text-align:center;" x-text="t('agent.security.status') || 'Status'"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="rule in securityConfig.rules || []" :key="rule.id">
+                                <tr>
+                                    <td>
+                                        <span style="font-size:var(--text-xs);font-weight:600;padding:2px 6px;border-radius:4px;"
+                                              :style="rule.severity === 'CRITICAL' ? 'background:color-mix(in oklab, var(--danger), transparent 85%);color:var(--danger);' :
+                                                      rule.severity === 'HIGH' ? 'background:color-mix(in oklab, var(--warn), transparent 85%);color:var(--warn);' :
+                                                      'background:color-mix(in oklab, var(--accent), transparent 85%);color:var(--accent);'"
+                                              x-text="rule.severity"></span>
+                                    </td>
+                                    <td><span style="font-family:var(--font-mono);font-size:var(--text-xs);font-weight:500;" x-text="rule.id"></span></td>
+                                    <td><span style="font-size:var(--text-sm);color:var(--muted);" x-text="rule.description"></span></td>
+                                    <td style="text-align:center;">
+                                        <label class="toggle">
+                                            <input type="checkbox"
+                                                   :checked="!rule.disabled"
+                                                   @change="toggleSecurityRule(rule.id)">
+                                            <span class="toggle-track"></span>
+                                        </label>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Test Panel -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title" x-text="t('agent.security.test') || 'Test Command'"></h3>
+                </div>
+                <div style="display:flex;gap:var(--space-3);">
+                    <input x-model="securityTestCommand" @keyup.enter="testSecurityCommand()"
+                           class="form-input" style="font-family:var(--font-mono);flex:1;"
+                           placeholder="rm -rf /">
+                    <button @click="testSecurityCommand()" class="btn btn-primary btn-sm" x-text="t('agent.security.test_btn') || 'Test'"></button>
+                </div>
+                <div x-show="securityTestResult !== null" style="margin-top:var(--space-3);padding:var(--space-3);border-radius:var(--radius-sm);"
+                     :style="securityTestResult?.is_safe ? 'background:color-mix(in oklab, var(--success), transparent 92%);border:1px solid color-mix(in oklab, var(--success), transparent 60%);' : 'background:color-mix(in oklab, var(--danger), transparent 92%);border:1px solid color-mix(in oklab, var(--danger), transparent 60%);'">
+                    <div style="font-weight:600;font-size:var(--text-sm);"
+                         :style="securityTestResult?.is_safe ? 'color:var(--success);' : 'color:var(--danger);'"
+                         x-text="securityTestResult?.is_safe ? (t('agent.security.safe') || 'SAFE') : (t('agent.security.blocked') || 'BLOCKED')"></div>
+                    <template x-if="securityTestResult?.findings?.length">
+                        <div style="margin-top:var(--space-2);">
+                            <template x-for="f in securityTestResult.findings" :key="f.rule_id">
+                                <div style="font-size:var(--text-xs);color:var(--muted);margin-top:var(--space-1);">
+                                    <span style="font-weight:600;" x-text="'[' + f.severity + ']'"></span>
+                                    <span x-text="f.title"></span>
+                                    <span x-show="f.remediation" style="color:var(--muted);"> — <span x-text="f.remediation"></span></span>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
                 </div>
             </div>
         </div>
