@@ -178,6 +178,11 @@ async def lifespan(app: FastAPI):
         init_sticker_tool(get_session_factory())
         logger.info("Sticker tools registered")
 
+    # Init segmented reply tool (no dependencies)
+    from ..services.tools import init_segment_tool
+    init_segment_tool()
+    logger.info("Segmented reply tool registered")
+
     agent_service = AgentService(llm_service, get_registry(), config)
     set_agent_service(agent_service)
     logger.info("Agent service initialized (tools=%s, max_rounds=%d)",

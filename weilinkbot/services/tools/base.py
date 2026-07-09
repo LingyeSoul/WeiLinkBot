@@ -43,6 +43,12 @@ class Tool(ABC):
     description: str
     parameters: dict[str, Any]
 
+    # Terminal tools have user-facing side effects that deliver the reply
+    # (e.g. send_messages, send_sticker). A successful call ends the agent
+    # loop immediately — continuing would let the LLM call them again,
+    # sending duplicate messages to the user.
+    terminal: bool = False
+
     @abstractmethod
     async def execute(self, **kwargs) -> str:
         """Execute the tool and return a text result.

@@ -274,6 +274,7 @@
   "bot.error.command": "[Error] Command failed: {e}",
   "bot.error.unknown_cmd": "Unknown command: {cmd}",
   "bot.error.empty_response": "[Error] Received empty response.",
+  "bot.error.segment_partial": "[Some messages failed to send, sorry]",
 
   "llm.error.no_key": "[Error] LLM API key not configured. Use the dashboard or CLI to set it.",
   "llm.error.request_failed": "[Error] LLM request failed: {e}",
@@ -491,6 +492,7 @@
   "agent.tool_desc.workspace_write": "Write or append content to a file in the workspace",
   "agent.tool_desc.workspace_edit": "Edit a file by replacing specific text, more efficient than full rewrites",
   "agent.tool_desc.send_file": "Send a file from the workspace to the user, auto-detects image/video/file type by extension",
+  "agent.tool_desc.send_messages": "By default use this tool to send replies: split into individual sentences as much as possible, each sentence as a separate message sent one after another to simulate human typing (max ~10)",
   "agent.tool_desc.search_sticker": "Search the sticker pack library by keyword to find matching stickers",
   "agent.tool_desc.send_sticker": "Send a sticker image to the user, call after searching for stickers",
   "agent.tool_desc.list_sticker_packs": "List all sticker packs, or view stickers in a specific pack",

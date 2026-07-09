@@ -19,6 +19,9 @@ _GIF_WARNED_USERS: set[str] = set()  # track per-user one-time GIF warning
 
 class SendStickerTool(Tool):
     name = "send_sticker"
+    # Terminal: the sticker is already sent via bot.reply_media — continuing
+    # the loop would risk duplicate sends or a redundant follow-up message.
+    terminal = True
     description = (
         "Send a sticker image to the user. Call this after search_sticker "
         "or list_sticker_packs to actually deliver the sticker. "

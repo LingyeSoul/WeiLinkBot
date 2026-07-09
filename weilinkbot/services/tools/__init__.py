@@ -33,6 +33,7 @@ __all__ = [
     "ToolResult",
     "ToolExecutionError",
     "init_default_tools",
+    "init_segment_tool",
 ]
 
 
@@ -117,3 +118,10 @@ def init_sticker_tool(session_factory) -> None:
     registry.register(SearchStickerTool(session_factory))
     registry.register(SendStickerTool(session_factory))
     registry.register(ListStickerPacksTool(session_factory))
+
+
+def init_segment_tool() -> None:
+    """Register the segmented-reply tool (no dependencies — uses sticker_context)."""
+    from .send_messages_tool import SendMessagesTool
+    registry = get_registry()
+    registry.register(SendMessagesTool())

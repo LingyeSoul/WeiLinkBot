@@ -206,8 +206,9 @@ class AgentLoop:
     async def _execute_tool_calls(self, ctx: AgentContext, tool_calls: list[dict]) -> AgentState | None:
         """Execute tool calls with failure tracking. Returns AgentState if early exit, None to continue."""
         for tc in tool_calls:
+            name = tc["function"]["name"]
             result = await self._execute_tool(
-                tc["id"], tc["function"]["name"], tc["function"]["arguments"],
+                tc["id"], name, tc["function"]["arguments"],
             )
             ctx.messages.append(result.to_tool_message())
             if not result.success:
@@ -224,6 +225,15 @@ class AgentLoop:
                     ),
                 })
                 return AgentState.FINALIZE
+            # Terminal tools (e.g. send_messages, send_sticker) deliver the
+            # reply to the user as a side effect. A successful call ends the
+            # loop — continuing would let the LLM call them again and send
+            # duplicate messages.
+            if result.success and self._registry.is_terminal(name):
+                logger.info(
+                    "Agent loop ended: terminal tool %s succeeded", name,
+                )
+                return AgentState.DONE
         return None
 
     async def _handle_silent_ai(self, ctx: AgentContext) -> None:

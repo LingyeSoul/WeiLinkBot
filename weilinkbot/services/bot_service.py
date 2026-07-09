@@ -23,10 +23,29 @@ from .conversation_service import ConversationService
 from .memory_buffer import MemoryBuffer
 from ..i18n import t
 from .event_log import get_event_log
-from .tools.sticker_context import set_sticker_context
+from .tools.sticker_context import set_sticker_context, get_segments_sent, clear_segments_sent
 from .ws_service import get_ws_service
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_context(ctx: list[dict]) -> list[dict[str, str]]:
+    """Convert context messages to display-safe format for the events log.
+
+    Non-string content (e.g. tool-call lists) is JSON-encoded so the frontend
+    can render every message uniformly.
+    """
+    import json as _json
+    result: list[dict[str, str]] = []
+    for m in ctx:
+        content = m.get("content", "")
+        if not isinstance(content, str):
+            try:
+                content = _json.dumps(content, ensure_ascii=False)
+            except Exception:
+                content = str(content)
+        result.append({"role": m.get("role", "?"), "content": content})
+    return result
 
 
 async def _get_bot_status_dict(bot_service) -> dict:
@@ -524,8 +543,51 @@ class BotService:
             except Exception:
                 pass
 
+    def _resolve_response_text(
+        self,
+        response_text: str,
+        tokens: int,
+        user_id: str,
+        *,
+        channel: str,
+    ) -> tuple[str, int | None, bool]:
+        """Resolve final response text + token-for-persistence + reply decision.
+
+        Handles three cases, reading the segmented-reply ContextVar:
+          - complete segmented reply  → use joined_text, persist no tokens,
+            tell caller to SKIP its own reply (segments already delivered).
+          - partial segmented failure → user already got some segments; use a
+            fallback notice, persist no tokens, caller SHOULD reply.
+          - no segmentation           → apply the empty-response guard, persist
+            the real token count, caller should reply normally.
+
+        Returns (final_text, persist_tokens, skip_reply).
+        """
+        seg = get_segments_sent()
+        if seg:
+            label = "Web" if channel == "web" else "User"
+            if seg.complete:
+                logger.info(
+                    "%s %s: sent %d segmented messages (response_text discarded)",
+                    label, user_id, seg.count,
+                )
+                return seg.joined_text, None, True
+            logger.warning(
+                "%s %s: segmented reply partial failure (%d sent), using fallback",
+                label, user_id, seg.count,
+            )
+            return t("bot.error.segment_partial"), None, False
+        # Normal path: empty-response guard
+        if not response_text or not response_text.strip():
+            logger.warning("LLM returned empty response for user %s, using fallback", user_id)
+            return t("bot.error.empty_response"), tokens, False
+        return response_text, tokens, False
+
     async def _process_message_inner(self, msg: IncomingMessage, user_id: str, text: str) -> None:
         """Actual preprocessing + LLM pipeline."""
+
+        # Reset segmented-reply state from any previous turn
+        clear_segments_sent()
 
         # Preprocess media if configured
         preprocess_tokens = 0
@@ -649,7 +711,11 @@ class BotService:
                     for entry in after_entries:
                         context.append({"role": "system", "content": entry.content})
 
-                await get_event_log().push("info", "llm", "llm.request", f"LLM request for user {user_id}: {text[:50]}...", {"user_id": user_id, "model": self._llm.config.model})
+                await get_event_log().push("info", "llm", "llm.request", f"LLM request for user {user_id}: {text[:50]}...", {
+                    "user_id": user_id,
+                    "model": self._llm.config.model,
+                    "request": _normalize_context(context),
+                })
                 logger.info("LLM request for user %s: %s...", user_id, text[:50])
 
                 # Set runtime context for sticker tools
@@ -665,39 +731,39 @@ class BotService:
                 self._session_tokens[model_name] = self._session_tokens.get(model_name, 0) + tokens
                 self._session_requests[model_name] = self._session_requests.get(model_name, 0) + 1
 
-                # Guard: never persist/send empty or whitespace-only response
-                if not response_text or not response_text.strip():
+                # Resolve final text + token-for-persistence + reply decision.
+                # Segmented-complete: use joined_text, persist no tokens, skip
+                # our reply. Partial-failure: use fallback notice. Normal: apply
+                # the empty-response guard. Caller sends its own reply unless
+                # skip_reply.
+                seg_before = get_segments_sent()
+                was_empty = (
+                    not seg_before
+                    and (not response_text or not response_text.strip())
+                )
+                if was_empty:
                     await get_event_log().push("warning", "llm", "llm.empty", f"LLM returned empty response for user {user_id}", {"user_id": user_id, "model": model_name})
-                    logger.warning("LLM returned empty/whitespace response for user %s, using fallback", user_id)
-                    response_text = t("bot.error.empty_response")
+                response_text, persist_tokens, skip_reply = self._resolve_response_text(
+                    response_text, tokens, user_id, channel="wechat",
+                )
 
                 await conv_service.add_message(
-                    user_id, "assistant", response_text, tokens, model_name,
+                    user_id, "assistant", response_text, persist_tokens, model_name,
                     reasoning_content=reasoning_content,
                 )
                 await db.commit()
-
-                def _normalize_context(ctx):
-                    """Convert context messages to display-safe format."""
-                    import json as _json
-                    result = []
-                    for m in ctx:
-                        content = m.get("content", "")
-                        if not isinstance(content, str):
-                            try:
-                                content = _json.dumps(content, ensure_ascii=False)
-                            except Exception:
-                                content = str(content)
-                        result.append({"role": m.get("role", "?"), "content": content})
-                    return result
 
                 llm_detail = {
                     "user_id": user_id,
                     "model": model_name,
                     "tokens": tokens,
+                    "request": _normalize_context(context),
+                    "response": response_text,
                 }
                 await get_event_log().push("info", "llm", "llm.response", f"LLM response for user {user_id} ({tokens} tokens)", llm_detail)
-                await self._bot.reply(msg, response_text)
+                if not skip_reply:
+                    # Send our own reply (normal text, or fallback after partial/empty)
+                    await self._bot.reply(msg, response_text)
                 await get_ws_service().broadcast("token_stats", self.session_token_stats)
                 await get_ws_service().broadcast("conversations_updated", {"user_id": user_id})
                 logger.info("Replied to user %s (%d tokens)", user_id, tokens)
@@ -799,7 +865,11 @@ class BotService:
                     for entry in after_entries:
                         context.append({"role": "system", "content": entry.content})
 
-                await get_event_log().push("info", "llm", "llm.request", f"Web LLM request for {user_id}: {text[:50]}...", {"user_id": user_id, "model": self._llm.config.model})
+                await get_event_log().push("info", "llm", "llm.request", f"Web LLM request for {user_id}: {text[:50]}...", {
+                    "user_id": user_id,
+                    "model": self._llm.config.model,
+                    "request": _normalize_context(context),
+                })
 
                 if self._agent:
                     response_text, tokens, reasoning_content = await self._agent.run(context, supports_tools=self._supports_tools)
@@ -810,16 +880,27 @@ class BotService:
                 self._session_tokens[model_name] = self._session_tokens.get(model_name, 0) + tokens
                 self._session_requests[model_name] = self._session_requests.get(model_name, 0) + 1
 
-                if not response_text or not response_text.strip():
-                    response_text = t("bot.error.empty_response")
+                # Resolve final text + token-for-persistence. Web has no
+                # sticker/segment context so seg is always None here (the
+                # segmented-complete/partial branches never fire), but routing
+                # through the helper keeps token accounting consistent.
+                response_text, persist_tokens, _skip = self._resolve_response_text(
+                    response_text, tokens, user_id, channel="web",
+                )
 
                 await conv_service.add_message(
-                    user_id, "assistant", response_text, tokens, model_name,
+                    user_id, "assistant", response_text, persist_tokens, model_name,
                     reasoning_content=reasoning_content,
                 )
                 await db.commit()
 
-                await get_event_log().push("info", "llm", "llm.response", f"Web LLM response for {user_id} ({tokens} tokens)", {"user_id": user_id, "model": model_name, "tokens": tokens})
+                await get_event_log().push("info", "llm", "llm.response", f"Web LLM response for {user_id} ({tokens} tokens)", {
+                    "user_id": user_id,
+                    "model": model_name,
+                    "tokens": tokens,
+                    "request": _normalize_context(context),
+                    "response": response_text,
+                })
 
                 # Deliver via WebSocket
                 await ws.broadcast("chat_response", {

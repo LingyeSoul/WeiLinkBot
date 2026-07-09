@@ -27,6 +27,11 @@ class ToolRegistry:
     def get(self, name: str) -> Tool | None:
         return self._tools.get(name)
 
+    def is_terminal(self, name: str) -> bool:
+        """Whether a successful call to this tool should end the agent loop."""
+        tool = self._tools.get(name)
+        return bool(tool and getattr(tool, "terminal", False))
+
     def unregister(self, name: str) -> bool:
         """Remove a tool from the registry. Returns True if found."""
         return self._tools.pop(name, None) is not None

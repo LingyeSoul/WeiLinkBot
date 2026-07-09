@@ -118,6 +118,7 @@ class AgentConfig(BaseModel):
     enabled_tools: list[str] = Field(default_factory=lambda: [
         "get_current_time", "calculate",
         "browser_fetch", "browser_eval", "browser_use", "browser_download",
+        "send_messages",
     ])
     enabled_skills: list[str] = Field(default_factory=list)
     disabled_skills: list[str] = Field(default_factory=list)
@@ -128,6 +129,8 @@ class AgentConfig(BaseModel):
         default_factory=lambda: ["search_sticker", "send_sticker", "list_sticker_packs"]
     )
     tool_prompt_injection: bool = True  # inject tool-aware system prompt to guide tool usage
+    segment_max_count: int = 10          # max segments per send_messages call
+    segment_max_chars: int = 3000        # max chars per segment (avoid WeChat truncation)
 
 
 class StickerConfig(BaseModel):

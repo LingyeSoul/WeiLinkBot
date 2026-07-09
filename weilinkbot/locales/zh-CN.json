@@ -274,6 +274,7 @@
   "bot.error.command": "[错误] 命令执行失败：{e}",
   "bot.error.unknown_cmd": "未知命令：{cmd}",
   "bot.error.empty_response": "[错误] 收到空回复。",
+  "bot.error.segment_partial": "[部分消息发送失败，请见谅]",
 
   "llm.error.no_key": "[错误] 未配置LLM API密钥。请通过Web面板或CLI设置。",
   "llm.error.request_failed": "[错误] LLM请求失败：{e}",
@@ -491,6 +492,7 @@
   "agent.tool_desc.workspace_write": "向工作区写入或追加文件内容",
   "agent.tool_desc.workspace_edit": "通过文本替换编辑工作区文件，比全文重写更高效",
   "agent.tool_desc.send_file": "将工作区中的文件发送给用户，自动识别图片、视频等类型",
+  "agent.tool_desc.send_messages": "默认使用此工具发送回复：尽可能按句子拆分，每句话作为一条消息依次发送，营造真人逐条回复的节奏（最多约10条）",
   "agent.tool_desc.search_sticker": "搜索表情包库，根据关键词找到匹配的表情包",
   "agent.tool_desc.send_sticker": "发送表情包图片给用户，在搜索到表情包后调用",
   "agent.tool_desc.list_sticker_packs": "列出所有表情包系列，或查看某个系列中的表情列表",

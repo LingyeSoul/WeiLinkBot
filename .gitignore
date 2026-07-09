@@ -49,3 +49,4 @@ wechatbot_credentials.json
 
 # Obscura headless browser binaries (auto-downloaded to data/)
 data/obscura/
+/.zcode
