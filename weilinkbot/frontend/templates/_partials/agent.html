@@ -69,6 +69,18 @@
                         <span class="toggle-track"></span>
                     </label>
                 </div>
+
+                <!-- Segment Fallback -->
+                <div class="form-toggle-row" style="margin-top:var(--space-2);">
+                    <div>
+                        <div class="form-toggle-label" x-text="t('agent.segment_fallback') || 'Segmented Reply Fallback'"></div>
+                        <div class="form-toggle-desc" x-text="t('agent.segment_fallback_hint') || 'Auto-split replies into multiple messages when the LLM does not call send_messages'"></div>
+                    </div>
+                    <label class="toggle">
+                        <input type="checkbox" x-model="agentConfig.segment_fallback">
+                        <span class="toggle-track"></span>
+                    </label>
+                </div>
             </div>
 
             <!-- Enabled Tools Table -->

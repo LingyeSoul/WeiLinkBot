@@ -36,6 +36,7 @@ async def get_agent_config():
         enabled_tools=config.agent.enabled_tools,
         available_tools=registry.list_names(),
         tool_prompt_injection=config.agent.tool_prompt_injection,
+        segment_fallback=config.agent.segment_fallback,
         # Agent工具高级参数
         tool_timeout_seconds=config.agent.tool_timeout_seconds,
         max_tool_result_chars=config.agent.max_tool_result_chars,
@@ -73,6 +74,8 @@ async def update_agent_config(data: AgentConfigUpdate):
         config.agent.enabled_tools = data.enabled_tools
     if data.tool_prompt_injection is not None:
         config.agent.tool_prompt_injection = data.tool_prompt_injection
+    if data.segment_fallback is not None:
+        config.agent.segment_fallback = data.segment_fallback
     # Agent工具高级参数
     if data.tool_timeout_seconds is not None:
         config.agent.tool_timeout_seconds = data.tool_timeout_seconds
@@ -122,6 +125,7 @@ async def update_agent_config(data: AgentConfigUpdate):
         enabled_tools=config.agent.enabled_tools,
         available_tools=registry.list_names(),
         tool_prompt_injection=config.agent.tool_prompt_injection,
+        segment_fallback=config.agent.segment_fallback,
         # Agent工具高级参数
         tool_timeout_seconds=config.agent.tool_timeout_seconds,
         max_tool_result_chars=config.agent.max_tool_result_chars,

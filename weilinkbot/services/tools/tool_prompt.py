@@ -120,18 +120,20 @@ _TOOL_CATEGORIES: dict[str, dict[str, Any]] = {
         "label_en": "Segmented Reply",
         "tools": ["send_messages"],
         "trigger_zh": (
-            "默认情况下，请使用 send_messages 工具发送回复："
-            "尽可能把回复按句子拆分，每一句话作为 messages 数组中的一个独立元素依次发出，"
+            "你必须使用 send_messages 工具发送回复——这是默认行为，不是可选项。"
+            "只要回复超过一句话，就必须拆成多条：按句子拆分，"
+            "每句话作为 messages 数组中的一个独立元素依次发出，"
             "营造类似真人逐条发送消息的效果（上限约 10 条）。"
-            "只有当回复只有简短的一两句话、确实无需拆分时，才可直接作为普通文本回复。"
+            "只有单句简短回复才可直接作为普通文本。"
             "调用后内容会立即发送给用户，不要在后续回复中重复这些内容。"
         ),
         "trigger_en": (
-            "By default, send your reply via the send_messages tool: split it "
-            "into individual sentences as much as possible, with each sentence "
-            "as a separate element in the messages array sent one after another, "
-            "to simulate a human typing multiple messages (max ~10 segments). "
-            "Only reply as plain text when the response is a single short "
+            "You MUST send your reply via the send_messages tool — this is the "
+            "default behavior, not optional. Whenever the reply has more than "
+            "one sentence, split it: break it into individual sentences with "
+            "each sentence as a separate element in the messages array sent one "
+            "after another, simulating a human typing multiple messages (max "
+            "~10 segments). Only reply as plain text for a single short "
             "sentence that needs no splitting. The content is sent immediately; "
             "do not repeat it in your follow-up response."
         ),

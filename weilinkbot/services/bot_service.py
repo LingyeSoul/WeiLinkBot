@@ -23,7 +23,8 @@ from .conversation_service import ConversationService
 from .memory_buffer import MemoryBuffer
 from ..i18n import t
 from .event_log import get_event_log
-from .tools.sticker_context import set_sticker_context, get_segments_sent, clear_segments_sent
+from .tools.sticker_context import set_sticker_context, get_segments_sent, clear_segments_sent, set_segments_sent
+from .tools.segment_splitter import split_reply_into_segments
 from .ws_service import get_ws_service
 
 logger = logging.getLogger(__name__)
@@ -730,6 +731,40 @@ class BotService:
                 model_name = self._llm.config.model
                 self._session_tokens[model_name] = self._session_tokens.get(model_name, 0) + tokens
                 self._session_requests[model_name] = self._session_requests.get(model_name, 0) + 1
+
+                # Fallback: if the LLM didn't call send_messages but segmentation
+                # is enabled, auto-split the reply and send multiple messages.
+                # Only triggers when no segmented tool ran (`get_segments_sent()`
+                # is None) — the two layers never overlap.
+                seg_pre = get_segments_sent()
+                if (
+                    not seg_pre
+                    and self._config.agent.segment_fallback
+                    and response_text
+                    and response_text.strip()
+                ):
+                    segments = split_reply_into_segments(
+                        response_text,
+                        max_count=self._config.agent.segment_max_count,
+                        max_chars=self._config.agent.segment_max_chars,
+                    )
+                    if len(segments) > 1:
+                        sent: list[str] = []
+                        for seg_text in segments:
+                            try:
+                                await self._bot.reply(msg, seg_text)
+                                sent.append(seg_text)
+                            except Exception:
+                                break
+                        if sent:
+                            set_segments_sent(sent)  # complete=True
+                            logger.info(
+                                "Fallback segmented %d messages to user %s "
+                                "(LLM did not call send_messages)",
+                                len(sent), user_id,
+                            )
+                        # If nothing was sent (all failed), fall through to the
+                        # normal path — bot_service's own reply still fires.
 
                 # Resolve final text + token-for-persistence + reply decision.
                 # Segmented-complete: use joined_text, persist no tokens, skip

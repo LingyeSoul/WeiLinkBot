@@ -480,6 +480,8 @@
   "agent.no_tools": "暂无可用工具",
   "agent.tool_prompt_injection": "工具提示注入",
   "agent.tool_prompt_injection_hint": "开启后，系统会自动向 LLM 注入工具使用指南，引导其在回答时效性、事实性问题时主动调用工具",
+  "agent.segment_fallback": "分段回复兜底",
+  "agent.segment_fallback_hint": "当 LLM 未调用分段工具时，自动将回复按句子拆分成多条消息发送，模拟真人逐条回复的节奏",
   "agent.tool_desc.get_current_time": "获取当前日期和时间，支持时区查询",
   "agent.tool_desc.calculate": "安全数学表达式计算",
   "agent.tool_desc.browser_fetch": "使用无头浏览器搜索网页、渲染页面内容，支持 JavaScript 执行和动态内容加载，适用于 SPA 和反爬虫页面",

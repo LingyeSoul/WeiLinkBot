@@ -480,6 +480,8 @@
   "agent.no_tools": "No tools available",
   "agent.tool_prompt_injection": "Tool Prompt Injection",
   "agent.tool_prompt_injection_hint": "When enabled, injects a tool usage guide into the system prompt to encourage the LLM to proactively use tools for time-sensitive and factual questions",
+  "agent.segment_fallback": "Segmented Reply Fallback",
+  "agent.segment_fallback_hint": "Auto-split replies into multiple messages when the LLM does not call send_messages, simulating human typing rhythm",
   "agent.tool_desc.get_current_time": "Get current date and time with timezone support",
   "agent.tool_desc.calculate": "Safe mathematical expression evaluation",
   "agent.tool_desc.browser_fetch": "Search the web and render pages with a real headless browser, supports JavaScript execution and dynamic content for SPAs and anti-bot sites",

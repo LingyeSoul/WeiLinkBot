@@ -102,7 +102,7 @@ function dashboard() {
         agentConfig: { 
             max_tool_rounds: 5, max_context_tokens: 0, max_concurrent_requests: 3, 
             consolidation_threshold: 30, consolidation_ratio: 0.3, enabled_tools: [], 
-            available_tools: [], tool_prompt_injection: true,
+            available_tools: [], tool_prompt_injection: true, segment_fallback: true,
             // Agent工具高级参数
             tool_timeout_seconds: 60, max_tool_result_chars: 30000, consecutive_fail_limit: 3,
             // 浏览器配置
@@ -1338,6 +1338,7 @@ function dashboard() {
                     consolidation_ratio: this.agentConfig.consolidation_ratio,
                     enabled_tools: this.agentConfig.enabled_tools,
                     tool_prompt_injection: this.agentConfig.tool_prompt_injection,
+                    segment_fallback: this.agentConfig.segment_fallback,
                     // Agent工具高级参数
                     tool_timeout_seconds: this.agentConfig.tool_timeout_seconds,
                     max_tool_result_chars: this.agentConfig.max_tool_result_chars,

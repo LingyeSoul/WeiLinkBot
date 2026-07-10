@@ -25,13 +25,13 @@ class SendMessagesTool(Tool):
     description = (
         "Send your reply as multiple sequential messages to the user. Each "
         "string in the 'messages' array is sent as a separate message, in "
-        "order. By default you SHOULD use this tool for your reply: split it "
-        "into individual sentences as much as possible, with each sentence as "
-        "its own array element, to simulate a human sending multiple messages "
-        "one after another (max ~10 segments). Only reply as plain text when "
-        "the response is a single short sentence that needs no splitting. The "
-        "content is sent immediately upon calling this tool — do NOT repeat "
-        "these messages in your follow-up response."
+        "order. You MUST use this tool for EVERY reply that contains more than "
+        "one sentence: split it into individual sentences as much as possible, "
+        "with each sentence as its own array element, to simulate a human "
+        "sending multiple messages one after another (max ~10 segments). Only "
+        "reply as plain text when the response is a single short sentence that "
+        "needs no splitting. The content is sent immediately upon calling this "
+        "tool — do NOT repeat these messages in your follow-up response."
     )
     parameters: dict[str, Any] = {
         "type": "object",

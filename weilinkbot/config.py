@@ -131,6 +131,7 @@ class AgentConfig(BaseModel):
     tool_prompt_injection: bool = True  # inject tool-aware system prompt to guide tool usage
     segment_max_count: int = 10          # max segments per send_messages call
     segment_max_chars: int = 3000        # max chars per segment (avoid WeChat truncation)
+    segment_fallback: bool = True        # auto-split reply into segments when LLM didn't call send_messages
 
 
 class StickerConfig(BaseModel):

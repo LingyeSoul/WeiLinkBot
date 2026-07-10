@@ -488,6 +488,7 @@ class AgentConfigResponse(BaseModel):
     enabled_tools: list[str]
     available_tools: list[str]
     tool_prompt_injection: bool = True
+    segment_fallback: bool = True  # auto-split reply when LLM didn't call send_messages
     # Agent工具高级参数
     tool_timeout_seconds: float = 60.0
     max_tool_result_chars: int = 30_000
@@ -513,6 +514,7 @@ class AgentConfigUpdate(BaseModel):
     consolidation_ratio: Optional[float] = Field(None, ge=0.1, le=0.9)
     enabled_tools: Optional[list[str]] = None
     tool_prompt_injection: Optional[bool] = None
+    segment_fallback: Optional[bool] = None
     # Agent工具高级参数
     tool_timeout_seconds: Optional[float] = Field(None, ge=1, le=300)
     max_tool_result_chars: Optional[int] = Field(None, ge=1000, le=200000)
